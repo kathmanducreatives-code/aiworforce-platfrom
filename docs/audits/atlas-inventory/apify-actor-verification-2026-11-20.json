@@ -1,0 +1,876 @@
+{
+ "at": "2026-11-20T09:11:47.280Z",
+ "accountRunsTotal": 61,
+ "actors": [
+  {
+   "id": "api-empire/post-comments-engagements-scraper-linkedin",
+   "exists": false,
+   "http": 404
+  },
+  {
+   "id": "apidojo/google-search-scraper",
+   "exists": true,
+   "actId": "yGieNbIOqrfpQKRAN",
+   "deprecated": false,
+   "modified": "2026-11-20",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "list-query": 0.002,
+    "dataset-item": 0.0002
+   },
+   "perResult": null,
+   "users": 1796,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "apify/google-search-scraper",
+   "exists": true,
+   "actId": "nFJndFXA5zjCTuudP",
+   "deprecated": false,
+   "modified": "2026-11-18",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "search-page-scraped": 0.0045,
+    "ai-overview-scraped": 0.003,
+    "ai-mode-result-scraped": 0.2,
+    "perplexity-ai-result-scraped": 0.2,
+    "chatgpt-result-scraped": 0.2,
+    "copilot-result-scraped": 0.2,
+    "gemini-result-scraped": 0.2,
+    "lead-scraped": 0.1,
+    "lead-email-verified": 0.1,
+    "ads-scraped": 0.0065,
+    "website-content-scraped": 0.008,
+    "apify-actor-start": 0.00005
+   },
+   "perResult": null,
+   "users": 239281,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "apify/indeed-scraper",
+   "exists": false,
+   "http": 404
+  },
+  {
+   "id": "apify/web-scraper",
+   "exists": true,
+   "actId": "moJRLRc85AitArpNN",
+   "deprecated": false,
+   "modified": "2026-11-18",
+   "pricing": "FREE",
+   "events": {},
+   "perResult": null,
+   "users": 127333,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "apify/website-content-crawler",
+   "exists": true,
+   "actId": "aYG0l9s7dbB7j3gbS",
+   "deprecated": false,
+   "modified": "2026-11-19",
+   "pricing": "FREE",
+   "events": {},
+   "perResult": null,
+   "users": 179827,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "apimaestro/linkedin-company-detail",
+   "exists": true,
+   "actId": "ipHw77V2NMJPy8sbS",
+   "deprecated": false,
+   "modified": "2026-11-02",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.005
+   },
+   "perResult": null,
+   "users": 7104,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "apimaestro/linkedin-profile-detail",
+   "exists": true,
+   "actId": "VhxlqQXRwhW8H5hNV",
+   "deprecated": false,
+   "modified": "2026-11-02",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.005
+   },
+   "perResult": null,
+   "users": 32832,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "atomus/linkedin-company-scraper",
+   "exists": true,
+   "actId": "gL9KGjP8gHJPO432i",
+   "deprecated": false,
+   "modified": "2026-11-16",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "company-enriched": 0.0035,
+    "apify-actor-start": 0.00005
+   },
+   "perResult": null,
+   "users": 148,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "atomus/linkedin-profile-scraper",
+   "exists": true,
+   "actId": "HcEUCKHXJu3SvAVnC",
+   "deprecated": false,
+   "modified": "2026-11-16",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "profile-enriched": 0.006,
+    "company-details": 0.0035,
+    "email-found": 0.006
+   },
+   "perResult": null,
+   "users": 971,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "automation-lab/indeed-scraper",
+   "exists": true,
+   "actId": "xuAyn6XV1gQMBlYo6",
+   "deprecated": false,
+   "modified": "2026-11-19",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "start": 0.005,
+    "job-listing": 0.003
+   },
+   "perResult": null,
+   "users": 270,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "bebity/linkedin-jobs-scraper",
+   "exists": true,
+   "actId": "BHzefUZlZRKWxkTck",
+   "deprecated": false,
+   "modified": "2026-11-06",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.00005,
+    "apify-default-dataset-item": 0.0015,
+    "premium-company": 0.001,
+    "premium-company-website": 0.0009
+   },
+   "perResult": null,
+   "users": 49853,
+   "accountRuns": 11,
+   "accountSucceeded": 11,
+   "accountUsd": 0.5674,
+   "lastRun": "2026-11-14"
+  },
+  {
+   "id": "bovi/greenhouse-lever-ashby-job-scraper",
+   "exists": true,
+   "actId": "GeQK0uepRsjeAVzne",
+   "deprecated": false,
+   "modified": "2026-11-14",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.00005,
+    "job-result": 0.0015
+   },
+   "perResult": null,
+   "users": 598,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "builtwith/builtwith-official-technology-scraper",
+   "exists": true,
+   "actId": "eFu56JAhgAGsIXfT4",
+   "deprecated": false,
+   "modified": "2026-03-20",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.002
+   },
+   "perResult": null,
+   "users": 812,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "crawlerbros/google-news-scraper",
+   "exists": false,
+   "http": 404
+  },
+  {
+   "id": "crawlerbros/producthunt-scraper",
+   "exists": false,
+   "http": 404
+  },
+  {
+   "id": "crawlworks/linkedin-jobs-scraper",
+   "exists": true,
+   "actId": "PeTP8M7vkdTthJvqk",
+   "deprecated": false,
+   "modified": "2026-10-12",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.00005,
+    "apify-default-dataset-item": 0.005
+   },
+   "perResult": null,
+   "users": 3220,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "curious_coder/indeed-scraper",
+   "exists": true,
+   "actId": "qA8rz8tR61HdkfTBL",
+   "deprecated": false,
+   "modified": "2026-09-05",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.0001,
+    "apify-default-dataset-item": 0.0001
+   },
+   "perResult": null,
+   "users": 5507,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "curious_coder/linkedin-company-scraper",
+   "exists": true,
+   "actId": "CzfgYQcC57pYWSXbv",
+   "deprecated": false,
+   "modified": "2026-10-02",
+   "pricing": "FREE",
+   "events": {},
+   "perResult": null,
+   "users": 1427,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "curious_coder/linkedin-jobs-scraper",
+   "exists": true,
+   "actId": "hKByXkMQaC5Qt9UMN",
+   "deprecated": false,
+   "modified": "2026-11-07",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.002,
+    "apify-actor-start": 0.00005
+   },
+   "perResult": null,
+   "users": 183155,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "curious_coder/linkedin-jobs-search-scraper",
+   "exists": true,
+   "actId": "gdbRh93zn42kBYDyS",
+   "deprecated": false,
+   "modified": "2026-08-19",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.005,
+    "apify-default-dataset-item": 0.0015
+   },
+   "perResult": null,
+   "users": 4614,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "curious_coder/linkedin-profile-scraper",
+   "exists": true,
+   "actId": "PEgClm7RgRD7YO94b",
+   "deprecated": false,
+   "modified": "2026-07-27",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.004,
+    "deep-scrape": 0.003
+   },
+   "perResult": null,
+   "users": 5955,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "data_xplorer/google-news-scraper-fast",
+   "exists": true,
+   "actId": "3Z6SK7F2WoPU3t2sg",
+   "deprecated": false,
+   "modified": "2026-11-18",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.004
+   },
+   "perResult": null,
+   "users": 2776,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "datacach/yc-companies-detail-scraper",
+   "exists": true,
+   "actId": "HcbNglyLUg3la7n6d",
+   "deprecated": false,
+   "modified": "2026-07-01",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.00005,
+    "apify-default-dataset-item": 0.01499
+   },
+   "perResult": null,
+   "users": 5,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "datahyena/company-funding-rounds",
+   "exists": true,
+   "actId": "e5gHNKGqjNWy402pY",
+   "deprecated": false,
+   "modified": "2026-11-14",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.07,
+    "apify-actor-start": 0.00005,
+    "monitor-new-round": 0.03
+   },
+   "perResult": null,
+   "users": 239,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "easyapi/google-news-scraper",
+   "exists": true,
+   "actId": "6vAxbA15R5J4uLKZ0",
+   "deprecated": false,
+   "modified": "2026-11-06",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.005,
+    "apify-actor-start": 0.09
+   },
+   "perResult": null,
+   "users": 2793,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "enrich-crm/enrich-crm-funding",
+   "exists": true,
+   "actId": "vgiqi6OkPWDSi4W7C",
+   "deprecated": false,
+   "modified": "2026-11-15",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.00005,
+    "enrichment-result": 0.03
+   },
+   "perResult": null,
+   "users": 61,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "haketa/ycombinator-companies-scraper",
+   "exists": true,
+   "actId": "FDxNNYMbDP9atAJed",
+   "deprecated": false,
+   "modified": "2026-11-10",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.00005,
+    "apify-default-dataset-item": 0.0025
+   },
+   "perResult": null,
+   "users": 166,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "harvestapi/linkedin-company",
+   "exists": true,
+   "actId": "UwSdACBp7ymaGUJjS",
+   "deprecated": false,
+   "modified": "2026-11-12",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.004,
+    "apify-actor-start": 0.00005
+   },
+   "perResult": null,
+   "users": 35042,
+   "accountRuns": 5,
+   "accountSucceeded": 5,
+   "accountUsd": 0.1123,
+   "lastRun": "2026-11-01"
+  },
+  {
+   "id": "harvestapi/linkedin-company-employees",
+   "exists": true,
+   "actId": "Vb6LZkh4EqRlR0Ka9",
+   "deprecated": false,
+   "modified": "2026-11-15",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "short-profile": 0.003,
+    "full-profile": 0.008,
+    "full-profile-with-email": 0.012,
+    "actor-start": 0.02
+   },
+   "perResult": null,
+   "users": 44139,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "harvestapi/linkedin-company-posts",
+   "exists": true,
+   "actId": "WI0tj4Ieb5Kq458gB",
+   "deprecated": false,
+   "modified": "2026-10-29",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "post": 0.002,
+    "reaction": 0.002,
+    "comment": 0.002,
+    "no-result": 0.001,
+    "apify-actor-start": 0.00005
+   },
+   "perResult": null,
+   "users": 19067,
+   "accountRuns": 7,
+   "accountSucceeded": 7,
+   "accountUsd": 0.0373,
+   "lastRun": "2026-10-31"
+  },
+  {
+   "id": "harvestapi/linkedin-company-search",
+   "exists": true,
+   "actId": "taHaRcqil3scbchuI",
+   "deprecated": false,
+   "modified": "2026-10-27",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "short-company": 0.002,
+    "full-company": 0.004,
+    "apify-actor-start": 0.001
+   },
+   "perResult": null,
+   "users": 14494,
+   "accountRuns": 6,
+   "accountSucceeded": 6,
+   "accountUsd": 0.258,
+   "lastRun": "2026-11-19"
+  },
+  {
+   "id": "harvestapi/linkedin-job-search",
+   "exists": true,
+   "actId": "zn01OAlzP853oqn4Z",
+   "deprecated": false,
+   "modified": "2026-11-10",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "job": 0.001,
+    "actor-start": 0.001
+   },
+   "perResult": null,
+   "users": 8743,
+   "accountRuns": 10,
+   "accountSucceeded": 10,
+   "accountUsd": 0.025,
+   "lastRun": "2026-11-01"
+  },
+  {
+   "id": "harvestapi/linkedin-post-search",
+   "exists": true,
+   "actId": "buIWk2uOUzTmcLsuB",
+   "deprecated": false,
+   "modified": "2026-10-27",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "post": 0.002,
+    "main-profile": 0.002,
+    "full-profile": 0.004,
+    "reaction": 0.002,
+    "comment": 0.002,
+    "no-result": 0.001,
+    "apify-actor-start": 0.00005
+   },
+   "perResult": null,
+   "users": 46051,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "harvestapi/linkedin-profile-posts",
+   "exists": true,
+   "actId": "A3cAPGpwBEG8RJwse",
+   "deprecated": false,
+   "modified": "2026-10-29",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "post": 0.002,
+    "reaction": 0.002,
+    "comment": 0.002,
+    "no-result": 0.001,
+    "apify-actor-start": 0.00005
+   },
+   "perResult": null,
+   "users": 50756,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "harvestapi/linkedin-profile-scraper",
+   "exists": true,
+   "actId": "LpVuK3Zozwuipa5bp",
+   "deprecated": false,
+   "modified": "2026-11-18",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "profile": 0.004,
+    "profile_with_email": 0.01
+   },
+   "perResult": null,
+   "users": 100454,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "harvestapi/linkedin-profile-search",
+   "exists": true,
+   "actId": "M2FMdjRVeF1HPGFcc",
+   "deprecated": false,
+   "modified": "2026-11-15",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "search-page": 0.1,
+    "full-profile": 0.004,
+    "full-profile-with-email": 0.01
+   },
+   "perResult": null,
+   "users": 58578,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "memo23/apify-ycombinator-scraper",
+   "exists": false,
+   "http": 404
+  },
+  {
+   "id": "memo23/crunchbase-scraper",
+   "exists": true,
+   "actId": "A2kXKBteDaITbXxSE",
+   "deprecated": false,
+   "modified": "2026-11-20",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.002,
+    "apify-default-dataset-item": 0.003,
+    "additional-data": 0.001,
+    "contact-email": 0.05,
+    "company-row": 0.005
+   },
+   "perResult": null,
+   "users": 582,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "memo23/y-combinator-scraper",
+   "exists": true,
+   "actId": "SrIfcdrKs6VJr7M8W",
+   "deprecated": false,
+   "modified": "2026-11-16",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.008,
+    "apify-default-dataset-item": 0.001,
+    "additional-data": 0.001,
+    "contact-email": 0.05
+   },
+   "perResult": null,
+   "users": 342,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "mikolabs/google-search-results-scraper",
+   "exists": true,
+   "actId": "mGqcMxxThfPIlEOAh",
+   "deprecated": false,
+   "modified": "2026-06-10",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.00005,
+    "apify-default-dataset-item": 0.015
+   },
+   "perResult": null,
+   "users": 7,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "misceres/indeed-scraper",
+   "exists": true,
+   "actId": "hMvNSpz3JnHgl5jkh",
+   "deprecated": false,
+   "modified": "2026-11-19",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "result": 0.006
+   },
+   "perResult": null,
+   "users": 33098,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "parsebird/yc-jobs-scraper",
+   "exists": true,
+   "actId": "CIHbQb2sgYrumBIIJ",
+   "deprecated": false,
+   "modified": "2026-10-16",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "yc-job-detail": 0.00199,
+    "apify-actor-start": 0.00005
+   },
+   "perResult": null,
+   "users": 953,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "parseforge/career-site-jobs-scraper",
+   "exists": true,
+   "actId": "M0cXf7wYCgkwZ9ioo",
+   "deprecated": false,
+   "modified": "2026-10-28",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "job-listing": 0.004,
+    "career-site-scanned": 0.004,
+    "search-page": 0.002,
+    "job-description": 0.001,
+    "compensation-data": 0.001,
+    "skills-extracted": 0.0008,
+    "company-profile": 0.0006,
+    "screening-questions": 0.0006,
+    "indeed-listing": 0.00149,
+    "linkedin-listing": 0.00265,
+    "google-listing": 0.03199,
+    "raw-source-record": 0.0004,
+    "apify-actor-start": 0.002
+   },
+   "perResult": null,
+   "users": 16,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "prodiger/google-search-scraper",
+   "exists": true,
+   "actId": "z1DkqP2QiqTdkM2bT",
+   "deprecated": false,
+   "modified": "2026-10-27",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "actor_start": 0.001,
+    "serp-page-scraped": 0.0042
+   },
+   "perResult": null,
+   "users": 59,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "s-r/free-google-search-results-serp---only-0-25-per-1-000-results",
+   "exists": true,
+   "actId": "QBb7iSV7bX3WX6CDF",
+   "deprecated": false,
+   "modified": "2026-11-19",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.00035
+   },
+   "perResult": null,
+   "users": 1086,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "scrapemesh/google-search-results-scraper",
+   "exists": false,
+   "http": 404
+  },
+  {
+   "id": "solidcode/ycombinator-scraper",
+   "exists": true,
+   "actId": "IecswaCQSNGwXGjnG",
+   "deprecated": false,
+   "modified": "2026-10-10",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.00005,
+    "apify-default-dataset-item": 0.00235
+   },
+   "perResult": null,
+   "users": 20,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "solidscrape/indeed-jobs-scraper",
+   "exists": true,
+   "actId": "hl8O9zOiOa19AkwBR",
+   "deprecated": false,
+   "modified": "2026-10-31",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.00005,
+    "apify-default-dataset-item": 0.003
+   },
+   "perResult": null,
+   "users": 45,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "valig/glassdoor-jobs-scraper",
+   "exists": true,
+   "actId": "5OaooRg0FxlRF0L1B",
+   "deprecated": false,
+   "modified": "2026-11-19",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-default-dataset-item": 0.0004,
+    "apify-actor-start": 0.001
+   },
+   "perResult": null,
+   "users": 12954,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  },
+  {
+   "id": "xtracto/google-news-scraper",
+   "exists": true,
+   "actId": "JGGibZGgELdk4388v",
+   "deprecated": false,
+   "modified": "2026-11-07",
+   "pricing": "PAY_PER_EVENT",
+   "events": {
+    "apify-actor-start": 0.005,
+    "apify-default-dataset-item": 0.002
+   },
+   "perResult": null,
+   "users": 4,
+   "accountRuns": 0,
+   "accountSucceeded": 0,
+   "accountUsd": 0,
+   "lastRun": null
+  }
+ ]
+}

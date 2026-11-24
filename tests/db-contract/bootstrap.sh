@@ -87,3 +87,41 @@ for f in "${held_execution[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
+
+# The held Company Brain V1 memory schema: profile revisions, memory items,
+# history, agent proposals and the idempotency ledger, written only through
+# SECURITY DEFINER functions (docs/plans/company-brain/V1_TEST_DEPLOYMENT.md).
+# Depends on 20261024120000_company_brain_authorized_writer (in migrations/).
+held_memory=(
+  20261110120000_company_brain_memory.sql
+)
+for f in "${held_memory[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done
+
+# The held LISA V2 signal engine: atomic event + evidence recording with a
+# server-side verification recount, the human lifecycle transition (in-
+# transaction authorization), scan-run leases and per-subject watch state.
+# Additive; depends on the signal_events tables and company_brain_write_authorization.
+held_lisa=(
+  20261111120000_lisa_signal_engine.sql
+  # Phase 5 agent collaboration ledger (depends on the LISA engine above).
+  20261112120000_agent_collaboration.sql
+)
+for f in "${held_lisa[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done
+
+# Workforce V2 security: signal tables and approvals become read-only for
+# browser roles (server-side writers only). Depends on the tables above.
+held_security=(
+  20261113120000_workforce_v2_security.sql
+  # The model-spend view stops bypassing RLS and leaves browser roles.
+  20261114120000_lead_model_calls_view_lockdown.sql
+)
+for f in "${held_security[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done

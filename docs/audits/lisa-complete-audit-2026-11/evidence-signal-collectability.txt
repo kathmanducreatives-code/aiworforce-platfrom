@@ -1,0 +1,39 @@
+competitor       hiring             YES hiring_verification         | hiring_verification runs for a competitor subject and establishes "hiring"
+competitor       funding            no  -                           | nothing that would prove "funding" is scheduled for a competitor subject (funding_signal_discovery exist but a
+competitor       expansion          YES expansion_signal_verification  | expansion_signal_verification runs for a competitor subject and establishes "expansion"
+competitor       product_launch     YES product_launch_verification  | product_launch_verification runs for a competitor subject and establishes "product_launch"
+competitor       headcount_change   no  -                           | no capability exists that would establish "headcount_change"
+competitor       pricing_change     no  -                           | no canonical signal type exists for "pricing_change", so it could never become a signal_event however well it 
+competitor       website_change     no  -                           | no canonical signal type exists for "website_change", so it could never become a signal_event however well it 
+competitor       acquisition        no  -                           | no canonical signal type exists for "acquisition", so it could never become a signal_event however well it was
+competitor       leadership_change  no  -                           | no canonical signal type exists for "leadership_change", so it could never become a signal_event however well 
+competitor       partnership        no  -                           | no canonical signal type exists for "partnership", so it could never become a signal_event however well it was
+competitor       technology         no  -                           | no canonical signal type exists for "technology", so it could never become a signal_event however well it was 
+competitor       regulatory         no  -                           | no canonical signal type exists for "regulatory", so it could never become a signal_event however well it was 
+competitor       announcement       no  -                           | no canonical signal type exists for "announcement", so it could never become a signal_event however well it wa
+tracked_company  hiring             YES hiring_verification         | hiring_verification runs for a tracked_company subject and establishes "hiring"
+tracked_company  funding            no  -                           | nothing that would prove "funding" is scheduled for a tracked_company subject (funding_signal_discovery exist 
+tracked_company  expansion          YES expansion_signal_verification  | expansion_signal_verification runs for a tracked_company subject and establishes "expansion"
+tracked_company  product_launch     YES product_launch_verification  | product_launch_verification runs for a tracked_company subject and establishes "product_launch"
+tracked_company  headcount_change   no  -                           | no capability exists that would establish "headcount_change"
+tracked_company  pricing_change     no  -                           | no canonical signal type exists for "pricing_change", so it could never become a signal_event however well it 
+tracked_company  website_change     no  -                           | no canonical signal type exists for "website_change", so it could never become a signal_event however well it 
+tracked_company  acquisition        no  -                           | no canonical signal type exists for "acquisition", so it could never become a signal_event however well it was
+tracked_company  leadership_change  no  -                           | no canonical signal type exists for "leadership_change", so it could never become a signal_event however well 
+tracked_company  partnership        no  -                           | no canonical signal type exists for "partnership", so it could never become a signal_event however well it was
+tracked_company  technology         no  -                           | no canonical signal type exists for "technology", so it could never become a signal_event however well it was 
+tracked_company  regulatory         no  -                           | no canonical signal type exists for "regulatory", so it could never become a signal_event however well it was 
+tracked_company  announcement       no  -                           | no canonical signal type exists for "announcement", so it could never become a signal_event however well it wa
+icp              hiring             YES hiring_verification         | hiring_verification runs for a icp subject and establishes "hiring"
+icp              funding            YES funding_signal_discovery    | funding_signal_discovery runs for a icp subject and establishes "funding"
+icp              expansion          YES expansion_signal_verification expansion_signal_discovery | expansion_signal_verification runs for a icp subject and establishes "expansion"
+icp              product_launch     YES product_launch_verification product_launch_discovery | product_launch_verification runs for a icp subject and establishes "product_launch"
+icp              headcount_change   no  -                           | no capability exists that would establish "headcount_change"
+icp              pricing_change     no  -                           | no canonical signal type exists for "pricing_change", so it could never become a signal_event however well it 
+icp              website_change     no  -                           | no canonical signal type exists for "website_change", so it could never become a signal_event however well it 
+icp              acquisition        no  -                           | no canonical signal type exists for "acquisition", so it could never become a signal_event however well it was
+icp              leadership_change  no  -                           | no canonical signal type exists for "leadership_change", so it could never become a signal_event however well 
+icp              partnership        no  -                           | no canonical signal type exists for "partnership", so it could never become a signal_event however well it was
+icp              technology         no  -                           | no canonical signal type exists for "technology", so it could never become a signal_event however well it was 
+icp              regulatory         no  -                           | no canonical signal type exists for "regulatory", so it could never become a signal_event however well it was 
+icp              announcement       no  -                           | no canonical signal type exists for "announcement", so it could never become a signal_event however well it wa

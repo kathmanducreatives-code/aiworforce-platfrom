@@ -23,6 +23,7 @@ import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
 import type { FundingClaim } from "../discoveryProviders/types.ts";
 import { sha256Hex } from "../providerInputFingerprint.ts";
 import { normalizeLinkedInJob } from "../hiringActorNormalizers.ts";
+import { failedChargeUsd, rethrowPending } from "./runErrors.ts";
 
 export type SignalType = "linkedin_post" | "hiring" | "funding" | "expansion" | "leadership_change";
 export type Recency = "recent" | "stale" | "undated";
@@ -260,8 +261,9 @@ export async function collectSignals(subjects: readonly SignalSubject[], plan: S
       spent += run.chargedUsd ?? (items.length ? worstCaseUsd(t.actor, items.length) : t.actor.perStartUsd + t.actor.emptyUsd);
       statuses.push({ subject: subjectKey, type: t.type, state: got.length ? "collected" : "none_found", reason: got.length ? null : "the source returned nothing in the window" });
     } catch (e) {
-      // The run may have been billed: count its worst case, stop further signal spend, never retry.
-      spent += worst;
+      rethrowPending(e);
+      // The run may have been billed: count its receipt (or worst case), stop further signal spend, never retry.
+      spent += failedChargeUsd(e, worst);
       stopped = `${t.actor.key} failed (${(e as Error)?.name ?? "error"}); its worst case is counted`;
       statuses.push({ subject: subjectKey, type: t.type, state: "unavailable", reason: stopped });
     }

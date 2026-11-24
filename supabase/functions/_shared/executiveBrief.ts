@@ -19,6 +19,8 @@
 //   4. MISSING DATA IS SAID, NOT FILLED. Empty sources produce empty sections
 //      and an explicit confidence note.
 
+import type { SharedBrainContext } from "./companyBrainContextLoader.ts";
+
 export const EXECUTIVE_BRIEF_VERSION = "orion-brief-v1" as const;
 export const EXECUTIVE_BRIEF_OUTPUT_TYPE = "executive_brief" as const;
 export const MAX_PRIORITIES = 3;
@@ -38,6 +40,8 @@ export interface EvidenceRef {
   occurred_at: string | null;
   /** In-app route that shows the underlying record (or its list). */
   route: string;
+  /** The public source the row cites (LISA V2 signals). Copied from the row, never invented. Additive. */
+  source_url?: string | null;
 }
 
 /** One normalized source row, scored. */
@@ -53,6 +57,16 @@ export interface ExecItem extends EvidenceRef {
   source_confidence: "high" | "medium" | "low" | null;
   /** Category used for grouping (signal type, lead priority, draft status…). */
   category: string | null;
+  /**
+   * LISA V2 provenance, when the row carries it. Additive. ORION reads it to
+   * state verification, lifecycle, Brain influence and the next step; it never
+   * elevates an item whose `elevatable` is false.
+   */
+  lisa?: {
+    verification: string; independent_sources: number; lifecycle: string; elevatable: boolean;
+    why_now: string | null; why_it_matters: string | null; suggested_action: string | null;
+    relevance_score: number | null; brain_influence: string[];
+  };
 }
 
 export interface BrainSnapshot {
@@ -65,6 +79,24 @@ export interface BrainSnapshot {
   competitors: string[];
   goal: string | null;
   missing: string[];
+  /** Every stated goal (profile + approved memory). Additive; absent on old callers. */
+  goals?: string[];
+  /** Domains of tracked competitors, for matching rows that carry no name. */
+  competitor_domains?: string[];
+  /** Whether Company Brain memory was read ("unavailable" where the tables are absent). */
+  memory_status?: "used" | "unavailable";
+}
+
+/** One way the Company Brain's memory changed this brief — so ORION can say how. */
+export interface MemoryInfluence {
+  /** Plain-language fact: "Exclusion: industry Defense", "Goal: …", "You rejected this lead". */
+  fact: string;
+  /** Where it came from: "your preference", "decision", "Company Brain goals". */
+  source: string;
+  /** What it did: "ranked lower", "ranked higher", "left out of the brief". */
+  effect: string;
+  /** table:id of the rows it touched (at most 10). */
+  items: string[];
 }
 
 export interface ExecutiveContext {
@@ -80,6 +112,10 @@ export interface ExecutiveContext {
   failed_work: ExecItem[];
   /** Sources that could not be read; the brief says so instead of pretending they were empty. */
   unavailable_sources: string[];
+  /** How memory changed ranking/selection. Additive. */
+  memory_influences?: MemoryInfluence[];
+  /** The loaded shared context, for the model-wording block. Never serialized into the brief. */
+  shared_brain?: SharedBrainContext | null;
 }
 
 export type Confidence = "high" | "medium" | "low";
@@ -129,14 +165,22 @@ export interface ExecutiveBrief {
   sources: EvidenceRef[];
   counts: { signals: number; leads: number; content: number; approvals: number; plans_in_flight: number; failed_work: number };
   confidence: { overall: Confidence; notes: string[] };
-  brain: { used: boolean; company: string | null; missing: string[] };
+  brain: {
+    used: boolean; company: string | null; missing: string[];
+    /** Goals ORION ranked against. Additive. */
+    goals?: string[];
+    /** How the Company Brain's memory shaped this brief. Additive. */
+    influences?: MemoryInfluence[];
+  };
   synthesis: { mode: "deterministic" | "model"; model: string | null; rejected_reason: string | null };
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 function ref(i: EvidenceRef): EvidenceRef {
-  return { kind: i.kind, table: i.table, id: i.id, title: i.title, occurred_at: i.occurred_at, route: i.route };
+  const r: EvidenceRef = { kind: i.kind, table: i.table, id: i.id, title: i.title, occurred_at: i.occurred_at, route: i.route };
+  if (typeof i.source_url === "string" && /^https?:\/\//.test(i.source_url)) r.source_url = i.source_url;
+  return r;
 }
 
 function refKey(r: Pick<EvidenceRef, "table" | "id">): string {
@@ -258,12 +302,14 @@ function candidates(ctx: ExecutiveContext, signals: ExecItem[], leads: ExecItem[
   }
 
   // MARKET: the strongest change not already covered by the opportunity.
-  for (const s of signals.slice(0, 3)) {
+  // A LISA claim that is single-source, contradicted, stale or unsourced is
+  // never raised to a recommendation (it stays visible on the Signals page).
+  for (const s of signals.filter((x) => !x.lisa || x.lisa.elevatable).slice(0, 3)) {
     out.push({
       category: "market",
       score: s.score,
       title: `${label(s)}: ${s.title}`,
-      why: `${sentence(s.reasons, "A recent market change.")}${icpPhrase(ctx)}`.trim(),
+      why: `${sentence(s.reasons, "A recent market change.")}${s.lisa?.why_now ? ` ${s.lisa.why_now}` : ""}${icpPhrase(ctx)}`.trim(),
       action: { label: "Open signals", route: s.route },
       confidence: itemConfidence(s),
       evidence: [ref(s)],
@@ -398,6 +444,12 @@ function overallConfidence(ctx: ExecutiveContext, total: number): { overall: Con
   if (!ctx.brain.usable) notes.push("Company Brain is incomplete, so relevance to your business is estimated, not known.");
   if (ctx.unavailable_sources.length) notes.push(`Could not read: ${ctx.unavailable_sources.join(", ")}. Those sections may be incomplete.`);
   if (total === 0) notes.push("No recent workspace activity to synthesise.");
+  const influences = ctx.memory_influences ?? [];
+  if (influences.length) {
+    const dropped = influences.filter((i) => i.effect === "left out of the brief").reduce((a, i) => a + i.items.length, 0);
+    const moved = influences.filter((i) => i.effect !== "left out of the brief").reduce((a, i) => a + i.items.length, 0);
+    notes.push(`Company Brain memory shaped this brief: ${dropped ? `${plural(dropped, "item")} you decided against left out` : ""}${dropped && moved ? "; " : ""}${moved ? `${plural(moved, "item")} re-ranked by your goals or exclusions` : ""}.`);
+  }
   const lowSignals = ctx.signals.filter((s) => s.source_confidence === "low").length;
   if (lowSignals) notes.push(`${plural(lowSignals, "signal")} rated low confidence by its source.`);
   const overall: Confidence = ctx.unavailable_sources.length || total === 0
@@ -452,7 +504,11 @@ export function synthesizeExecutiveBrief(ctx: ExecutiveContext): ExecutiveBrief 
     sources: [...sourceMap.values()],
     counts,
     confidence: overallConfidence(ctx, total),
-    brain: { used: ctx.brain.usable, company: ctx.brain.company, missing: ctx.brain.missing },
+    brain: {
+      used: ctx.brain.usable, company: ctx.brain.company, missing: ctx.brain.missing,
+      goals: ctx.brain.goals ?? [],
+      influences: ctx.memory_influences ?? [],
+    },
     synthesis: { mode: "deterministic", model: null, rejected_reason: null },
   };
 }

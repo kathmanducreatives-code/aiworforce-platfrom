@@ -14,6 +14,7 @@ import { observationFromCompany } from "../candidateObservation.ts";
 import { normalizeLinkedInCompanyEnriched } from "../hiringActorNormalizers.ts";
 import type { ActorInvoker } from "../discoveryProviders/adapters/apify.ts";
 import { isFresh, type CachedCompanyRecord, type EvidenceCache } from "./evidenceCache.ts";
+import { rethrowPending } from "./runErrors.ts";
 
 export const COMPANY_RECORD_ACTOR = Object.freeze({ key: "apify_linkedin_company_details", actorId: "harvestapi/linkedin-company", perItemUsd: 0.004, perStartUsd: 0.00005 });
 
@@ -89,6 +90,7 @@ export async function readCompanyRecords(targets: readonly CanonicalTarget[], in
     }
     return { evidence, facts, statuses, spentUsd: run.chargedUsd ?? worst, stopped: null };
   } catch (e) {
+    rethrowPending(e);
     for (const t of batch) statuses.push({ companyKey: t.companyKey, state: "unavailable", reason: `company record read failed (${(e as Error)?.name ?? "error"}); not retried` });
     return { evidence, facts, statuses, spentUsd: worst, stopped: "charge_uncertain" };
   }

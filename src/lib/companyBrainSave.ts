@@ -7,6 +7,7 @@
 // that, which is how the page, the agents and lead search came to disagree
 // (docs/audits/company-brain-onboarding).
 import { supabase } from '@/integrations/supabase/client';
+import { companyBrainWritesBlocked, COMPANY_BRAIN_UNAVAILABLE_MESSAGE } from '@/lib/env/companyBrainAvailability';
 
 export type BrainProfile = Record<string, unknown>;
 
@@ -19,6 +20,8 @@ export interface BrainSaveResult {
   conflict?: boolean;
   /** Why it failed, in words for a person. */
   message?: string;
+  /** This environment does not allow Company Brain writes at all (isolated TEST). */
+  unavailable?: boolean;
 }
 
 export async function saveCompanyBrainPatch(input: {
@@ -28,8 +31,17 @@ export async function saveCompanyBrainPatch(input: {
   /** `company_brain.updated_at` of the copy being edited. */
   expectedUpdatedAt: string | null;
 }): Promise<BrainSaveResult> {
+  // Never send a write the database is built to refuse.
+  if (companyBrainWritesBlocked(import.meta.env)) {
+    return { ok: false, conflict: false, unavailable: true, message: COMPANY_BRAIN_UNAVAILABLE_MESSAGE };
+  }
+  // No version to build on: the Brain has not loaded, or does not exist yet for
+  // this workspace. Neither is a change made elsewhere, so this is not a conflict.
   if (!input.expectedUpdatedAt) {
-    return { ok: false, conflict: true, message: 'The Company Brain is still loading. Try again in a moment.' };
+    return {
+      ok: false, conflict: false,
+      message: "This workspace's Company Brain hasn't loaded or hasn't been set up yet. Reload the page; if this persists, set up the Company Brain first.",
+    };
   }
   const { data, error } = await supabase.functions.invoke('generate-company-brain-draft', {
     body: {

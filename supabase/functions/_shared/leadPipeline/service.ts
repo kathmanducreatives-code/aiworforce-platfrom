@@ -19,6 +19,7 @@
 
 import { classifyConstraints, REQUIREMENT_VOCABULARY_VERSION } from "../requirementVocabulary.ts";
 import type { PlanReplay, PlanSigner, PlanTokenPayload } from "./planToken.ts";
+import { expandIndustries, flexibleMatches, flexibleOutcome, readIndustryMap, relaxForFlexible, requestedIndustries, type DiscoveryMode, type IndustryMap } from "./flexibleDiscovery.ts";
 import { activeMissionContract } from "../missionInterpretationContract.ts";
 import { understandingOf } from "../missionUnderstanding.ts";
 import { summarizeProviderRun } from "./providerRunSummary.ts";
@@ -46,18 +47,19 @@ import type { ConnectionStore } from "../discoveryProviders/connections.ts";
 import type { DiscoveryFlags, Env } from "../discoveryProviders/flags.ts";
 import type { ProviderConnectionState } from "../discoveryProviders/routing.ts";
 import type { CheckpointStore } from "./checkpoint.ts";
+import { RunPending, spendBasis } from "./apifyRuns.ts";
 import { ExclusionIndex, type ExistingRecord } from "./exclusions.ts";
 import { configureIcp, ICPS, type IcpConfig, type IcpId } from "./icp.ts";
 import { runLeadPipeline, worstCase, type PipelineApprovals, type PipelineLead, type PipelineRun } from "./pipeline.ts";
 import { projectPipelineLead, type PipelineRow } from "./projection.ts";
 import type { GenerateJsonFn } from "../intelligence/plannerWrapper.ts";
 import type { ProviderId } from "../discoveryProviders/types.ts";
-import { runDiscoveryStrategy, type StrategyRun } from "./multiProvider.ts";
+import { runDiscoveryStrategy, type StrategyRun, type StrategyRunInput } from "./multiProvider.ts";
 import { adviseStrategy, isStrategy, planStrategy, specFromMission, type DiscoveryStrategyId, type StrategyContext, type StrategyPlan } from "./strategy.ts";
 
 const on = (v: string | undefined) => !!v && ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
 
-export interface PipelineFlags { enabled: boolean; workspaces: Set<string>; signals: boolean; phones: boolean; strictRequirements?: boolean }
+export interface PipelineFlags { enabled: boolean; workspaces: Set<string>; signals: boolean; phones: boolean; strictRequirements?: boolean; companySearch?: boolean }
 export function readPipelineFlags(env: Env): PipelineFlags {
   return {
     enabled: on(env("LEAD_PIPELINE_ENABLED")),
@@ -68,6 +70,9 @@ export function readPipelineFlags(env: Env): PipelineFlags {
     // Option E Stage 6: refuse a model-invented requirement outside the closed vocabulary.
     // Off by default; until it is on, the plan only REPORTS what it would refuse.
     strictRequirements: on(env("LEAD_STRICT_REQUIREMENTS_ENABLED")),
+    // Company-first discovery (harvestapi/linkedin-company-search). Off by default: until an
+    // owner turns it on, a request with no hiring or post signal is refused exactly as before.
+    companySearch: on(env("LEAD_PIPELINE_COMPANY_SEARCH")),
   };
 }
 
@@ -233,6 +238,8 @@ export interface StrategyRequest {
   user: StrategyContext["user"];
   budget: StrategyContext["budget"];
   approval: { planHash: string; leadoceanRecords: number; apifyUsd: number; token: string | null } | null;
+  /** FLEXIBLE DISCOVERY (flexibleDiscovery.ts): the user's choice; absent = strict, unchanged. */
+  mode?: DiscoveryMode;
 }
 
 const PROVIDER_NAMES: readonly ProviderId[] = ["leadocean", "apify", "apollo"];
@@ -249,6 +256,7 @@ export function parseStrategyRequest(b: Record<string, unknown>): StrategyReques
   const maxLo = b.max_leadocean_records === undefined ? 50 : num(b.max_leadocean_records, 500);
   const maxUsd = b.max_apify_usd === undefined ? 0.25 : num(b.max_apify_usd, 5);
   if (maxLo === null || maxUsd === null || !Number.isInteger(maxLo)) return null;
+  if (b.discovery_mode !== undefined && b.discovery_mode !== "strict" && b.discovery_mode !== "flexible") return null;
   const a = b.approval as Record<string, unknown> | null | undefined;
   let approval: StrategyRequest["approval"] = null;
   if (a) {
@@ -262,6 +270,7 @@ export function parseStrategyRequest(b: Record<string, unknown>): StrategyReques
     user: { ...(b.strategy ? { strategy: b.strategy as DiscoveryStrategyId } : {}), excludeProviders: exclude as ProviderId[], allowReviewOnly: b.allow_review_only === true,
       ...(b.accept_likely === true ? { acceptLikely: true } : {}) },
     budget: { maxLeadoceanRecords: maxLo, maxApifyUsd: maxUsd }, approval,
+    ...(b.discovery_mode === "flexible" ? { mode: "flexible" as const } : {}),
   };
 }
 
@@ -314,6 +323,8 @@ export interface StrategyDeps extends PipelineDeps {
    * failing: the leads are still saved, and the response says there is no Workbench view.
    */
   recordRunPlan?(p: { workspaceId: string; userId: string; query: string; planHash: string; status: "completed" | "partial" | "failed"; summary: string }): Promise<string | null>;
+  /** Asynchronous Apify runs with recorded run ids and receipts (V5 Phase C); null/absent = run-sync. */
+  apifyRuns?: StrategyRunInput["apifyRuns"];
 }
 
 /** Words by which a request asks for VERIFIED companies (then likely matches never count). */
@@ -383,11 +394,23 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   if (unsupported.length && contract.enforced) {
     return { status: 422, body: { error: "the request was read with a requirement ATLAS cannot place and you did not state; rephrase the request or remove it", contract } };
   }
-  const spec = specFromMission(interpreted.mission as never, { defaultCount: req.requestedCount ?? 25 });
+  let spec = specFromMission(interpreted.mission as never, { defaultCount: req.requestedCount ?? 25 });
   if (mc) {
     const v = checkPlanRequirements(mc, spec.requirements.criteria as unknown as { id: string; kind: string }[]);
     if (v.length) return { status: 409, body: { error: "the plan's requirements differ from the approved contract; nothing ran", invariantViolations: v } };
   }
+  // FLEXIBLE DISCOVERY: the user's explicit choice to rank by industry and consumer-only instead
+  // of gating on them. GPT names related industries at PLAN time only; a run replays the signed list.
+  let industries: IndustryMap | null = null;
+  if (req.mode === "flexible") {
+    const asked = requestedIndustries(spec);
+    industries = token ? readIndustryMap(token.replay.flexible, asked) : await expandIndustries(asked, d.advisor, req.workspaceId);
+    spec = relaxForFlexible(spec, industries).spec;
+  }
+  const flexibleView = spec.flexible ? {
+    mode: "flexible" as const, relaxed: spec.flexible.relaxed,
+    industries: { requested: spec.flexible.industries.requested, related: spec.flexible.industries.related, source: spec.flexible.industries.source, note: spec.flexible.industries.error },
+  } : null;
 
   const rows = await d.store.list(req.workspaceId);
   const lo = rows.find((x) => x.provider === "leadocean");
@@ -399,7 +422,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       apify: { enabled: f.enabled && f.provider.apify, connected: !!d.apify, authorized: true },
       apollo: { enabled: f.enabled && f.provider.apollo && f.commercialTerms.apollo, connected: ap?.status === "connected", authorized: true },
     },
-    budget: req.budget, user: req.user, businessModelGrounding: !!d.groundBusinessModel,
+    budget: req.budget, user: req.user, businessModelGrounding: !!d.groundBusinessModel, companySearch: !!d.flags.companySearch,
     // The plan hash binds the workspace and the interpretation contract it was read under.
     // Contract mode: the plan hash binds the contract's own hash, so an approval names one exact meaning.
     binding: { workspaceId: req.workspaceId, contractVersion: mc ? `${MISSION_CONTRACT_VERSION}:${mcHash}` : d.contractVersion ?? activeMissionContract() },
@@ -429,9 +452,9 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   if (req.action === "strategy_plan" || plan.status === "blocked") {
     // The approval token: what an owner/admin approves, and all a run may execute.
     const approval_token = req.action === "strategy_plan" && plan.status === "ready" && d.signer && interpreted.replay
-      ? await d.signer.sign({ workspaceId: req.workspaceId, walkId: req.walkId, plannedBy: d.userId, planHash: plan.planHash, query: req.query, requestedCount: req.requestedCount, replay: { ...interpreted.replay, advice } }, now())
+      ? await d.signer.sign({ workspaceId: req.workspaceId, walkId: req.walkId, plannedBy: d.userId, planHash: plan.planHash, query: req.query, requestedCount: req.requestedCount, replay: { ...interpreted.replay, advice, ...(industries ? { flexible: industries } : {}) } }, now())
       : null;
-    return { status: plan.status === "blocked" ? 409 : 200, body: { status: plan.status, plan, worstCase: plan.estimate, interpretation, ...(approval_token ? { approval_token } : {}) } };
+    return { status: plan.status === "blocked" ? 409 : 200, body: { status: plan.status, plan, worstCase: plan.estimate, interpretation, discoveryMode: flexibleView ? "flexible" : "strict", ...(flexibleView ? { flexible: flexibleView } : {}), ...(approval_token ? { approval_token } : {}) } };
   }
   if (!req.approval) return { status: 400, body: { error: "a run needs an approval", plan } };
   if (req.approval.planHash !== plan.planHash) return { status: 409, body: { error: "plan changed since it was approved (re-interpretation or new limits); review the new plan", plan } };
@@ -442,7 +465,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     commercialTermsConfirmed: f.commercialTerms.leadocean, remainingCredits: lo?.usage?.remaining ?? null,
     recentFailures: lo && lo.status !== "connected" ? 1 : 0, restrictions: lo?.usage?.restrictions ?? [],
   }];
-  const run: StrategyRun = await runDiscoveryStrategy({
+  const run: StrategyRun | RunPending = await runDiscoveryStrategy({
     workspaceId: req.workspaceId, walkId: req.walkId, spec, plan,
     approval: { planHash: req.approval.planHash, leadoceanRecords: req.approval.leadoceanRecords, apifyUsd: req.approval.apifyUsd, approvedBy: d.userId, approvedAt: now().toISOString() },
     leadocean: key ? d.leadoceanFor(key).adapter : null, apify: d.apify, connections,
@@ -450,13 +473,29 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     evidenceCache: d.evidenceCache ?? null,
     groundBusinessModel: d.groundBusinessModel ?? null,
     acceptLikely: req.user?.acceptLikely === true,
+    apifyRuns: d.apifyRuns ?? null,
+  }).catch((e) => {
+    // A RUN STILL GOING (Phase C): nothing is lost and nothing is bought again — the run id is
+    // recorded on its reservation, and calling strategy_run again with the SAME approval token
+    // adopts it (completed steps replay from the ledger at $0).
+    if (e instanceof RunPending) return e;
+    throw e;
   });
+  if (run instanceof RunPending) {
+    return { status: 202, body: { status: "running", plan: { planHash: plan.planHash },
+      running: { actor: run.actorKey, runId: run.runId, state: run.status, reservedUsd: run.reservedUsd },
+      next: "Call strategy_run again with the same approval token: the run in progress is adopted, never bought again.",
+      outcome: { status: "running", summary: `Still running: ${run.actorKey.replace(/^apify_/, "").replace(/_/g, " ")} (${run.status.toLowerCase()}). Check again shortly — nothing will be bought twice.`,
+        spend: { apifyUsd: run.reservedUsd, leadoceanRecords: 0, basis: "reserved" } } } };
+  }
+  const charged = run.charges ? spendBasis(run.charges) : null;
   if (run.status === "blocked") {
     // A "blocked" run that already spent is a FAILED run, not a refusal (audit S3/S4).
     const spent = run.spend.apifyUsd > 0 || run.spend.leadoceanRecords > 0;
     const outcome = missionOutcome({ requested: spec.requestedCount, qualified: 0, pending: 0, rejected: 0, runStatus: spent ? "failed" : "blocked", reason: run.reason,
-      spend: { ...run.spend, basis: "estimate" } });
-    return { status: 409, body: { error: run.reason, plan, outcome, steps: run.steps, spend: run.spend } };
+      spend: { ...run.spend, basis: charged?.basis ?? "estimate" } });
+    return { status: 409, body: { error: run.reason, plan, outcome, steps: run.steps, spend: run.spend,
+      ...(run.charges ? { charges: run.charges.map((c) => ({ actor: c.actorKey, runId: c.runId, state: c.state, usd: c.usd, reservedUsd: c.reservedUsd, build: c.build, status: c.status })), chargeStates: charged?.states ?? {} } : {}) } };
   }
   // The run's own plan: what the Workbench reads (`lead_candidates.plan_id`). Recorded before
   // the rows so every new lead carries it; a failure here never loses the leads.
@@ -469,6 +508,10 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   const projected = [...run.queue, ...run.review].map((l) => projectPipelineLead(l, { workspaceId: req.workspaceId, values: [], planId: runPlanId })).filter((x): x is PipelineRow => !!x);
   const persisted = await d.persist(projected, 0);
   const saved = saveOutcome(run.status, run.reason ?? null, persisted, projected.length);
+  // FLEXIBLE DISCOVERY counts only Strong and Close matches toward the number asked for; the rest
+  // are returned, labelled, for review. Strict counts exactly as before.
+  const matches = spec.flexible ? flexibleMatches([...run.queue, ...run.review], spec.flexible.industries) : null;
+  const counted = matches ? matches.filter((m) => m.tier === "strong" || m.tier === "close").length : null;
   return {
     status: 200,
     body: {
@@ -476,18 +519,24 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       // Where the saved leads appear: the Workbench Leads table for this plan (null = not linked).
       workbench: runPlanId ? { planId: runPlanId } : null,
       // What the REQUEST got (outcome.ts): only qualified companies count toward the number asked for.
-      outcome: missionOutcome({
-        requested: spec.requestedCount, qualified: run.queue.length,
+      outcome: flexibleOutcome(matches, spec.requestedCount, missionOutcome({
+        requested: spec.requestedCount, qualified: counted ?? run.queue.length,
         // A likely match the user permitted counts (labelled); it is not also "pending".
-        pending: run.review.filter((l) => l.statuses.qualification === "pending" && !l.acceptedAsLikely).length, rejected: run.excluded.length,
+        pending: matches ? matches.length - counted! : run.review.filter((l) => l.statuses.qualification === "pending" && !l.acceptedAsLikely).length, rejected: run.excluded.length,
         likely: run.review.filter((l) => l.acceptedAsLikely).length,
         runStatus: run.status, reason: run.reason,
         openRequirements: [...new Set(run.review.flatMap((l) => l.qualification?.gaps ?? []))].map((g) => g.replace(/_/g, " ")),
-        // run-sync reports no charge: the ledger settles the worst case for the items returned.
-        spend: { ...run.spend, basis: "estimate" },
+        // Async runs (Phase C) report Apify's own receipt; run-sync reports none (estimate).
+        spend: { ...run.spend, basis: charged?.basis ?? "estimate" },
         saved: { failed: saved.failed, attempted: projected.length },
-      }),
+      })),
       mergedCompanies: run.mergedCompanies ?? [],
+      // FLEXIBLE DISCOVERY: the original request, what was relaxed, and every company's match tier
+      // with each attribute verified / inferred / unknown and its sources (flexibleDiscovery.ts).
+      discoveryMode: flexibleView ? "flexible" : "strict",
+      ...(flexibleView && matches ? { flexible: { ...flexibleView, originalRequest: token?.query ?? req.query, matches } } : {}),
+      // Every Apify run: its id, how sure its charge is (settled / provider_reported / unknown).
+      ...(run.charges ? { charges: run.charges.map((c) => ({ actor: c.actorKey, runId: c.runId, state: c.state, usd: c.usd, reservedUsd: c.reservedUsd, build: c.build, status: c.status })), chargeStates: charged?.states ?? {} } : {}),
       evidenceRefused: run.evidenceRefused, queue: run.queue, review: run.review, excludedCount: run.excluded.length,
       // Who was ruled out and why — the count alone hid it from the user.
       rejected: rejectedSummary(run.excluded),

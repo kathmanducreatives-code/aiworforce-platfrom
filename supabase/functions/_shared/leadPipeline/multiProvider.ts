@@ -34,9 +34,10 @@ import type { EvidenceItem } from "../candidateObservation.ts";
 import type { Eligibility } from "../candidateEligibility.ts";
 import { classifyDecisionMakerRole } from "../decisionMaker/roleFamily.ts";
 import { ledgeredInvoker } from "./apifyInvoker.ts";
-import { collapseDuplicateLeads, type MergedLead } from "./identity.ts";
+import { asyncLedgeredInvoker, type ApifyTransport, type RunCharge, type RunLedger } from "./apifyRuns.ts";
+import { canonicalDomain, collapseDuplicateLeads, type MergedLead } from "./identity.ts";
 import { apifyPageFetcher, checkBusinessModels, type BusinessModelFinding, type Grounder } from "./businessModelCheck.ts";
-import { COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput, discoverHiringCompanies, discoverPostingCompanies, peopleFromEmployeeRows, slugOf } from "./apifyDiscovery.ts";
+import { COMPANY_EMPLOYEES_ACTOR_KEY, companyEmployeesInput, discoverFirmographicCompanies, discoverHiringCompanies, discoverPostingCompanies, peopleFromEmployeeRows, slugOf } from "./apifyDiscovery.ts";
 import { PIPELINE_ACTORS } from "./apifyInvoker.ts";
 import type { Signal } from "./signals.ts";
 import { COMPANY_RECORD_ACTOR, readCompanyRecordsCached } from "./canonical.ts";
@@ -47,9 +48,11 @@ import { NON_DECISION_TITLES } from "./icp.ts";
 import { bestContact, personVerification, runLeadPipeline, PIPELINE_VERSION, type PipelineLead, type PipelineRun } from "./pipeline.ts";
 import { DEFAULT_WEIGHTS, rankLeads } from "./ranking.ts";
 import {
-  APOLLO_ACCESS_VALIDATED, DISCOVERY_CAPABILITIES, discoveryJobTitles, icpFromSpec, postTopics, sizePreferenceDistance, leadoceanDiscoveryRequirements,
+  APOLLO_ACCESS_VALIDATED, companySearchInput, DISCOVERY_CAPABILITIES, discoveryJobTitles, icpFromSpec, postTopics, sizePreferenceDistance, leadoceanDiscoveryRequirements,
   type DiscoverySpec, type DiscoveryStrategyId, type Limitation, type StrategyPlan,
 } from "./strategy.ts";
+import { rethrowPending } from "./runErrors.ts";
+import { proofNeeded } from "./capabilityResolution.ts";
 
 export const STRATEGY_RUN_VERSION = "discovery-strategy-run-v1" as const;
 
@@ -83,6 +86,12 @@ export interface StrategyRunInput {
   groundBusinessModel?: Grounder | null;
   /** The plan's hash-bound permission to count likely business-model matches (strategy.ts `acceptLikely`). */
   acceptLikely?: boolean;
+  /**
+   * Asynchronous Apify runs (V5 Phase C, apifyRuns.ts): start → record the run id → poll →
+   * receipt. When present it replaces the synchronous invoker for every Apify step; a run that
+   * outlives `deadlineMs` throws RunPending, and the next request with the same plan adopts it.
+   */
+  apifyRuns?: { transport: ApifyTransport; ledger: RunLedger; deadlineMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void> } | null;
 }
 
 export interface ProviderStepOutcome {
@@ -113,6 +122,8 @@ export interface StrategyRun {
   contactValues: [];
   /** The LeadOcean-led path's full pipeline run (funnel, checkpoint, yield), when it ran. */
   pipeline: Pick<PipelineRun, "funnel" | "checkpoint" | "yield" | "discovery" | "canonical"> | null;
+  /** Every Apify run's charge and how sure it is (async runs only; absent on the sync path). */
+  charges?: RunCharge[];
 }
 
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6;
@@ -152,11 +163,12 @@ export async function runDiscoveryStrategy(input: StrategyRunInput): Promise<Str
   const a = input.approval!;
   // The server's estimate is the ceiling: an approval naming more never raises it.
   const cap = { leadoceanRecords: Math.min(a.leadoceanRecords, plan.estimate.leadoceanRecords), apifyUsd: Math.min(a.apifyUsd, plan.estimate.apifyUsd) };
+  const chargesOut: { current: RunCharge[] | null } = { current: null };
   const run = plan.strategy === "leadocean_only" || plan.strategy === "leadocean_plus_apify" ? await runLeadOceanLed(input, cap, now)
-    : plan.strategy === "apify_only" || plan.strategy === "apify_plus_leadocean" || plan.strategy === "apify_leadocean_concurrent" ? await runApifyLed(input, cap, now)
+    : plan.strategy === "apify_only" || plan.strategy === "apify_plus_leadocean" || plan.strategy === "apify_leadocean_concurrent" ? await runApifyLed(input, cap, now, chargesOut)
     : null;
   if (!run) return blocked(`strategy ${plan.strategy} has no executor`);
-  return withOneLeadPerCompany(run);
+  return { ...withOneLeadPerCompany(run), ...(chargesOut.current ? { charges: chargesOut.current } : {}) };
 }
 
 /** One company, one lead (identity.ts): collapse across every lane, then re-file by the kept verdict. */
@@ -252,14 +264,18 @@ async function leadOceanConcurrentDiscovery(input: StrategyRunInput, step: Strat
 
 // ── Apify-led: discover by an open role ─────────────────────────────────────
 
-async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: number; apifyUsd: number }, now: () => Date): Promise<StrategyRun> {
+async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: number; apifyUsd: number }, now: () => Date, chargesOut: { current: RunCharge[] | null }): Promise<StrategyRun> {
   const { plan, spec } = input;
   const at = now().toISOString();
   const mission = `ms:${input.walkId}:${plan.planHash}`;
   const steps: ProviderStepOutcome[] = [];
   const timed = withTimeout(input.apify, input.actorTimeoutMs ?? 120_000);
   // Every Apify run reserves its worst case in the durable ledger first: a re-run replays, an uncertain charge is never re-bought.
-  const apify = timed ? ledgeredInvoker(timed, input.ledger, { workspaceId: input.workspaceId, missionId: `${mission}:apify`, maxUsd: cap.apifyUsd }) : null;
+  const ar = input.apifyRuns;
+  const runs = ar ? asyncLedgeredInvoker(ar.transport, ar.ledger, { workspaceId: input.workspaceId, missionId: `${mission}:apify`, maxUsd: cap.apifyUsd },
+    { deadlineMs: ar.deadlineMs, now: ar.now, sleep: ar.sleep }) : null;
+  const apify = runs ?? (timed ? ledgeredInvoker(timed, input.ledger, { workspaceId: input.workspaceId, missionId: `${mission}:apify`, maxUsd: cap.apifyUsd }) : null);
+  chargesOut.current = runs?.charges ?? null;
 
   // 1 discovery by the defining signal: open roles (job search) or posts on a topic (post search)
   const jobStep = plan.steps[0];
@@ -267,9 +283,12 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   const postActor = PIPELINE_ACTORS["apify_linkedin_post_search"];
   const apifyDiscovery = async (): Promise<Awaited<ReturnType<typeof discoverHiringCompanies>> & { signals?: Signal[] }> =>
     jobStep.capability === "apify.linkedin_job_search"
-      ? await discoverHiringCompanies(spec, discoveryJobTitles(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission })
+      ? await discoverHiringCompanies(spec, discoveryJobTitles(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission, input: jobStep.input ?? null })
       : jobStep.capability === "apify.linkedin_post_search" && postActor
       ? await discoverPostingCompanies(spec, postTopics(spec), apify, { maxItems: jobStep.maxItems, maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission, perItemUsd: postActor.perItemUsd, perStartUsd: postActor.perStartUsd })
+      // Company-first: the SAME input the signed plan priced (strategy.companySearchInput).
+      : jobStep.capability === "apify.linkedin_company_search"
+      ? await discoverFirmographicCompanies((jobStep.input as never) ?? companySearchInput(spec, jobStep.maxItems).input, apify, { maxUsd: seedUsd, now: now(), idPrefix: mission, missionId: mission })
       : { companies: [], evidence: new Map(), jobs: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: `no executor for ${jobStep.capability}`, runId: null };
   // CONCURRENT (apify_leadocean_concurrent): LeadOcean searches the SAME mission at the same
   // time, by the filters it can express (never the hiring signal, which only Apify proves).
@@ -279,6 +298,8 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
     apifyDiscovery(),
     loStep ? leadOceanConcurrentDiscovery(input, loStep, cap, mission) : Promise.resolve(null),
   ]);
+  // A discovery run still going at Apify (Phase C) is not a failure: the request answers 202.
+  if (apifySettled.status === "rejected") rethrowPending(apifySettled.reason);
   const found: Awaited<ReturnType<typeof apifyDiscovery>> = apifySettled.status === "fulfilled" ? apifySettled.value
     : { companies: [], evidence: new Map(), jobs: new Map(), rows: 0, dropped: {}, spentUsd: 0, stopped: `${(apifySettled.reason as Error)?.message ?? "failed"}; not retried`, runId: null };
   steps.push({ capability: jobStep.capability, provider: "apify", status: found.stopped ? "failed" : "completed",
@@ -372,6 +393,7 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
       apifySpent += spent;
       steps.push({ capability: peopleStep.capability, provider: "apify", status: run ? "completed" : "skipped", reason: run ? null : "no company to look up", spend: { leadoceanRecords: 0, apifyUsd: r6(spent) } });
     } catch (e) {
+      rethrowPending(e);
       apifySpent += peopleStep.estimate.apifyUsd;
       steps.push({ capability: peopleStep.capability, provider: "apify", status: "failed", reason: `${(e as Error)?.message ?? "failed"}; not retried`, spend: { leadoceanRecords: 0, apifyUsd: peopleStep.estimate.apifyUsd } });
     }
@@ -433,9 +455,42 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   if (bmStep) {
     const required = String(spec.requirements.criteria.find((c) => c.kind === "hard" && c.dimension === "business_model")?.value ?? "B2B");
     const eligibleNow = leads.filter((l) => l.shared?.eligibility === "eligible").length;
-    const need = Math.max(0, spec.requestedCount - eligibleNow);
-    const open = leads.filter((l) => l.shared?.eligibility === "pending" && (l.shared.gaps ?? []).length === 1 && l.shared.gaps[0] === "business_model" && !(l.shared.disproven ?? []).length && l.company.domain.length);
-    const targets = open.slice(0, Math.min(Math.ceil(need * 1.5), Math.floor(bmStep.maxItems / 3))).map((l) => ({
+    const need = spec.flexible ? spec.requestedCount : Math.max(0, spec.requestedCount - eligibleNow);
+    // An industry gap never closes on any strategy (strategy.ts: "a taxonomy label proves no
+    // industry"), so it must not hide a company from the one check that CAN still decide it:
+    // pilot rehearsal 2026-11-09 — an industry-scoped request left every company open on
+    // [business_model, industry], the website step never ran, and a homeowner-only roofer was
+    // saved as "needs verification" instead of being rejected as consumer.
+    const closable = (g: string) => g !== "industry";
+    // A requirement business-model evidence decides is not always filed as a business_model gap:
+    // "Exclude consumer-only companies" is an exclusion, which no gap names (pilot 2026-11-23 —
+    // the step was planned for it and then read no site). Such a company is read too, when
+    // every check still open on it is either one the website decides or one nothing can close.
+    const hardCrit = spec.requirements.criteria.filter((c) => c.kind === "hard");
+    const siteDecides = new Set(hardCrit.filter((c) => proofNeeded(c as never).includes("business_model")).map((c) => c.id));
+    const neverCloses = new Set(hardCrit.filter((c) => { const n = proofNeeded(c as never); return n.length === 1 && n[0] === "industry"; }).map((c) => c.id));
+    const openOnSite = (l: VerifiedLead) => {
+      const unknown = (l.shared?.checks ?? []).filter((c) => c.result === "unknown").map((c) => c.criterion_id);
+      return unknown.some((id) => siteDecides.has(id)) && unknown.every((id) => siteDecides.has(id) || neverCloses.has(id));
+    };
+    // FLEXIBLE DISCOVERY ranks by the business model (flexibleDiscovery.ts), so it reads every
+    // company still in play — eligible ones too — within the same approved step and budget.
+    const open = spec.flexible
+      ? leads.filter((l) => l.shared?.eligibility !== "ineligible" && !(l.shared?.disproven ?? []).length && l.company.domain.length)
+      : leads.filter((l) => {
+        const gaps = (l.shared?.gaps ?? []).filter(closable);
+        return l.shared?.eligibility === "pending" && ((gaps.length === 1 && gaps[0] === "business_model") || (gaps.length === 0 && openOnSite(l)))
+          && !(l.shared.disproven ?? []).length && l.company.domain.length;
+      });
+    // ONE SITE, ONE READ. Two records of one company (two LinkedIn pages, one domain) are merged
+    // only after this step, so without this both were targeted: the same three pages were bought
+    // twice and credited to one record, and the record that survived the merge read "no readable
+    // first-party page" (pilot rehearsal 2026-11-09). Read each domain once; credit every record on it.
+    const domainOf = (l: VerifiedLead) => canonicalDomain(l.company.domain[0].value) ?? l.company.domain[0].value;
+    const sameSite = new Map<string, string[]>();
+    for (const l of open) sameSite.set(domainOf(l), [...(sameSite.get(domainOf(l)) ?? []), l.company.key]);
+    const onePerSite = open.filter((l) => sameSite.get(domainOf(l))![0] === l.company.key);
+    const targets = onePerSite.slice(0, Math.min(Math.ceil(need * 1.5), Math.floor(bmStep.maxItems / 3))).map((l) => ({
       companyKey: l.company.key, name: l.company.name[0]?.value ?? null, domain: l.company.domain[0].value,
       linkedinUrl: l.company.linkedinUrl[0]?.value ?? null,
       description: canonical.facts.get(`li:${slugOf(l.company.linkedinUrl[0]?.value) ?? ""}`)?.description ?? null,
@@ -447,10 +502,13 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
       : await checkBusinessModels(targets, required, { fetchPages: apifyPageFetcher(apify, now), ground },
         { maxUsd: budget, idempotencyKey: `${mission}:apify_website_content:business_model`, missionId: mission, now });
     apifySpent += res.spentUsd;
+    const siteOfKey = new Map(targets.map((t) => [t.companyKey, canonicalDomain(t.domain) ?? t.domain]));
     for (const f of res.findings) {
       const { item, ...shown } = f;
-      businessModel.set(f.companyKey, shown);
-      if (item) siteEvidence.set(f.companyKey, [item]);
+      for (const key of sameSite.get(siteOfKey.get(f.companyKey) ?? "") ?? [f.companyKey]) {
+        businessModel.set(key, { ...shown, companyKey: key });
+        if (item) siteEvidence.set(key, [item]);
+      }
     }
     steps.push({ capability: bmStep.capability, provider: "apify",
       status: !targets.length ? "not_run" : res.stopped ? "failed" : "completed",

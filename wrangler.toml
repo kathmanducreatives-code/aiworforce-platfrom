@@ -1,0 +1,9 @@
+# Cloudflare Pages project for the Agentory frontend (static Vite SPA).
+# Build: `npm run build` → `dist/` (routing: public/_redirects; headers: public/_headers).
+# Deploy a PREVIEW (never touches agentory.space):
+#   npx wrangler pages deploy dist --project-name agentory-web --branch preview
+# Production deploys use --branch main. The custom domain is attached only at cutover
+# (docs/release/2026-11-12-r1/FRONTEND_HOSTING.md).
+name = "agentory-web"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-11-01"

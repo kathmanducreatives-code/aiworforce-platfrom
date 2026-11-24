@@ -67,12 +67,76 @@ export interface StrategyPlanView {
   questions: string[];
   /** What the interpreter assumed, what it could not check, and what it merged — from the contract. */
   interpretation: { assumptions: string[]; disclosures: string[]; merged: { span: string; reason: string }[] };
+  /** FLEXIBLE DISCOVERY: what this plan relaxed and the related industries it ranks by. Null = strict. */
+  flexible: FlexiblePlanView | null;
+  /** The mode the BACKEND planned in. Null = a backend from before Flexible Discovery (it ignores
+   *  discovery_mode and plans strictly), so a Flexible request must not be approved against it. */
+  discoveryMode: DiscoveryMode | null;
+}
+
+export type DiscoveryMode = 'strict' | 'flexible';
+export interface FlexiblePlanView {
+  relaxed: { label: string; why: string }[];
+  industries: { requested: string[]; related: string[]; note: string | null };
+}
+export type MatchTier = 'strong' | 'close' | 'exploratory' | 'insufficient';
+export type AttributeStatus = 'verified' | 'inferred' | 'unknown';
+export interface FlexibleMatchView {
+  leadKey: string; name: string; domain: string | null; tier: MatchTier; why: string[];
+  attributes: { name: string; status: AttributeStatus; value: string }[];
+  sources: string[];
+}
+export const TIER_LABEL: Record<MatchTier, string> = { strong: 'Strong Match', close: 'Close Match', exploratory: 'Exploratory', insufficient: 'Insufficient Evidence' };
+export const ATTRIBUTE_LABEL: Record<string, string> = {
+  headquarters: 'HQ', hiring: 'Hiring', industry: 'Industry', business_model: 'Business model', consumer_only: 'Consumer-only', size: 'Size',
+};
+const TIERS: readonly MatchTier[] = ['strong', 'close', 'exploratory', 'insufficient'];
+const STATUSES: readonly AttributeStatus[] = ['verified', 'inferred', 'unknown'];
+
+function readFlexiblePlan(v: unknown): FlexiblePlanView | null {
+  if (!isObj(v)) return null;
+  const ind = isObj(v.industries) ? v.industries : {};
+  const strs = (x: unknown) => (Array.isArray(x) ? x.filter((y): y is string => typeof y === 'string') : []);
+  return {
+    relaxed: (Array.isArray(v.relaxed) ? v.relaxed : []).filter(isObj).map((r) => ({ label: String(r.label ?? ''), why: String(r.why ?? '') })).filter((r) => r.label),
+    industries: { requested: strs(ind.requested), related: strs(ind.related), note: str(ind.note) },
+  };
+}
+
+/** Flexible Discovery's tiered companies; unknown tiers or statuses are dropped, never guessed. */
+export function readFlexibleMatches(v: unknown): FlexibleMatchView[] {
+  if (!isObj(v) || !Array.isArray(v.matches)) return [];
+  return v.matches.filter(isObj).flatMap((m) => {
+    const tier = TIERS.find((t) => t === m.tier);
+    if (!tier) return [];
+    const attrs = isObj(m.attributes) ? m.attributes : {};
+    return [{
+      leadKey: String(m.leadKey ?? ''), name: str(m.name) ?? str(m.domain) ?? 'Unnamed company', domain: str(m.domain), tier,
+      why: (Array.isArray(m.why) ? m.why : []).filter((x): x is string => typeof x === 'string').slice(0, 4),
+      attributes: Object.keys(ATTRIBUTE_LABEL).flatMap((k) => {
+        const a = attrs[k];
+        const status = isObj(a) ? STATUSES.find((x) => x === a.status) : undefined;
+        return isObj(a) && status ? [{ name: k, status, value: String(a.value ?? '') }] : [];
+      }),
+      sources: (Array.isArray(m.sources) ? m.sources : []).map((u) => (typeof u === 'string' ? safeHref(u) : null)).filter((u): u is string => !!u).slice(0, 6),
+    }];
+  });
 }
 
 export interface RequirementView {
   label: string; necessity: 'required' | 'preferred';
   route: 'checked' | 'ranked_only' | 'not_checkable';
   checkedBy: string[]; explanation: string;
+}
+
+/**
+ * An either/or group ("SaaS or fintech", "HQ in Texas or California") is one requirement to the
+ * user: the plan routes each alternative, and every alternative carries the group's label
+ * ("Industry: SaaS or fintech"). Shown once — not once per alternative.
+ */
+export function oncePerGroup(rows: RequirementView[]): RequirementView[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => { const k = `${r.necessity}|${r.route}|${r.label}`; if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
 /** Human names for the capabilities a requirement can be checked by. */
@@ -113,13 +177,16 @@ export function readStrategyPlan(body: unknown): StrategyPlanView | null {
     rationale: Array.isArray(p.rationale) ? p.rationale.map(String) : [],
     steps, worstCase: { apifyUsd: usd, leadoceanRecords: lo }, planHash: p.planHash,
     approvalToken: str(body.approval_token),
-    requirements: Array.isArray(p.requirementRoutes) ? p.requirementRoutes.filter(isObj).map((r) => ({
+    requirements: Array.isArray(p.requirementRoutes) ? oncePerGroup(p.requirementRoutes.filter(isObj).map((r) => ({
       label: String(r.label ?? ''), necessity: r.necessity === 'preferred' ? 'preferred' as const : 'required' as const,
       route: r.route === 'checked' || r.route === 'ranked_only' ? r.route : 'not_checkable' as const,
       checkedBy: Array.isArray(r.checkedBy) ? r.checkedBy.map(String) : [], explanation: String(r.explanation ?? ''),
-    })) : [],
-    questions: Array.isArray(p.questions) ? p.questions.map(String) : [],
+    }))) : [],
+    // Once each: an any-of group's alternatives used to repeat the same question (pre-fix backends).
+    questions: Array.isArray(p.questions) ? [...new Set(p.questions.map(String))] : [],
     interpretation: interpretationOf(body),
+    flexible: readFlexiblePlan(body.flexible),
+    discoveryMode: body.discoveryMode === 'flexible' || body.discoveryMode === 'strict' ? body.discoveryMode : null,
   };
 }
 
@@ -129,7 +196,11 @@ function interpretationOf(body: Record<string, unknown>): StrategyPlanView['inte
   return {
     assumptions: list(mc?.assumptions).filter(isObj).map((a) => String(a.text ?? '')).filter(Boolean),
     disclosures: list(mc?.disclosures).map(String),
-    merged: list(mc?.mergedDuplicates).filter(isObj).map((m) => ({ span: String(m.span ?? ''), reason: String(m.reason ?? '') })),
+    merged: [
+      ...list(mc?.mergedDuplicates).filter(isObj).map((m) => ({ span: String(m.span ?? ''), reason: String(m.reason ?? '') })),
+      // Pipeline operations the user asked for ("no duplicates"): performed on every run.
+      ...list(isObj(mc?.contract) ? mc.contract.operations : null).filter(isObj).map((o) => ({ span: String(o.span ?? ''), reason: `handled on every run — ${String(o.appliedBy ?? '')}` })),
+    ],
   };
 }
 
@@ -139,16 +210,19 @@ export interface PlanRequest {
   reviewOnly?: boolean;
   /** The user's explicit permission to count LIKELY business-model matches (labelled, never verified; hash-bound on the server). */
   acceptLikely?: boolean;
+  /** Flexible Discovery: industry and consumer-only rank instead of gate (hash-bound on the server). */
+  mode?: DiscoveryMode;
 }
 
 function baseBody(r: PlanRequest) {
   return {
-    workspace_id: r.workspaceId, walk_id: walkIdFor(r.messageId, r.choice), query: r.query,
+    workspace_id: r.workspaceId, walk_id: walkIdFor(r.messageId, r.choice) + (r.mode === 'flexible' ? '-flex' : ''), query: r.query,
     ...(r.requestedCount ? { requested_count: r.requestedCount } : {}),
     ...(r.choice === 'auto' ? {} : { strategy: r.choice }),
     // LeadOcean alone cannot prove a hiring signal: its companies are shown as pending review.
     allow_review_only: r.reviewOnly === true || r.choice === 'leadocean_only',
     ...(r.acceptLikely === true ? { accept_likely: true } : {}),
+    ...(r.mode === 'flexible' ? { discovery_mode: 'flexible' } : {}),
   };
 }
 
@@ -162,18 +236,32 @@ export async function planStrategy(invoke: Invoke, r: PlanRequest): Promise<Resu
   return plan ? { ok: true, value: plan } : { ok: false, error: await errorMessage(res.error, 'The discovery service is unavailable.') };
 }
 
-/** Run exactly the plan the owner approved: its hash, its worst case as the ceilings, and its signed token. */
-export async function runStrategy(invoke: Invoke, r: PlanRequest, plan: StrategyPlanView): Promise<Result<StrategyRunView>> {
+/** How a run still going at Apify is picked up again (the server answers 202 `running`). */
+export const RUNNING_RETRY = { attempts: 12, waitMs: 5_000 } as const;
+
+/**
+ * Run exactly the plan the owner approved: its hash, its worst case as the ceilings, and its signed token.
+ * A run that outlives one request answers `running` (V5 Phase C): the SAME approval is sent again,
+ * which adopts the run in progress at the provider — it is never bought twice.
+ */
+export async function runStrategy(invoke: Invoke, r: PlanRequest, plan: StrategyPlanView,
+  o: { attempts?: number; waitMs?: number; sleep?: (ms: number) => Promise<void> } = {}): Promise<Result<StrategyRunView>> {
   if (plan.status !== 'ready') return { ok: false, error: plan.blockedReason ?? 'This plan cannot run.' };
-  const res = await invoke<Record<string, unknown>>('lead-pipeline', {
-    action: 'strategy_run', ...baseBody(r),
-    approval: { plan_hash: plan.planHash, apify_usd: plan.worstCase.apifyUsd, leadocean_records: plan.worstCase.leadoceanRecords, ...(plan.approvalToken ? { token: plan.approvalToken } : {}) },
-  });
-  let body: unknown = res.data;
-  // A failed or refused run answers 409 with its outcome, steps and spend: still a result to show.
-  if (!body && res.error?.context) { try { body = await res.error.context.clone().json(); } catch { body = null; } }
-  const run = readStrategyRun(body);
-  return run ? { ok: true, value: run } : { ok: false, error: await errorMessage(res.error, 'The run did not return a readable result.') };
+  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((res) => setTimeout(res, ms)));
+  const attempts = Math.max(1, o.attempts ?? RUNNING_RETRY.attempts);
+  for (let i = 0; i < attempts; i++) {
+    const res = await invoke<Record<string, unknown>>('lead-pipeline', {
+      action: 'strategy_run', ...baseBody(r),
+      approval: { plan_hash: plan.planHash, apify_usd: plan.worstCase.apifyUsd, leadocean_records: plan.worstCase.leadoceanRecords, ...(plan.approvalToken ? { token: plan.approvalToken } : {}) },
+    });
+    let body: unknown = res.data;
+    // A failed or refused run answers 409 with its outcome, steps and spend: still a result to show.
+    if (!body && res.error?.context) { try { body = await res.error.context.clone().json(); } catch { body = null; } }
+    if (isObj(body) && body.status === 'running') { if (i < attempts - 1) await sleep(o.waitMs ?? RUNNING_RETRY.waitMs); continue; }
+    const run = readStrategyRun(body);
+    return run ? { ok: true, value: run } : { ok: false, error: await errorMessage(res.error, 'The run did not return a readable result.') };
+  }
+  return { ok: false, error: 'The run is still in progress at the provider. Run the same plan again to pick it up — nothing will be bought twice.' };
 }
 
 // ── Run ─────────────────────────────────────────────────────────────────────
@@ -254,6 +342,9 @@ export interface StrategyRunView {
   summary: ProviderRunSummary | null;
   /** The raw response, for ProviderRunSummaryCard (which reads `providerSummary` itself). */
   response: Record<string, unknown>;
+  /** Flexible Discovery: every company by tier, and the request as the user wrote it. Empty/null = strict. */
+  matches: FlexibleMatchView[];
+  originalRequest: string | null;
 }
 
 /** Provider-supplied URLs are untrusted: only http(s) links are ever rendered. */
@@ -321,6 +412,8 @@ export function readStrategyRun(body: unknown): StrategyRunView | null {
     written: typeof body.written === 'number' ? body.written : null,
     workbenchPlanId: isObj(body.workbench) && typeof body.workbench.planId === 'string' && body.workbench.planId ? body.workbench.planId : null,
     summary: readProviderRunSummary(body), response: body,
+    matches: readFlexibleMatches(body.flexible),
+    originalRequest: isObj(body.flexible) ? str(body.flexible.originalRequest) : null,
   };
 }
 

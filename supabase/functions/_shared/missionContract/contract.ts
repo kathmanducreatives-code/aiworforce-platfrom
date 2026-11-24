@@ -20,6 +20,8 @@
 //
 // Pure: no I/O.
 
+import { OPERATION_APPLIED_BY, type PipelineOperation } from "./semanticClasses.ts";
+
 export const MISSION_CONTRACT_VERSION = "mission-contract-v1" as const;
 
 export type Necessity = "required" | "preferred";
@@ -115,15 +117,28 @@ export interface MergedDuplicate {
    * Absent (PR #249): the same EXCLUSION an enforced REQUIRED requirement applies.
    * `same_words`: every content word is quoted by an executable requirement (MRLE Phase 0).
    * `count`: nothing but the request's framing and the requested count ("Find 5").
+   * `implied`: a company STATUS the user asked for ("active") that an enforced, dated, REQUIRED
+   *   signal proves (a job posted in the last 30 days shows the company is operating).
    * Absent on the original kind, so every existing contract hash is unchanged.
    */
-  kind?: "same_words" | "count";
+  kind?: "same_words" | "count" | "implied";
   /** The user's words the duplicate quoted. */
   span: string;
   /** The executable REQUIRED requirement(s) that enforce exactly those words. */
   coveredBy: string[];
   /** Why they are the same restriction, in plain words. */
   reason: string;
+}
+
+/**
+ * A PIPELINE OPERATION the user asked for — how the results are produced, never a property of
+ * a company ("no duplicates", "not ones already in my leads"). Each names the pipeline step
+ * that always performs it (semanticClasses.ts `OPERATION_APPLIED_BY`). Hashed when present.
+ */
+export interface ContractOperation {
+  span: string;
+  operation: PipelineOperation;
+  appliedBy: string;
 }
 
 export type Dimension = Requirement["dimension"];
@@ -154,6 +169,8 @@ export interface MissionContract {
    * `redundantUnsupported`). Hashed: it is part of what is approved. Absent when none.
    */
   mergedDuplicates?: MergedDuplicate[];
+  /** Pipeline operations the user asked for (dedupe, skip known records). Absent when none. */
+  operations?: ContractOperation[];
   authorizedActions: AuthorizedAction[];
   /** Spending ceilings, set when a plan is approved (null = not yet bounded). */
   budget: { maxApifyUsd: number; maxLeadoceanRecords: number } | null;
@@ -179,6 +196,9 @@ export function contractProblems(c: MissionContract): ContractProblem[] {
   // A mission with no requirement at all cannot be frozen, and an unfrozen mission is
   // re-derived from the sentence by legacy readers: refuse it (ask), never run it.
   if (!c.requirements.length) p("empty_mission", null, "the mission states no requirement; ask what qualifies a result");
+  // …nor can one whose every requirement is only disclosed (shown, never executed): it would
+  // freeze an EMPTY criteria list. Refused as a typed contract problem, not a crash.
+  else if (!c.requirements.some(isExecutable)) p("empty_mission", null, "no requirement can be checked (all are disclosed only); ask what qualifies a result");
   const ids = new Set<string>();
   for (const r of c.requirements) {
     if (!r.id || ids.has(r.id)) p("duplicate_id", r.id, "requirement ids must be unique and non-empty");
@@ -227,6 +247,12 @@ export function contractProblems(c: MissionContract): ContractProblem[] {
       const r = c.requirements.find((x) => x.id === id);
       // The exclusion kind (#249) must be enforced as REQUIRED; same words need only be executed.
       if (!r || !isExecutable(r) || (m.kind !== "same_words" && r.necessity !== "required")) p("merged_duplicate", id, `merged duplicate "${m.span}" names no enforced required requirement`);
+    }
+  }
+  // An operation must quote the request and be one the pipeline actually performs.
+  for (const o of c.operations ?? []) {
+    if (!o.span?.trim() || !(o.operation in OPERATION_APPLIED_BY) || o.appliedBy !== OPERATION_APPLIED_BY[o.operation]) {
+      p("operation", null, `operation "${o.span}" (${o.operation}) is not one the pipeline performs`);
     }
   }
   for (const g of c.anyOf) {

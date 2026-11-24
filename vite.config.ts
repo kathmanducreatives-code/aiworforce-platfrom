@@ -9,11 +9,14 @@ import {
   PRODUCTION_SUPABASE_PUBLISHABLE_KEY, PRODUCTION_SUPABASE_URL, secretKeysInPublicEnv, supabaseTargetMismatch,
 } from "./src/integrations/supabase/productionTarget";
 
-// WHAT COMMIT IS THE FRONTEND? Netlify sets COMMIT_REF at build time; a local
+// WHAT COMMIT IS THE FRONTEND? The host's build variable (Cloudflare Pages
+// CF_PAGES_COMMIT_SHA, Vercel VERCEL_GIT_COMMIT_SHA, Netlify COMMIT_REF); a local
 // build falls back to git. The answer ships as /version.json and as
 // import.meta.env.VITE_BUILD_SHA (read by src/lib/env/projectEnvironment.ts).
 function buildSha(): string {
-  if (process.env.COMMIT_REF) return process.env.COMMIT_REF;
+  for (const k of ["CF_PAGES_COMMIT_SHA", "VERCEL_GIT_COMMIT_SHA", "COMMIT_REF"]) {
+    if (process.env[k]) return process.env[k] as string;
+  }
   if (process.env.VITE_BUILD_SHA) return process.env.VITE_BUILD_SHA;
   try { return execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { return "unstamped"; }
 }
@@ -28,8 +31,8 @@ function versionFile(sha: string, builtAt: string): Plugin {
         fileName: "version.json",
         source: JSON.stringify({
           sha, built_at: builtAt,
-          context: process.env.CONTEXT ?? null,
-          deploy_id: process.env.DEPLOY_ID ?? null,
+          context: process.env.CONTEXT ?? process.env.CF_PAGES_BRANCH ?? process.env.VERCEL_ENV ?? null,
+          deploy_id: process.env.DEPLOY_ID ?? process.env.CF_PAGES_URL ?? process.env.VERCEL_URL ?? null,
         }, null, 1) + "\n",
       });
     },

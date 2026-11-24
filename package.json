@@ -7,6 +7,8 @@
     "dev": "vite",
     "dev:fast": "node scripts/dev/dev-fast.mjs",
     "dev:atlas": "deno run --allow-read --allow-write=dev-sim --no-check scripts/dev/atlas-sim.ts",
+    "dev:lisa": "deno run --allow-read --no-check scripts/dev/lisa-sim.ts",
+    "dev:collab": "deno run --allow-read --allow-write=src/components/collaboration --no-check scripts/dev/collab-sim.ts",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
@@ -27,7 +29,8 @@
     "qa:model-routing": "deno run --allow-read --allow-env scripts/model-routing-eval/run.ts",
     "test:changed": "node scripts/dev/affected-tests.mjs --run",
     "check:fast": "node scripts/dev/check-fast.mjs",
-    "test:pre-pr": "node scripts/dev/pre-pr.mjs"
+    "test:pre-pr": "node scripts/dev/pre-pr.mjs",
+    "verify:frontend-build": "node scripts/release/verify-frontend-build.mjs dist"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -35,7 +35,9 @@ Deno.test("V-2 every in-place editor and edit affordance reads the editable cont
 Deno.test("V-3 the page provides the context from the user's role, and the role fails closed while unknown", () => {
   const page = read("src/pages/CompanyBrainDashboard.tsx");
   assert(/const \{ canEditBrain \} = useWorkspaceRole\(\);/.test(page));
-  assert(/<BrainEditableContext\.Provider value=\{canEditBrain\}><BrainOverview/.test(page));
+  // …and is read-only where the environment blocks Brain writes (isolated TEST).
+  assert(/<BrainEditableContext\.Provider value=\{canEditBrain && !brainWritesBlocked\}><BrainOverview/.test(page));
+  assert(/const brainWritesBlocked = companyBrainWritesBlocked\(import\.meta\.env\);/.test(page));
   const hook = read("src/hooks/useWorkspaceRole.ts");
   assert(/const role = q\.data \?\? 'viewer';/.test(hook), "loading or unreadable → viewer");
   assert(/\.eq\('user_id', user!\.id\)/.test(hook), "reads the caller's own membership only");

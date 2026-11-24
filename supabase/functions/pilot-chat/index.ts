@@ -30,7 +30,9 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 type UntypedClient = SupabaseClient<any, any, any>;
 import {
   generateJson, generateText, logProviderCall, type GenerateOpts,
+  chatVendorScope, ORION_OPENAI_ONLY, orionChatModel,
 } from "../_shared/aiProvider.ts";
+import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
 import type { ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
@@ -69,7 +71,7 @@ import {
   converseSystemPrompt, CONVERSE_UNAVAILABLE,
 } from "../_shared/converseSurface.ts";
 import {
-  conversationFact, workspaceFact,
+  conversationFact, workspaceFact, requestFact,
 } from "../_shared/groundedFacts.ts";
 import { routeRequest, type Route } from "../_shared/objectiveRouter.ts";
 import {
@@ -86,9 +88,7 @@ import {
   planRead, executeRead, renderReadAnswer, presentedCompanies, type ReadDb,
   displayLimitFor, readOutcome,
 } from "../_shared/readSurface.ts";
-import {
-  resolveReferents, type ResolvedReferentBinding,
-} from "../_shared/referentBinding.ts";
+import { type ResolvedReferentBinding } from "../_shared/referentBinding.ts";
 import {
   buildPresentedReferents, presentedFromIdentifier, requestHasBackReference,
   PRESENTED_REFERENTS_KEY,
@@ -115,6 +115,34 @@ import { getSourceCapability } from "../_shared/sourceCapabilities.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
+import { loadChatBrain } from "../_shared/chatBrainContext.ts";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+// THE MODEL THAT ACTUALLY ANSWERED THIS TURN — read from the request's model
+// call collector (the same one that feeds the cost ledger). "deterministic"
+// when no model produced the reply. Replaces a hard-coded
+// "google/gemini-3-flash-preview" label that no chat path has used since the
+// gateway was removed (audit 2026-11, P4).
+// Scoped per REQUEST (AsyncLocalStorage), so concurrent turns in one isolate
+// never read each other's collector.
+const turnCollector = new AsyncLocalStorage<{ lastModel(): string | null }>();
+/** Returned (503) when ORION's only provider has no key on this project. */
+export const ORION_OPENAI_NOT_CONFIGURED = "orion_openai_not_configured";
+/** R1.2: the reference policy's notes, as request-scoped facts ORION must respect. */
+function policyNoteFacts(t: TurnRouting | null) {
+  return (t?.notes ?? []).map((n) => requestFact(n, "orion_reference_policy"));
+}
+function actualModelUsed(): string {
+  return turnCollector.getStore()?.lastModel() ?? "deterministic";
+}
+import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
+import { subQuestions, ORION_INTELLIGENCE_VERSION, type OrionRouting } from "../_shared/orionIntelligence.ts";
+import { planTurnRouting, ORION_REFERENCE_POLICY_VERSION, type TurnRouting } from "../_shared/orionReferencePolicy.ts";
+import { orionDraftSystemPrompt, draftMaxTokens, withDraftNotice, ORION_DRAFT_VERSION } from "../_shared/orionDraft.ts";
+import { retrieveEvidence, type EvidenceDb as StoredEvidenceDb } from "../_shared/evidence/retrieve.ts";
+import { orionEvidenceForTurn, orionEvidenceEnabledFor, orionAnswerShapeFor, digestFacts, presentedSubjectsFor, ORION_EVIDENCE_CONTEXT_VERSION } from "../_shared/orionEvidenceContext.ts";
+import { composeStructuredAnswer, evidenceQuestionKind, evidenceSubjectFromMessage, renderStructuredAnswer } from "../_shared/evidence/answer.ts";
+import type { PresentedReferentSet } from "../_shared/referentPersistence.ts";
 import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { leadIntentFromMission, planJobsActorInput, type LeadIntent, type BrainLite } from "../_shared/leadIntent.ts";
 import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
@@ -1117,7 +1145,7 @@ async function showWorkflowConfirmation(
       role: "assistant",
       content: confirmContent,
       agent_slug: "pilot",
-      model_used: "google/gemini-3-flash-preview",
+      model_used: actualModelUsed(),
       metadata: {
         ...baseMeta,
         type: "workflow_confirmation",
@@ -1187,7 +1215,37 @@ interface DelegateArgs {
   idempotencyKey?: string | null;
 }
 
+/**
+ * RELEASE GUARD. `AGENTORY_DELEGATION_ENABLED=false` keeps ORION from starting
+ * agent work (ATLAS sourcing, LYRA drafting, research) through `orchestrate`.
+ * Used while the agent backend in an environment is older than this chat
+ * (production, 2026-11-12: orchestrate/run-agent from 2026-10-13). Unset or any
+ * other value: unchanged behaviour. Nothing is called and nothing is charged.
+ */
+export const DELEGATION_DISABLED_REPLY =
+  "Starting agent work (ATLAS sourcing, research runs, monitoring, LYRA agent runs, sending) isn't switched on in this release yet. " +
+  "I can still answer from your Company Brain, saved leads and signals, and write drafts right here in the chat — ask me to draft it. " +
+  "Nothing was started and nothing was charged.";
+export function delegationEnabled(read: (k: string) => string | undefined = (k) => Deno.env.get(k)): boolean {
+  return String(read("AGENTORY_DELEGATION_ENABLED") ?? "").trim().toLowerCase() !== "false";
+}
+
 async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
+  if (!delegationEnabled()) {
+    const { data: saved } = await a.admin
+      .from("messages")
+      .insert({
+        conversation_id: a.conversationId,
+        role: "assistant",
+        content: DELEGATION_DISABLED_REPLY,
+        agent_slug: "pilot",
+        model_used: a.modelUsed,
+        metadata: { type: "delegation_disabled", prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION },
+      })
+      .select("*")
+      .single();
+    return json({ type: "reply", conversation_id: a.conversationId, message: saved, delegation_disabled: true });
+  }
   const toolInput = a.toolInput;
   if (toolInput && a.workflowInputs) {
     const inputs = a.workflowInputs;
@@ -1411,6 +1469,11 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
 
 async function handlePilotChat(req: Request, fail: FailureContext): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  // ORION CHAT IS OPENAI-ONLY. Every model call made while answering this
+  // request — chat's own and those of shared modules it reaches — runs on
+  // OpenAI with no Anthropic fallback (`chatVendorScope`, aiProvider.ts).
+  // Request-scoped, the same way `turnCollector` is.
+  chatVendorScope.enterWith(ORION_OPENAI_ONLY);
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -1503,6 +1566,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // someone chooses a limit.
   const chatModelCalls = new ModelCallCollector(resolveRunBudget());
   fail.modelCalls = chatModelCalls;
+  turnCollector.enterWith(chatModelCalls);
 
   // ── WHERE MODEL SPEND GETS RECORDED ─────────────────────────────────────
   //
@@ -1525,6 +1589,20 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (!member) return json({ error: "Forbidden — not a member of this workspace" }, 403);
+
+  // ORION RUNS ON OPENAI ONLY. Without its key nothing below can answer, and
+  // there is no Anthropic fallback — so say exactly that, before any work.
+  if (!Deno.env.get("OPENAI_API_KEY")) {
+    console.error("[pilot-chat] OPENAI_API_KEY is not set; ORION chat is OpenAI-only");
+    return json({
+      error: ORION_OPENAI_NOT_CONFIGURED,
+      message: `ORION is not configured: OPENAI_API_KEY is missing on this project (ORION chat uses OpenAI ${orionChatModel()} only). Nothing was started and nothing was charged.`,
+    }, 503);
+  }
+
+  // ONE Company Brain read for the whole turn, through the shared loader: the
+  // effective profile (approved memory folded in) plus ORION's memory view.
+  const chatBrain = await loadChatBrain(admin, workspaceId, userId);
 
   // ── THE MODEL SPEND CEILING ─────────────────────────────────────────────
   //
@@ -1560,14 +1638,20 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     }, 429);
   }
 
-  // 4. Get or create conversation (conversations table is user-scoped; no workspace_id column)
+  // 4. Get or create conversation. Ownership is per USER (RLS: user_id = auth.uid()).
+  // R1.2: a conversation is also bound to the workspace it was started in
+  // (`conversations.workspace_id`, nullable, FK → workspaces), so one user who
+  // belongs to two workspaces cannot carry a conversation — and its earlier
+  // turns — from one workspace into another. Legacy conversations (NULL) keep
+  // working and are not rewritten.
   if (conversationId) {
     const { data: existing } = await admin
       .from("conversations")
-      .select("id, user_id")
+      .select("id, user_id, workspace_id")
       .eq("id", conversationId)
       .maybeSingle();
-    if (!existing || existing.user_id !== userId) {
+    if (!existing || existing.user_id !== userId ||
+        (existing.workspace_id && existing.workspace_id !== workspaceId)) {
       return json({ error: "Conversation not found or not yours" }, 404);
     }
   } else {
@@ -1575,6 +1659,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       .from("conversations")
       .insert({
         user_id: userId,
+        workspace_id: workspaceId,
         agent_slug: "pilot",
         channel: "dashboard",
         title: message.slice(0, 60),
@@ -1704,7 +1789,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             role: "assistant",
             content: fallbackMsg,
             agent_slug: "pilot",
-            model_used: "google/gemini-3-flash-preview",
+            model_used: actualModelUsed(),
             metadata: {
               ...meta,
               ...pendingClarification("lead_source_selector", "people_unavailable"),
@@ -1740,7 +1825,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
               role: "assistant",
               content: agencyMsg,
               agent_slug: "pilot",
-              model_used: "google/gemini-3-flash-preview",
+              model_used: actualModelUsed(),
               metadata: {
                 ...meta,
                 ...pendingClarification("lead_source_selector", "agency_unavailable"),
@@ -1761,8 +1846,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           workspaceId,
           instruction: originalInstruction,
           toolInput: resolved.action,
-          modelUsed: "google/gemini-3-flash-preview",
-          providerUsed: "lovable-ai",
+          modelUsed: actualModelUsed(),
+          providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
         });
       }
 
@@ -1779,7 +1864,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             role: "assistant",
             content: reAsk,
             agent_slug: "pilot",
-            model_used: "google/gemini-3-flash-preview",
+            model_used: actualModelUsed(),
             metadata: {
               ...meta,
               ...pendingClarification("lead_source_selector", "reask_people_or_companies"),
@@ -1844,7 +1929,82 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // these answers cannot spend and cannot produce a Start card.
   //
   // Typed messages only: a card action carries its own structured intent.
-  const workspaceQuestion = !actionSource && !isPreConfirmed ? classifyWorkspaceQuestion(message) : null;
+  let workspaceQuestion = !actionSource && !isPreConfirmed ? classifyWorkspaceQuestion(message) : null;
+  // ── "WHY WAS THIS LEAD REJECTED?" — RESOLVE THE PRONOUN, NEVER GUESS ────
+  // The recogniser hands back the words ("this lead"); the companies the last
+  // answer SHOWED decide which company that is.
+  if (workspaceQuestion?.kind === "why_company" && isPronounReference(workspaceQuestion.company)) {
+    const { data: recent } = await admin.from("messages").select("metadata")
+      .eq("conversation_id", conversationId).eq("role", "assistant")
+      .order("created_at", { ascending: false }).limit(6);
+    const resolved = resolvePronounCompany(((recent ?? []) as Array<{ metadata?: Record<string, unknown> | null }>)
+      .map((m) => (m.metadata?.[PRESENTED_REFERENTS_KEY] ?? null) as PresentedReferentSet | null), workspaceQuestion.company);
+    if (resolved.kind === "one") {
+      workspaceQuestion = { ...workspaceQuestion, company: resolved.name };
+    } else {
+      const ask = resolved.kind === "many"
+        ? `Which company do you mean — ${resolved.names.join(", ")}? Tell me the name and I'll explain the recorded decision.`
+        : "Which company do you mean? Tell me its name and I'll explain the recorded decision.";
+      const { data: saved } = await admin.from("messages").insert({
+        conversation_id: conversationId, role: "assistant", content: ask, agent_slug: "pilot",
+        metadata: { classifier_source: "workspace_question", clarification: true, department: "atlas",
+          brain_fingerprint: chatBrain.fingerprint, pronoun_resolution: resolved.kind },
+      }).select("*").single();
+      return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+    }
+  }
+  // ══ EVIDENCE ANSWERS (Workforce V2, flag AGENTORY_EVIDENCE_ANSWERS_ENABLED) ══
+  // "Is this announcement verified?" and "What should I prioritize?" are
+  // answered from stored evidence in six sections. Reads only; $0; no model.
+  const evidenceKind = !workspaceQuestion && !actionSource && !isPreConfirmed &&
+      Deno.env.get("AGENTORY_EVIDENCE_ANSWERS_ENABLED") === "true"
+    ? evidenceQuestionKind(message) : null;
+  if (evidenceKind === "verification" || evidenceKind === "priority") {
+    let subject: { name: string } | null = null;
+    if (evidenceKind === "verification") {
+      const named = evidenceSubjectFromMessage(message);
+      if (named) subject = { name: named };
+      else {
+        const { data: recent } = await admin.from("messages").select("metadata")
+          .eq("conversation_id", conversationId).eq("role", "assistant")
+          .order("created_at", { ascending: false }).limit(6);
+        const resolved = resolvePronounCompany(((recent ?? []) as Array<{ metadata?: Record<string, unknown> | null }>)
+          .map((m) => (m.metadata?.[PRESENTED_REFERENTS_KEY] ?? null) as PresentedReferentSet | null), message);
+        if (resolved.kind === "one") subject = { name: resolved.name };
+        else {
+          const ask = resolved.kind === "many"
+            ? `Which one do you mean — ${resolved.names.join(", ")}? I'll check how well it is verified.`
+            : "Which company's announcement do you mean? Tell me the name and I'll check its verification.";
+          const { data: saved } = await admin.from("messages").insert({
+            conversation_id: conversationId, role: "assistant", content: ask, agent_slug: "pilot",
+            metadata: { classifier_source: "evidence_answer", clarification: true, department: "lisa",
+              brain_fingerprint: chatBrain.fingerprint },
+          }).select("*").single();
+          return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+        }
+      }
+    }
+    // Membership was checked above; the retrieval checks it again through the loader.
+    const retrieved = await retrieveEvidence(admin as unknown as StoredEvidenceDb, { workspaceId, userId, subject });
+    if (retrieved.ok) {
+      const structured = composeStructuredAnswer({ kind: evidenceKind, subject, retrieved });
+      const { data: saved } = await admin.from("messages").insert({
+        conversation_id: conversationId, role: "assistant",
+        content: renderStructuredAnswer(structured), agent_slug: "pilot",
+        metadata: {
+          classifier_source: "evidence_answer",
+          department: evidenceKind === "verification" ? "lisa" : "orion",
+          structured_answer: structured,
+          evidence_sources: retrieved.sources,
+          brain_fingerprint: chatBrain.fingerprint,
+          chat_brain: { route: "read", target: `evidence:${evidenceKind}`, served_from: "stored_evidence", spent: false },
+          outcome: satisfied(`read:evidence:${evidenceKind}`),
+        },
+      }).select("*").single();
+      return json({ type: "reply", conversation_id: conversationId, message: saved });
+    }
+    // A refusal here falls through to the ordinary path, which applies its own checks.
+  }
   if (workspaceQuestion) {
     // "TODAY" IS THE USER'S DAY when the client says which zone it is in; the
     // answer names UTC when it does not.
@@ -1927,9 +2087,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   let brainConfidence: number | null = null;
   const workspaceContextBlock: string | null = await (async () => {
     try {
-      const { data } = await admin.from("company_brain")
-        .select("profile, onboarding_completed")
-        .eq("workspace_id", workspaceId).maybeSingle();
+      const data = chatBrain.row;
       const profile = (data?.profile ?? null) as Record<string, unknown> | null;
       brainProfileForMission = profile;
       brainOnboardedForGate = data?.onboarding_completed === true;
@@ -1940,7 +2098,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       if (!profile || !hasUsableBrain(profile, contextAllowed)) {
         return null;
       }
-      return buildCompanyBrainContext(profile, { integrationStatus: buildIntegrationStatus() }) || null;
+      const base = buildCompanyBrainContext(profile, { integrationStatus: buildIntegrationStatus() }) || null;
+      return base && chatBrain.memoryBlock ? `${base}\n\n${chatBrain.memoryBlock}` : base;
     } catch { return null; }
   })();
   const readEnvSafe = (k: string): string | undefined => {
@@ -1964,6 +2123,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
   let brainRoute: Route | null = null;
   let brainBinding: BindingOutcome | null = null;
+  /** R1.1: ORION's routing decision for this turn (orionIntelligence.ts). */
+  let orion: OrionRouting | null = null;
+  /** R1.2 reference policy decision for this turn (orionReferencePolicy.ts); its notes go into ORION's prompt. */
+  let turnRouting: TurnRouting | null = null;
   /**
    * THE SIGNAL A CARD HANDED US, VERIFIED — or `none`. Set once, before routing,
    * from `body.metadata.signal_id` and the workspace; never from the model.
@@ -2009,6 +2172,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     route: brainRoute?.kind ?? null,
     confidence: brainConfidence,
     prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+    // Which Company Brain version this answer was given (shared loader fingerprint).
+    brain_fingerprint: chatBrain.fingerprint,
+    // Which department answered (ORION / ATLAS / LISA / LYRA).
+    department: departmentForRoute(brainRoute?.kind ?? null, null),
   });
 
   async function replyAndReturn(
@@ -2021,7 +2188,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         role: "assistant",
         content,
         agent_slug: "pilot",
-        model_used: "google/gemini-3-flash-preview",
+        model_used: actualModelUsed(),
         metadata: { ...replyMeta(), ...extraMeta },
       })
       .select("*")
@@ -2172,7 +2339,13 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       workspaceContext: workspaceContextBlock,
       conversation: priorTurns,
       log: (m, meta) => console.log(`[pilot-chat][chat-brain] ${m}`, meta ?? ""),
-    }, { readEnv: readEnvSafe });
+    }, {
+      readEnv: readEnvSafe,
+      // UNDERSTANDING IS SPEND TOO. Without this the Luna read (and the rarer,
+      // pricier Terra repair) never reached the ledger, so the model-spend
+      // ceiling could not see chat's largest per-turn cost.
+      onModelCall: fail.modelCalls?.sink,
+    });
 
     if (understood.ok) {
       // ══ A SIGNAL THE USER IS LOOKING AT ══════════════════════════════════
@@ -2216,18 +2389,6 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       const referents = requestHasBackReference(understood.request)
         ? await loadLatestReferents(admin as unknown as ReferentDb, conversationId)
         : null;
-      // DETERMINISTIC, AND THE MODEL IS NOT CONSULTED. Chat Brain said a
-      // reference EXISTS; `resolveReferents` decides what it resolves to, from
-      // records this system wrote, using the same `resolveCompanyIdentity` the
-      // rest of the pipeline uses. A `resolved_key` the model invented is not
-      // read by anything on this path.
-      const resolution = resolveReferents(understood.request, referents?.source ?? null);
-      resolvedBindings = resolution.bindings;
-      // A SET THAT ONLY PARTLY IDENTIFIED IS A GAP, NOT A FAILURE. Four of the
-      // five companies bound; the answer covers four and says so. Declared
-      // here so every surface downstream reports it the same way.
-      partialReferents = resolution.partial.flatMap((x) => x.labels);
-
       // ── A CONTENT REFERENT IS NOT A COMPANY REFERENT ───────────────────
       //
       // `resolveReferents` resolves a back-reference against LEAD prior results
@@ -2249,55 +2410,6 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       const contentPlanForReferent = planCompose(understood.request);
       const referentBelongsToContent = contentPlanForReferent?.kind === "content"
         && contentPlanForReferent.targets_existing_content;
-
-      if (resolution.failures.length > 0 && !referentBelongsToContent) {
-        // ── ASK, NEVER GUESS ─────────────────────────────────────────────
-        //
-        // Two prior companies and "check them" is a genuine ambiguity, and the
-        // nearest-name fallback that would resolve it is exactly how a
-        // follow-up silently investigates a company the user never mentioned.
-        // Nothing has been routed, no provider has been reached and no credit
-        // has been reserved at this point — which is the property that makes
-        // asking cheap.
-        const first = resolution.failures[0];
-        const { data: saved } = await admin.from("messages").insert({
-          conversation_id: conversationId,
-          role: "assistant",
-          content: first.question,
-          agent_slug: "pilot",
-          metadata: {
-            ...pendingClarification("referent", `referent:${first.reason}`, {
-              request_part_id: first.part_id,
-              required_fields: ["subject.references"],
-            }),
-            chat_brain: {
-              route: "referent_unresolved",
-              reason: `referent:${first.reason}`,
-              part_id: first.part_id,
-              source_message_id: referents?.message_id ?? null,
-              candidates: referents?.set?.entities.length ?? 0,
-            },
-          },
-        }).select("*").single();
-        await recordUnderstanding(admin as unknown as UnderstandingWriter, {
-          workspaceId, conversationId,
-          source: "chat_brain_shadow",
-          utterance: message,
-          objective: understood.request.objective,
-          confidence: understood.request.confidence,
-          metadata: {
-            authoritative: true,
-            route: "referent_unresolved",
-            route_reason: `referent:${first.reason}`,
-            spent: false,
-            failures: resolution.failures.map((f) => f.reason),
-          },
-        });
-        return json({
-          type: "reply", conversation_id: conversationId,
-          clarification: true, message: saved,
-        });
-      }
 
       composeIntentForFollowUp = planCompose(understood.request)?.kind ?? null;
       brainConfidence = understood.request.confidence;
@@ -2326,7 +2438,114 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         }
         : understood.request;
 
-      brainRoute = routeRequest(requestForRouting, {
+      // PRIORITY QUESTIONS ARE ORION'S BRIEF (see departmentRouting.ts) —
+      // except where ORION's evidence context is on for this workspace: there
+      // the question stays with ORION, answered from cited workspace evidence
+      // (`strategic_prioritization`) in this request, on OpenAI, instead of
+      // being handed to the separate `daily-brief` function.
+      // A COMPOUND READ ("companies AND signals", "summarize with evidence")
+      // is answered by ORION from the evidence digest where it is enabled; the
+      // deterministic read surface serves only one part (departmentRouting.ts §3).
+      // R1.1 (orionIntelligence.ts): ONE routing step for ORION. A read that
+      // needs reasoning (comparison, explanation, filter, named fields, several
+      // parts or sources) is answered by ORION from evidence and authoritative
+      // totals instead of the list template; a paid objective under an explicit
+      // "do not execute" is answered, never started; and while delegation is
+      // off, a drafting request is written by ORION as text (`orion.draft`).
+      const evidenceOn = orionEvidenceEnabledFor(workspaceId);
+
+      // ══ R1.2 · CONSEQUENCE-GATED REFERENCE RESOLUTION ══════════════════════
+      //
+      // ONE deterministic policy step (orionReferencePolicy.ts) replaces the
+      // early "any referent failure → ask" gate and the per-prompt exceptions
+      // that had grown around it. The model's reading is interpreted; the
+      // decision comes from facts computed here:
+      //   - what each back-reference points at (earlier CONTENT, a SET of
+      //     companies, one ENTITY), resolved by `resolveReferents` against
+      //     records this system wrote — a `resolved_key` the model invented is
+      //     never read;
+      //   - what the request would DO (answer, spend, outbound, mutation).
+      // An unbound or ambiguous single company always asks. Anything that may
+      // spend, send or change data keeps every question (fail closed). Only a
+      // free ANSWER proceeds past an unmatched set or a content reference, with
+      // notes telling ORION not to guess. Nothing has been routed, no provider
+      // reached and no credit reserved before an ask.
+      turnRouting = planTurnRouting({
+        request: requestForRouting, message,
+        source: referents?.source ?? null,
+        evidenceEnabled: evidenceOn, delegationEnabled: delegationEnabled(),
+        referencesPointAtContentDraft: referentBelongsToContent,
+      });
+      const policyLog = {
+        policy: ORION_REFERENCE_POLICY_VERSION,
+        consequence: turnRouting.consequence,
+        policy_decision: turnRouting.decision,
+        references: turnRouting.references,
+        blocking_fields: turnRouting.blocking_fields,
+      };
+      if (turnRouting.ask) {
+        // ── ASK, NEVER GUESS ─────────────────────────────────────────────
+        const ask = turnRouting.ask;
+        const { data: saved } = await admin.from("messages").insert({
+          conversation_id: conversationId,
+          role: "assistant",
+          content: ask.question,
+          agent_slug: "pilot",
+          metadata: {
+            ...pendingClarification("referent", ask.reason, {
+              request_part_id: ask.part_id,
+              required_fields: ["subject.references"],
+            }),
+            chat_brain: {
+              route: "referent_unresolved",
+              reason: ask.reason,
+              part_id: ask.part_id,
+              source_message_id: referents?.message_id ?? null,
+              candidates: referents?.set?.entities.length ?? 0,
+              ...policyLog,
+            },
+          },
+        }).select("*").single();
+        await recordUnderstanding(admin as unknown as UnderstandingWriter, {
+          workspaceId, conversationId,
+          source: "chat_brain_shadow",
+          utterance: message,
+          objective: understood.request.objective,
+          confidence: understood.request.confidence,
+          metadata: {
+            authoritative: true,
+            route: "referent_unresolved",
+            route_reason: ask.reason,
+            spent: false,
+            failures: turnRouting.resolution.failures.map((f) => f.reason),
+            ...policyLog,
+          },
+        });
+        return json({
+          type: "reply", conversation_id: conversationId,
+          clarification: true, message: saved,
+        });
+      }
+      resolvedBindings = turnRouting.resolution.bindings;
+      // A SET THAT ONLY PARTLY IDENTIFIED IS A GAP, NOT A FAILURE. Four of the
+      // five companies bound; the answer covers four and says so.
+      partialReferents = turnRouting.resolution.partial.flatMap((x) => x.labels);
+      orion = turnRouting.orion;
+      if (orion.reroute) {
+        console.log(`[pilot-chat][routing] ${orion.reroute} → ORION evidence answer`, orion.reasons);
+      }
+      // Every later reader sees the policy's request: for an ANSWER, unmatched
+      // set references and the model's blocking questions are already notes.
+      understood.request = orion.request;
+      const executive = evidenceOn
+        ? { request: orion.request, promoted: false }
+        : promoteExecutiveQuestion(orion.request, message);
+      if (executive.promoted) {
+        console.log("[pilot-chat][routing] priority question → ORION brief");
+        // Every later reader (the read planner included) must see the promoted reading.
+        understood.request = executive.request;
+      }
+      brainRoute = routeRequest(executive.request, {
         // WORKSPACE POLICY, NOT THE MODEL'S OPINION. A paid run still needs the
         // user's explicit Start; this only says spending is possible at all.
         spendAllowed: true,
@@ -2354,6 +2573,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           may_spend: brainRoute.may_spend,
           parts: understood.request.parts.map((x) => x.objective),
           repaired: understood.repaired,
+          ...policyLog,
         },
       });
 
@@ -2362,6 +2582,68 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           unsafe: true,
           chat_brain: { route: brainRoute.kind, refused: "unsafe_request" },
         });
+      }
+
+      // ══ R1.1 · ORION WRITES THE DRAFT — TEXT ONLY ══════════════════════════
+      //
+      // Only while delegation is off (orionRoute never sets `draft` otherwise).
+      // BEFORE the blocked-ambiguity reply, the content route and every
+      // delegation: this branch creates no content_item row, starts no mission,
+      // writes no approval, sends nothing and publishes nothing. One model call
+      // (OpenAI, under the model-spend ceiling), one assistant message.
+      if (orion?.draft) {
+        // The same Company Brain readiness rule compose has always had.
+        if (readinessV2) {
+          const readinessNow = (brainReadiness as BrainReadiness | null) ?? companyBrainReadiness(normalizeCompanyBrain({}), false);
+          const gate = readinessGate("compose", "content", readinessNow);
+          if (gate.gated) {
+            return await replyAndReturn(gate.reply, {
+              gated: "brain_not_ready", clarification: true,
+              chat_brain: { route: "orion_draft", capability: gate.capability, readiness: readinessNow.state },
+            });
+          }
+        } else if (shouldGateObjective("compose", { onboarding_completed: brainOnboardedForGate })) {
+          return await replyAndReturn(ONBOARDING_GATE_REPLY, {
+            gated: "missing_brain", clarification: true, chat_brain: { route: "orion_draft" },
+          });
+        }
+        const draftEvidence = await orionEvidenceForTurn(admin as unknown as StoredEvidenceDb,
+          { task: "complex_company_qa", workspaceId, userId, message });
+        const ai = await generateText({
+          onModelCall: fail.modelCalls?.sink,
+          budget: fail.modelCalls,
+          taskType: "pilot_chat",
+          systemPrompt: orionDraftSystemPrompt({
+            workspaceContext: workspaceContextBlock,
+            facts: [...policyNoteFacts(turnRouting), ...(draftEvidence ? digestFacts(draftEvidence) : [])],
+            kinds: orion.draft.kinds,
+          }),
+          messages: [...priorTurns, { role: "user", content: message }],
+          temperature: 0.6,
+          maxTokens: draftMaxTokens(orion.draft.kinds),
+          functionName: "pilot-chat-orion-draft",
+          workspaceId,
+          workforceTask: "complex_company_qa",
+          terraLimiter: createTerraRunLimiter(),
+        });
+        return await replyAndReturn(
+          ai.ok && ai.content?.trim() ? withDraftNotice(ai.content) : CONVERSE_UNAVAILABLE,
+          {
+            ...(ai.routeDecision ? { model_route: ai.routeDecision } : {}),
+            orion_draft: {
+              version: ORION_DRAFT_VERSION, kinds: orion.draft.kinds,
+              text_only: true, delegated: false, persisted: false, sent: false, published: false,
+              execution_enabled: false,
+            },
+            ...(draftEvidence ? {
+              orion_evidence: { version: ORION_EVIDENCE_CONTEXT_VERSION, task: "orion_draft", cited_ids: draftEvidence.cited_ids,
+                retrieval_ms: draftEvidence.retrieval_ms ?? null, items: draftEvidence.items },
+            } : {}),
+            chat_brain: { route: "orion_draft", answered: ai.ok, grounded: !!workspaceContextBlock,
+              routing: ORION_INTELLIGENCE_VERSION },
+            ...(ai.ok ? {} : { model_error: { code: ai.errorCode ?? "unknown", model: ai.model || null } }),
+          },
+        );
       }
 
       // ══ A DRILL-DOWN INTO SOMETHING WE SHOWED IS A READ ════════════════
@@ -2769,30 +3051,59 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
             `Company Brain onboarding complete: ${brainOnboardedForGate ? "yes" : "no"}.`,
             "company_brain.onboarded"),
         ];
+        const converseTask = orion?.reroute ? "complex_company_qa" : orionConverseTask(message); // rerouted reads are business questions
+        const evidenceDigest = await orionEvidenceForTurn(admin as unknown as StoredEvidenceDb, { task: converseTask, workspaceId, userId, message });
+        facts.push(...policyNoteFacts(turnRouting), ...(evidenceDigest ? digestFacts(evidenceDigest) : []));
+        const parts = evidenceDigest ? subQuestions(message) : [];
         const ai = await generateText({
       onModelCall: fail.modelCalls?.sink,
       budget: fail.modelCalls,
           taskType: "pilot_chat",
           systemPrompt: converseSystemPrompt({
             workspaceContext: workspaceContextBlock, facts,
+            answerShape: evidenceDigest ? orionAnswerShapeFor(parts) : null,
+            delegationEnabled: delegationEnabled(),
           }),
           messages: [
+            ...priorTurns,
             // THE SAME TURNS UNDERSTANDING SAW. A conversational answer that
             // cannot see the previous turn restarts the conversation on every
             // message, which is how "hello" mid-thread read as a first hello.
-            ...priorTurns,
             { role: "user", content: message },
           ],
           temperature: 0.5,
-          maxTokens: 420,
+          maxTokens: evidenceDigest ? 1100 : 420, // business answers need room; small talk stays short
           functionName: "pilot-chat-converse",
           workspaceId,
+          // HYBRID ROUTING: the task is classified deterministically, so small
+          // talk stays on the cheap model and only a business question may use a
+          // routed model (Terra). Off unless AGENTORY_ROUTE_* / AGENTORY_TERRA_* say so.
+          workforceTask: converseTask,
+          terraLimiter: createTerraRunLimiter(),
         });
+        const replyText = ai.ok && ai.content?.trim() ? ai.content.trim() : CONVERSE_UNAVAILABLE;
+        // R1.2: what a follow-up can point at = the companies the question named,
+        // then the [E#] subjects the reply actually cites — not the default list.
+        const pointable = evidenceDigest ? presentedSubjectsFor(evidenceDigest, replyText) : [];
         return await replyAndReturn(
-          ai.ok && ai.content?.trim() ? ai.content.trim() : CONVERSE_UNAVAILABLE,
+          replyText,
           {
+            ...(ai.routeDecision ? { model_route: ai.routeDecision } : {}),
+            ...(evidenceDigest ? {
+              orion_evidence: { version: ORION_EVIDENCE_CONTEXT_VERSION, task: converseTask, cited_ids: evidenceDigest.cited_ids,
+                retrieval_ms: evidenceDigest.retrieval_ms ?? null, items: evidenceDigest.items,
+                // [S#] rows of the LISA signal table, in order, for traceability.
+                ...(evidenceDigest.workspace?.signal_table_ids ? { signal_table_ids: evidenceDigest.workspace.signal_table_ids } : {}) },
+              ...(pointable.length ? {
+                [PRESENTED_REFERENTS_KEY]: buildPresentedReferents(pointable, "orion_evidence"),
+              } : {}),
+            } : {}),
             chat_brain: { route: "converse", grounded: !!workspaceContextBlock,
-              answered: ai.ok },
+              answered: ai.ok,
+              ...(orion?.reroute ? { rerouted_from: orion.reroute, reasons: orion.reasons, routing: ORION_INTELLIGENCE_VERSION } : {}),
+              ...(parts.length >= 2 ? { sub_questions: parts.length } : {}),
+              ...(evidenceDigest?.workspace ? { workspace_totals: true } : {}) },
+            ...(ai.ok ? {} : { model_error: { code: ai.errorCode ?? "unknown", model: ai.model || null } }),
           },
         );
       }
@@ -2930,6 +3241,17 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // could be reached.
       if (brainRoute.kind === "compose" && brainRoute.compose) {
         const plan = brainRoute.compose;
+
+        // R1.1 DEFENCE IN DEPTH. With delegation off, drafting is ORION's
+        // (the `orion.draft` branch above). Anything that still arrives here
+        // must not create a content_item row or a confirmation card for work
+        // that cannot run: live, two empty draft rows were left behind by
+        // exactly this path before the guard refused the delegation.
+        if (!delegationEnabled()) {
+          return await replyAndReturn(DELEGATION_DISABLED_REPLY, {
+            chat_brain: { route: "compose", kind: plan.kind, served: false, reason: "delegation_disabled" },
+          });
+        }
 
         if (plan.kind === "outreach") {
           // NOBODY TO WRITE TO IS NOT A DRAFT. It is a question about who.
@@ -3601,11 +3923,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
   // Company Brain context — load once, reuse for all brain-aware direct replies.
   // (Content/outreach DRAFTING already gets the brain downstream in run-agent;
   // this covers the chat-reply layer that never reaches an agent.)
-  const { data: cbRow } = await admin
-    .from("company_brain")
-    .select("profile, onboarding_completed")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
+  const cbRow = chatBrain.row;
   const brainProfile = (cbRow?.profile ?? null) as Record<string, unknown> | null;
   // Same rule as the context block above: under BRAIN_READINESS_V2 a usable Brain counts.
   const brainContextAllowed = readinessV2
@@ -3717,7 +4035,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         lead_candidate_ids: top.map((l) => l.id), needs_enrichment: true, needs_outreach: true,
         execution_mode: "outreach", confidence: 0.9, missing_fields: [], reason: "follow-up: enrich + draft from memory",
       } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      modelUsed: actualModelUsed(), providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
     });
   }
 
@@ -3827,8 +4145,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           missing_fields: [],
           reason: "follow-up: draft outreach to top N from memory",
         } as unknown as ToolInput,
-        modelUsed: "google/gemini-3-flash-preview",
-        providerUsed: "lovable-ai",
+        modelUsed: actualModelUsed(),
+        providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
       });
     }
 
@@ -3887,8 +4205,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           missing_fields: [],
           reason: "follow-up: enrich top N from memory",
         } as ToolInput,
-        modelUsed: "google/gemini-3-flash-preview",
-        providerUsed: "lovable-ai",
+        modelUsed: actualModelUsed(),
+        providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
       });
     }
   }
@@ -3993,7 +4311,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
           ? { companies: linkedinUrls, jobTitles: persona.personas }
           : { keywords: queries },
       } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      modelUsed: actualModelUsed(), providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
     });
   }
 
@@ -4126,7 +4444,7 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       leadBindings: resolvedBindings,
     missionOrigin: "brief_rewrite",
       toolInput: { ...ti, confidence: 0.95, missing_fields: [] } as unknown as ToolInput,
-      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      modelUsed: actualModelUsed(), providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
     });
   }
 
@@ -4205,8 +4523,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         toolInput: {
           ...ti, confidence: 0.9, missing_fields: [],
         } as unknown as ToolInput,
-        modelUsed: "google/gemini-3-flash-preview",
-        providerUsed: "lovable-ai",
+        modelUsed: actualModelUsed(),
+        providerUsed: actualModelUsed() === "deterministic" ? "none" : "recorded",
       });
     }
     // Vague / incomplete → Lead Source Selector (7 engines, brain-prefilled,
@@ -4308,24 +4626,24 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
 
 
 
-  // 6. Load last 20 messages for context
-  const { data: history } = await admin
+  // 6. Load the LAST 20 messages for context. This used to order ascending
+  // with limit 20 — the conversation's FIRST twenty, so a long thread never
+  // showed the model its recent turns (audit 2026-11, C3). Newest twenty,
+  // then put back in chronological order.
+  const { data: historyNewestFirst } = await admin
     .from("messages")
     .select("role, content")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(20);
+  const history = [...(historyNewestFirst ?? [])].reverse();
 
   const msgs: Msg[] = (history ?? [])
     .filter((m: any) => m.role === "user" || m.role === "assistant")
     .map((m: any) => ({ role: m.role, content: m.content }));
 
   // 6b. Load company brain for context
-  const { data: brainRow } = await admin
-    .from("company_brain")
-    .select("profile, onboarding_completed")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
+  const brainRow = chatBrain.row;
   const brain = (brainRow?.profile ?? {}) as Record<string, unknown>;
   const pilotSystem = getAgentorySystemPrompt({
     taskType: "pilot_router",
@@ -4377,8 +4695,8 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
     prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
   });
 
-  const providerUsed = ai.provider !== "none" ? ai.provider : "lovable-ai";
-  const modelUsed = ai.model || "google/gemini-3-flash-preview";
+  const providerUsed = ai.provider !== "none" ? ai.provider : "none";
+  const modelUsed = ai.model || actualModelUsed();
 
   // 7b. Total provider failure — return a safe message but 200 so chat keeps working.
   if (!ai.ok || (!ai.content && !ai.json)) {

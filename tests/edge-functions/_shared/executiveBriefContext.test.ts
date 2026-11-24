@@ -186,3 +186,45 @@ Deno.test("refuses to run without a workspace", async () => {
   try { await collectExecutiveContext(db, ""); } catch { threw = true; }
   assert(threw);
 });
+
+// ── LISA V2 provenance reaches ORION; unsupported claims are never elevated ──
+
+Deno.test("LISA V2: ORION scores by counted verification, carries the source link, never elevates single-source or contradicted claims", async () => {
+  const lisaRow = (id: string, level: string, sources: number, src: string | null, title: string) => ({
+    id, workspace_id: A, account_id: null, signal_type: "geographic_expansion", confidence: level === "corroborated" ? "high" : "low",
+    lifecycle_status: "active", verification_status: level === "corroborated" ? "provider_verified" : "unverified",
+    dedupe_key: `lisa-${id}`, occurred_at: day(1), observed_at: day(1), created_at: day(1), source_url: src,
+    normalized_value: { title, company_name: "Brightforge Robotics", lisa: {
+      category: "expansion", event_date: day(1).slice(0, 10), title,
+      verification: { level, independent_sources: sources, contradictions: level === "contradicted" ? ["x"] : [] },
+      relevance: { score: 80, why_now: "Announced 1 days ago: a new site means decisions are being made now.", why_it_matters: "Relevant because it is in Manufacturing",
+        suggested_action: "Research Brightforge Robotics in Leads (approval required before any spend).", reasons: ["Matches your target industry: Manufacturing (+20)"] },
+    } },
+  });
+  const t = fixture();
+  t.signal_events = [
+    lisaRow("lisa-ok", "corroborated", 2, "https://ohio-business-journal.example/brightforge-columbus", "Brightforge opens plant in Columbus"),
+    lisaRow("lisa-single", "single_source", 1, "https://one.example/x", "Brightforge rumoured to hire"),
+    lisaRow("lisa-contra", "contradicted", 2, "https://two.example/y", "Brightforge raises $90M"),
+  ];
+  const { db } = fakeDb(t);
+  const ctx = await collectExecutiveContext(db, A, { now: NOW });
+  const ok = ctx.signals.find((x) => x.id === "lisa-ok")!;
+  const single = ctx.signals.find((x) => x.id === "lisa-single")!;
+  const contra = ctx.signals.find((x) => x.id === "lisa-contra")!;
+  assert(ok.reasons.includes("corroborated by 2 independent sources"));
+  assertEquals(ok.lisa?.elevatable, true);
+  assertEquals(ok.source_url, "https://ohio-business-journal.example/brightforge-columbus");
+  assertEquals(ok.lisa?.brain_influence, ["Matches your target industry: Manufacturing (+20)"]);
+  assertFalse(single.lisa!.elevatable);
+  assertEquals(single.source_confidence, "low");
+  assertFalse(contra.lisa!.elevatable);
+  assert(ok.score > single.score && single.score > contra.score, `${ok.score} ${single.score} ${contra.score} ${JSON.stringify(ok.reasons)}`);
+  const brief = synthesizeExecutiveBrief(ctx);
+  const market = brief.priorities.filter((r) => r.category === "market");
+  const ids = [...market, ...brief.recommended_actions].flatMap((r) => r.evidence.map((e) => e.id));
+  assert(ids.includes("lisa-ok"), JSON.stringify(brief.priorities));
+  assertFalse(ids.includes("lisa-single"));
+  assertFalse(ids.includes("lisa-contra"));
+  assertEquals(market.flatMap((r) => r.evidence).find((e) => e.id === "lisa-ok")?.source_url, "https://ohio-business-journal.example/brightforge-columbus");
+});

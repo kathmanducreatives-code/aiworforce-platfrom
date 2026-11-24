@@ -14,7 +14,8 @@ import {
   resolveTarget, configuredRef, environmentOf, refusalFor, testIsProduction, testTargetRefusal,
 } from "../../scripts/supabase-target.mjs";
 
-const TEST_REF = "ohsdatpvfdjdemstoiuj";
+// TEST is the isolated `agentory-discovery-test` project; it must never be production.
+const TEST_REF = "tlvnfrxzjhsjgdofwehb";
 const PROD_REF = "ohsdatpvfdjdemstoiuj";
 const CONFIG = new URL("../../supabase/config.toml", import.meta.url).pathname;
 
@@ -39,6 +40,7 @@ Deno.test("an unrecognised ref still fails closed", () => {
   // model does not recognise must classify as `unknown`, never fall through to
   // a default, so every caller can refuse it.
   assertEquals(environmentOf(PROD_REF), "production", "the live project resolves");
+  assertEquals(environmentOf(TEST_REF), "test", "the isolated TEST project resolves as test");
   assertEquals(environmentOf("something-else"), "unknown");
   for (const retired of ["zbwsbnqqpkvdhqwavjke", "wqnigjhcwjxtmordrwno"]) {
     assertEquals(environmentOf(retired), "unknown",
@@ -148,11 +150,13 @@ Deno.test("verify-deploy-target refuses a RETIRED ref for either environment", a
   }
 });
 
-Deno.test("verify-deploy-target accepts the live project under either name", async () => {
-  // Both role names resolve to the same project, so both must be accepted — a
-  // script still saying `--production` must not break after consolidation.
-  assertEquals(await verifyDeployTarget("test", PROD_REF), 0);
+Deno.test("verify-deploy-target: each role name accepts ONLY its own project", async () => {
+  // Two projects again. The check that matters: "deploy to test" must never be
+  // satisfied by production, and the reverse.
+  assertEquals(await verifyDeployTarget("test", TEST_REF), 0);
   assertEquals(await verifyDeployTarget("production", PROD_REF), 0);
+  assertEquals(await verifyDeployTarget("test", PROD_REF), 1, "test expected, production given → refused");
+  assertEquals(await verifyDeployTarget("production", TEST_REF), 1, "production expected, TEST given → refused");
 });
 
 Deno.test("verify-deploy-target refuses an unknown ref", async () => {
@@ -193,16 +197,25 @@ Deno.test("the baseline snapshot still declares itself informational", async () 
   assertStringIncludes(sql, "NOT meant to be applied");
 });
 
-// "TEST" resolves to production today, so the test target only reads.
-Deno.test("test target: while it names production, every mutating command is refused", () => {
-  assert(testIsProduction(), "both canonical refs name the same project today");
+// The checked-in TEST ref is the isolated project; the read-only guard remains
+// for the day someone points it back at production.
+Deno.test("test target: the checked-in TEST ref is NOT production", () => {
+  assertEquals(testIsProduction(), false);
+  const r = resolveTarget({ requested: "test", env: {} });
+  assert(r.ok); assertEquals(r.ref, TEST_REF);
+  assert(r.ref !== PROD_REF);
+});
+
+Deno.test("test target: if it ever named production again, every mutating command is refused", () => {
+  const collapsed = { production: PROD_REF, test: PROD_REF };
+  assert(testIsProduction(collapsed));
   for (const args of [["functions", "deploy", "run-agent"], ["secrets", "set", "X=1"], ["migration", "repair"], ["storage", "rm", "x"], ["link"]]) {
-    const r = testTargetRefusal(args);
+    const r = testTargetRefusal(args, collapsed);
     assert(r, args.join(" "));
     assertStringIncludes(r!, "PRODUCTION project");
   }
   for (const args of [["functions", "list"], ["secrets", "list"], ["migration", "list", "--linked"], ["projects", "list"]]) {
-    assertEquals(testTargetRefusal(args), null, args.join(" "));
+    assertEquals(testTargetRefusal(args, collapsed), null, args.join(" "));
   }
 });
 

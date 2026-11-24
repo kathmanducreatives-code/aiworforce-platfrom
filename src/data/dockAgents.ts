@@ -83,4 +83,5 @@ export const modelBadge: Record<DockModel, { label: string; className: string }>
   'claude-sonnet': { label: 'Claude Sonnet', className: 'bg-orange-500/15 text-orange-300 border-orange-500/30' },
   'claude-haiku':  { label: 'Claude Haiku',  className: 'bg-orange-500/15 text-orange-300 border-orange-500/30' },
   'gemini-pro':    { label: 'Gemini Pro',    className: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
+  'gpt-5.6-luna':  { label: 'GPT-5.6 Luna',  className: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
 };

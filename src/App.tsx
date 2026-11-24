@@ -36,6 +36,11 @@ const Landing = lazy(() => import("./pages/Landing"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Signals = lazy(() => import("./pages/Signals"));
 const AwaitingYou = lazy(() => import("./pages/AwaitingYou"));
+// DEV ONLY: the fictional multi-agent collaboration journey (npm run dev:collab). Never routed in production.
+const CollaborationPreview = import.meta.env.DEV ? lazy(() => import("./pages/dev/CollaborationPreview")) : null;
+// Workforce V2 live dashboard — routed only when VITE_WORKFORCE_DASHBOARD_ENABLED=true.
+const WORKFORCE_DASHBOARD_ENABLED = import.meta.env.VITE_WORKFORCE_DASHBOARD_ENABLED === "true";
+const WorkforceDashboard = WORKFORCE_DASHBOARD_ENABLED ? lazy(() => import("./pages/WorkforceDashboard")) : null;
 const Features = lazy(() => import("./pages/Features"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -102,6 +107,10 @@ const App = () => (
                   <Suspense fallback={<div className="min-h-screen bg-background" />}>
                   <Routes>
 
+                    {import.meta.env.DEV && CollaborationPreview && (
+                      <Route path="/dev/collaboration" element={<CollaborationPreview />} />
+                    )}
+
                     {/* Public Routes */}
                     <Route path="/" element={<Landing />} />
                     <Route path="/auth" element={<Auth />} />
@@ -112,6 +121,15 @@ const App = () => (
                     <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
 
                     {/* Protected Routes with MainLayout */}
+                    {WorkforceDashboard && (
+                      <Route path="/workforce" element={
+                        <ProtectedRoute>
+                          <MainLayout>
+                            <WorkforceDashboard />
+                          </MainLayout>
+                        </ProtectedRoute>
+                      } />
+                    )}
                     <Route path="/dashboard" element={
                       <ProtectedRoute>
                         <MainLayout>

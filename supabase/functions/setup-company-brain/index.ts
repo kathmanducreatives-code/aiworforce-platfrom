@@ -15,6 +15,7 @@ import {
   resolveRunBudget, authorizeModelSpend, resolveSpendEnforcement, resolveCeiling, spendRefusalMessage,
   describeSpend, MODEL_SPEND_REFUSED, type SpendDb,
 } from "../_shared/modelSpendCeiling.ts";
+import { withBuildStamp } from "../_shared/buildStamp.ts";
 /**
  * LAYER 1, PER SPENDING BRANCH.
  *
@@ -85,7 +86,7 @@ const json = (b: unknown, s = 200) =>
 
 type AnyObj = Record<string, unknown>;
 
-Deno.serve(async (req) => {
+Deno.serve(withBuildStamp(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -337,4 +338,4 @@ Deno.serve(async (req) => {
     console.error("setup-company-brain error", e);
     return json({ error: "internal_error", details: e instanceof Error ? e.message : String(e) }, 500);
   }
-});
+}));

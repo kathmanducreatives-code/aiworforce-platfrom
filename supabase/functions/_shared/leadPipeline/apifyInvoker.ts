@@ -23,7 +23,10 @@ import { SIGNAL_ACTORS, worstCaseUsd } from "./signals.ts";
  * ASSUMPTION (Apify publishes it per plan) — it must be checked against the account's plan,
  * and the first approved run's billed usage, before this estimate is trusted. MRLE Phase 1.
  */
-export const WEBSITE_PAGES_RUN = Object.freeze({ memoryMb: 1024, timeoutS: 120, assumedUsdPerComputeUnit: 0.4 });
+/** harvestapi/linkedin-company-search in short mode (V2 card `apify_linkedin_company_search`). */
+export const COMPANY_SEARCH_ACTOR = Object.freeze({ key: "apify_linkedin_company_search", actorId: "harvestapi/linkedin-company-search", perItemUsd: 0.002, perStartUsd: 0.001 });
+
+export const WEBSITE_PAGES_RUN =Object.freeze({ memoryMb: 1024, timeoutS: 120, assumedUsdPerComputeUnit: 0.4 });
 export const WEBSITE_PAGES_WORST_USD = Math.ceil((WEBSITE_PAGES_RUN.memoryMb / 1024) * (WEBSITE_PAGES_RUN.timeoutS / 3600) * WEBSITE_PAGES_RUN.assumedUsdPerComputeUnit * 1e5) / 1e5;
 
 export const PIPELINE_ACTORS: Readonly<Record<string, { actorId: string; perItemUsd: number; perStartUsd: number; emptyUsd: number; memoryMb?: number; timeoutS?: number }>> = Object.freeze({
@@ -31,6 +34,11 @@ export const PIPELINE_ACTORS: Readonly<Record<string, { actorId: string; perItem
   [SIGNAL_ACTORS.profilePosts.key]: SIGNAL_ACTORS.profilePosts,
   [SIGNAL_ACTORS.companyPosts.key]: SIGNAL_ACTORS.companyPosts,
   [SIGNAL_ACTORS.jobs.key]: SIGNAL_ACTORS.jobs,
+  // Company-first discovery (industry / size / location filters, never a concept query).
+  // Prices are the V2 catalogue card's, re-read from Apify on 2026-11-20: $0.001 start,
+  // $0.002 per SHORT-mode company (the mode compiled here). Planning uses it only when
+  // LEAD_PIPELINE_COMPANY_SEARCH is on (strategy.ts `companySearch`).
+  [COMPANY_SEARCH_ACTOR.key]: { actorId: COMPANY_SEARCH_ACTOR.actorId, perItemUsd: COMPANY_SEARCH_ACTOR.perItemUsd, perStartUsd: COMPANY_SEARCH_ACTOR.perStartUsd, emptyUsd: 0 },
   // First-party pages for business-model verification (businessModelCheck.ts): compute-bounded.
   apify_website_content: { actorId: "apify/website-content-crawler", perItemUsd: 0, perStartUsd: WEBSITE_PAGES_WORST_USD, emptyUsd: 0,
     memoryMb: WEBSITE_PAGES_RUN.memoryMb, timeoutS: WEBSITE_PAGES_RUN.timeoutS },

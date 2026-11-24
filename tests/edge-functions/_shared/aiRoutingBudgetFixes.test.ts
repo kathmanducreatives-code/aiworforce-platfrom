@@ -201,8 +201,9 @@ Deno.test("PRICING: gpt-6 cache writes cost the write rate; gpt-5.6 pricing is b
   const base = { input_tokens: 10_000, cached_input_tokens: 2_000, output_tokens: 1_000 };
   const writes = { ...base, cache_write_input_tokens: 8_000 };
   const usd = (model: string, usage: typeof base) => priceModelCall({ model, usage }).estimated_usd!;
-  // gpt-5.6: no write rate modelled (pre-existing, documented gap) — unchanged.
-  assertEquals(usd("gpt-5.6-luna", writes), usd("gpt-5.6-luna", base));
+  // gpt-5.6: the write rate is now modelled (published 2026-11-11: $0.25 vs $0.20 input).
+  const lunaDelta = usd("gpt-5.6-luna", writes) - usd("gpt-5.6-luna", base);
+  assert(Math.abs(lunaDelta - 8_000 * (0.25 - 0.20) / 1e6) < 1e-9, String(lunaDelta));
   // gpt-6-luna: $0.10 in, $0.125 write per 1M → 8,000 writes add 8000 × (0.125 − 0.10) / 1e6.
   const delta = usd("gpt-6-luna", writes) - usd("gpt-6-luna", base);
   assert(Math.abs(delta - 8_000 * (0.125 - 0.10) / 1e6) < 1e-9, String(delta));

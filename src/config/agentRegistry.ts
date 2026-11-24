@@ -8,12 +8,16 @@
  * hawk / penn / scribe) continue to power execution and are preserved below
  * for backend compatibility, but they must NEVER be rendered publicly.
  *
- * Public lineup (Phase 0/1):
- *   Pilot  — AI Workforce Coordinator
- *   Lyra   — AI Signal Scout          (execution: scout)
- *   Atlas  — AI Account Analyst       (execution: aria qualification + hawk research)
- *   Mira   — AI Message Strategist    (execution: penn, approval-first preserved)
- *   Orion  — Executive Intelligence   (execution: daily-brief executive brief; legacy slug scribe)
+ * Public lineup (Workforce V2 — the four departments):
+ *   Orion  — Executive Intelligence      (coordinator + briefs; legacy slug pilot)
+ *   Atlas  — Sales & Lead Intelligence   (legacy slugs scout sourcing, aria qualification, hawk research)
+ *   Lisa   — Signals & Market Intelligence (radar / monitoring / LISA V2)
+ *   Lyra   — Content & Marketing         (legacy slugs scribe content, penn outreach drafts)
+ *
+ * `pilot` and `mira` remain as HIDDEN ids so historical rows and stored
+ * references keep resolving; both alias to their department (pilot → Orion,
+ * mira → Lyra). The same map is mirrored server-side in
+ * supabase/functions/_shared/departments.ts and pinned to it by test.
  */
 
 // Canonical public identity assets. Legacy files (scout.png, aria.png,
@@ -31,7 +35,7 @@ import orionImg from '@/assets/agents/public/orion-cinematic.webp';
 import lyraImg from '@/assets/agents/public/lyra-cinematic.webp';
 import unknownAgentImg from '@/assets/agents/public/unknown-agent.png';
 
-export type PublicAgentId = 'pilot' | 'lyra' | 'atlas' | 'mira' | 'orion';
+export type PublicAgentId = 'pilot' | 'lyra' | 'atlas' | 'mira' | 'orion' | 'lisa';
 export type LegacyAgentId = 'pilot' | 'scout' | 'aria' | 'hawk' | 'penn' | 'scribe';
 export type AnyAgentId = PublicAgentId | LegacyAgentId;
 
@@ -94,138 +98,147 @@ export interface PublicAgentProfile {
  * Canonical public roster.
  */
 export const PUBLIC_AGENTS: Record<PublicAgentId, PublicAgentProfile> = {
-  pilot: {
-    id: 'pilot',
-    name: 'Pilot',
-    title: 'AI Workforce Coordinator',
-    shortDescription: "Coordinates Agentory's specialists and presents work for founder review.",
-    description:
-      "Coordinates Agentory's specialist agents, delegates work, and presents each result for founder review.",
-    avatar: pilotImg,
-    accent: 'emerald',
-    accentHex: '#10B981',
-    department: 'operations',
-    capabilities: ['delegation', 'workflow coordination', 'workforce briefing', 'founder review'],
-    legacySlugs: ['pilot'],
-    publiclyVisible: true,
-    fallbackInitial: 'P',
-    status: 'active',
-  },
-  lyra: {
-    id: 'lyra',
-    name: 'Lyra',
-    title: 'AI Signal Scout',
-    shortDescription: 'Finds companies showing meaningful signs they may be ready to buy.',
-    description:
-      'Continuously scans hiring, funding, growth, and product signals to surface accounts that may be ready to buy.',
-    avatar: lyraImg,
-    portrait: lyraImg,
-    accent: 'blue',
-    accentHex: '#3B82F6',
-    department: 'growth',
-    capabilities: [
-      'signal discovery',
-      'buying-moment detection',
-      'opportunity discovery',
-      'market monitoring',
-    ],
-    legacySlugs: ['scout'],
-    publiclyVisible: true,
-    fallbackInitial: 'L',
-    imageCrop: { objectPosition: 'center 20%' },
-    status: 'active',
-  },
-  atlas: {
-    id: 'atlas',
-    name: 'Atlas',
-    title: 'AI Account Analyst',
-    shortDescription:
-      'Researches every account, qualifies it against the Company Brain, and ranks the strongest opportunities.',
-    description:
-      'Researches accounts, cross-checks evidence against the Company Brain, and ranks the strongest opportunities so founders review what matters first.',
-    avatar: atlasImg,
-    portrait: atlasImg,
-    accent: 'amber',
-    accentHex: '#F59E0B',
-    department: 'intelligence',
-    capabilities: [
-      'account research',
-      'company enrichment',
-      'qualification',
-      'evidence analysis',
-      'opportunity ranking',
-    ],
-    // Descriptive only — execution stays split across aria + hawk.
-    internalCapabilities: {
-      qualification_engine: 'aria',
-      research_engine: 'hawk',
-    },
-    legacySlugs: ['aria', 'hawk'],
-    publiclyVisible: true,
-    fallbackInitial: 'A',
-    status: 'active',
-  },
-  mira: {
-    id: 'mira',
-    name: 'Mira',
-    title: 'AI Message Strategist',
-    shortDescription:
-      'Turns account research into clear, relevant outreach prepared for founder approval.',
-    description:
-      'Turns account research into clear, relevant outreach. Every draft is prepared for founder approval — Mira never sends without a human.',
-    avatar: miraImg,
-    portrait: miraImg,
-    accent: 'emerald',
-    accentHex: '#22C55E',
-    department: 'growth',
-    capabilities: [
-      'outreach strategy',
-      'message drafting',
-      'personalization',
-      'angle selection',
-      'CTA development',
-    ],
-    legacySlugs: ['penn'],
-    publiclyVisible: true,
-    fallbackInitial: 'M',
-    status: 'active',
-  },
   orion: {
     id: 'orion',
     name: 'Orion',
     title: 'Executive Intelligence',
     shortDescription:
-      'Reads what the team found and briefs you on the three things that matter most.',
+      'Your AI chief of staff: answers business questions, briefs you on what matters, and coordinates the team.',
     description:
-      'Executive Intelligence: combines signals, leads, content drafts, approvals and your Company Brain into one evidence-backed brief — what happened, what matters most, why, and what to do next.',
+      'Executive Intelligence and the primary interface. Combines signals, leads, content and approvals with your Company Brain into evidence-backed answers and briefs, delegates work to Atlas, Lisa and Lyra, and asks for your approval before anything consequential.',
     avatar: orionImg,
     portrait: orionImg,
     accent: 'purple',
     accentHex: '#A855F7',
     department: 'operations',
     capabilities: [
+      'business Q&A',
       'executive briefings',
       'priority ranking',
-      'evidence-backed recommendations',
-      'approval queues',
-      'decision support',
+      'delegation',
+      'approval requests',
     ],
-    // Scribe's generic content-generation capability is intentionally NOT
-    // migrated to Orion yet — that surface stays on legacy Scribe until a
-    // separate phase reviews it.
-    legacySlugs: ['scribe'],
+    legacySlugs: ['pilot'],
     publiclyVisible: true,
     fallbackInitial: 'O',
     status: 'active',
   },
+  atlas: {
+    id: 'atlas',
+    name: 'Atlas',
+    title: 'Sales & Lead Intelligence',
+    shortDescription:
+      'Finds and researches companies, qualifies them against your Company Brain, and explains every verdict.',
+    description:
+      'Discovers relevant companies, researches accounts and decision-makers, qualifies or disqualifies them against your ICP and exclusions, and explains why. Never contacts anyone.',
+    avatar: atlasImg,
+    portrait: atlasImg,
+    accent: 'amber',
+    accentHex: '#F59E0B',
+    department: 'intelligence',
+    capabilities: [
+      'company discovery',
+      'account research',
+      'qualification',
+      'evidence analysis',
+      'opportunity ranking',
+    ],
+    internalCapabilities: {
+      sourcing_engine: 'scout',
+      qualification_engine: 'aria',
+      research_engine: 'hawk',
+    },
+    legacySlugs: ['scout', 'aria', 'hawk'],
+    publiclyVisible: true,
+    fallbackInitial: 'A',
+    status: 'active',
+  },
+  lisa: {
+    id: 'lisa',
+    name: 'Lisa',
+    title: 'Signals & Market Intelligence',
+    shortDescription: 'Watches competitors and markets, verifies what changed, and flags what matters to you.',
+    description:
+      'Monitors competitors and markets for expansion, hiring, funding and launch signals, verifies them against independent sources, and scores their relevance to your Company Brain. Never presents an unverified report as fact.',
+    avatar: miraImg,
+    portrait: miraImg,
+    accent: 'blue',
+    accentHex: '#3B82F6',
+    department: 'intelligence',
+    capabilities: ['signal discovery', 'source verification', 'competitor monitoring', 'relevance scoring'],
+    legacySlugs: [],
+    publiclyVisible: true,
+    fallbackInitial: 'L',
+    status: 'monitoring',
+  },
+  lyra: {
+    id: 'lyra',
+    name: 'Lyra',
+    title: 'Content & Marketing',
+    shortDescription: 'Writes posts and outreach drafts in your brand voice, citing approved evidence.',
+    description:
+      'Turns approved research and verified signals into LinkedIn content, campaign ideas and personalised outreach drafts in your brand voice. Nothing is published or sent without your approval.',
+    avatar: lyraImg,
+    portrait: lyraImg,
+    accent: 'emerald',
+    accentHex: '#22C55E',
+    department: 'content',
+    capabilities: ['LinkedIn content', 'outreach drafts', 'campaign ideas', 'brand voice', 'evidence citation'],
+    internalCapabilities: {
+      content_engine: 'scribe',
+      outreach_engine: 'penn',
+    },
+    legacySlugs: ['scribe', 'penn'],
+    publiclyVisible: true,
+    fallbackInitial: 'L',
+    imageCrop: { objectPosition: 'center 20%' },
+    status: 'active',
+  },
+  // ── HIDDEN COMPATIBILITY IDS ───────────────────────────────────────────
+  // Stored rows and links still carry these. They alias to their department
+  // (see PUBLIC_ALIASES) and are never shown in selectors.
+  pilot: {
+    id: 'pilot',
+    name: 'Orion',
+    title: 'Executive Intelligence',
+    shortDescription: "Coordinates Agentory's departments.",
+    description: "Coordinates Agentory's departments and presents each result for review.",
+    avatar: orionImg,
+    accent: 'purple',
+    accentHex: '#A855F7',
+    department: 'operations',
+    capabilities: ['delegation', 'workflow coordination'],
+    legacySlugs: ['pilot'],
+    publiclyVisible: false,
+    fallbackInitial: 'O',
+    status: 'active',
+  },
+  mira: {
+    id: 'mira',
+    name: 'Lyra',
+    title: 'Content & Marketing',
+    shortDescription: 'Outreach drafts, now part of Lyra.',
+    description: 'Outreach drafting is part of Lyra. Every draft waits for your approval.',
+    avatar: lyraImg,
+    accent: 'emerald',
+    accentHex: '#22C55E',
+    department: 'content',
+    capabilities: ['outreach drafts'],
+    legacySlugs: ['penn'],
+    publiclyVisible: false,
+    fallbackInitial: 'L',
+    status: 'active',
+  },
 };
 
+/** Hidden ids that DISPLAY as their department. */
+export const PUBLIC_ALIASES: Readonly<Partial<Record<PublicAgentId, PublicAgentId>>> = { pilot: 'orion', mira: 'lyra' };
+
 export const PUBLIC_AGENT_ORDER: readonly PublicAgentId[] = [
-  'pilot',
-  'lyra',
-  'atlas',
-  'mira',
   'orion',
+  'atlas',
+  'lisa',
+  'lyra',
 ];
 
 /**
@@ -233,12 +246,12 @@ export const PUBLIC_AGENT_ORDER: readonly PublicAgentId[] = [
  * Do not use this to reroute execution.
  */
 export const LEGACY_TO_PUBLIC: Readonly<Record<LegacyAgentId, PublicAgentId>> = {
-  pilot: 'pilot',
-  scout: 'lyra',
+  pilot: 'orion',
+  scout: 'atlas',
   aria: 'atlas',
   hawk: 'atlas',
-  penn: 'mira',
-  scribe: 'orion',
+  penn: 'lyra',
+  scribe: 'lyra',
 };
 
 /**
@@ -288,6 +301,7 @@ export function lookupPublicAgent(input?: string | null): PublicAgentProfile | n
   if (!input) return null;
   const key = String(input).trim().toLowerCase();
   if (!key) return null;
+  if (key in PUBLIC_ALIASES) return PUBLIC_AGENTS[PUBLIC_ALIASES[key as PublicAgentId]!];
   if (key in PUBLIC_AGENTS) return PUBLIC_AGENTS[key as PublicAgentId];
   if (key in LEGACY_TO_PUBLIC) return PUBLIC_AGENTS[LEGACY_TO_PUBLIC[key as LegacyAgentId]];
   if (key in NAME_INDEX) return PUBLIC_AGENTS[NAME_INDEX[key]];
@@ -327,7 +341,7 @@ export function resolveAgentForDisplay(
 ): PublicAgentProfile {
   const found = lookupPublicAgent(input);
   if (found) return found;
-  if (opts.pilotFallback) return PUBLIC_AGENTS.pilot;
+  if (opts.pilotFallback) return PUBLIC_AGENTS.orion;
   return UNKNOWN_AGENT_DISPLAY;
 }
 

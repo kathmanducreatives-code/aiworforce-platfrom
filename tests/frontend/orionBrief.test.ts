@@ -115,11 +115,13 @@ Deno.test("Orion is Executive Intelligence everywhere it is named; backend slugs
     .catch(() => ({ lookupPublicAgent: null })) as { lookupPublicAgent: Lookup | null };
   const reg = read("src/config/agentRegistry.ts");
   assert(reg.includes("title: 'Executive Intelligence',"));
-  assert(reg.includes("legacySlugs: ['scribe'],"), "historical scribe records still resolve to Orion");
+  // Workforce V2: Orion is the coordinator (legacy `pilot`); content (`scribe`) is Lyra's.
+  assert(reg.includes("legacySlugs: ['pilot'],"), "the coordinator slug resolves to Orion");
   assert(read("src/components/workforce/agents.ts").includes("role: 'Executive Intelligence',"));
   assertFalse(read("src/data/dockAgents.ts").includes("Pipeline Operator"));
   if (lookupPublicAgent) {
     assertEquals(lookupPublicAgent("orion")?.title, "Executive Intelligence");
-    assertEquals(lookupPublicAgent("scribe")?.id, "orion");
+    assertEquals(lookupPublicAgent("pilot")?.id, "orion");
+    assertEquals(lookupPublicAgent("scribe")?.id, "lyra");
   }
 });

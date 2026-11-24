@@ -24,6 +24,9 @@ import {
   type GetBrainOptions,
 } from "../getCompiledCompanyBrainForWorkspace.ts";
 import type { MissionCompanyBrain, MissionIcp } from "./mission.ts";
+import { getCompiledCompanyBrainWithMemory } from "../atlasBrainContract.ts";
+import type { AtlasBrainContract } from "../companyBrainAgentViews.ts";
+import type { LoaderDb } from "../companyBrainContextLoader.ts";
 
 // ------------------------------------------------------------ size bounds ----
 //
@@ -357,4 +360,27 @@ export async function loadMissionContext(
     return { ok: false, context: null, error: res.error };
   }
   return { ok: true, context: buildMissionContext(workspaceId, res.brain) };
+}
+
+/**
+ * OPT-IN, memory-aware variant (Company Brain V1, contract atlas-brain-v1).
+ *
+ * Same membership semantics and the same projection as `loadMissionContext`;
+ * the brain comes from the EFFECTIVE profile (approved memory folded in: newer
+ * ICP choices, explicit exclusions as disqualifiers, approved competitors), and
+ * the narrow `brain_contract` adds rejected lead/account refs, the ICP-change
+ * time and the fingerprint. For a workspace with no memory the context is
+ * deep-equal to `loadMissionContext`'s (pinned by missionContextMemory.test.ts).
+ *
+ * The ATLAS track switches its call site when it is ready; nothing calls this
+ * on the mission path today.
+ */
+export async function loadMissionContextWithMemory(
+  db: LoaderDb,
+  workspaceId: string,
+  opts: GetBrainOptions = {},
+): Promise<MissionContextResult & { brain_contract: AtlasBrainContract | null }> {
+  const res = await getCompiledCompanyBrainWithMemory(db, workspaceId, opts);
+  if (!res.ok) return { ok: false, context: null, error: res.error, brain_contract: null };
+  return { ok: true, context: buildMissionContext(workspaceId, res.brain), brain_contract: res.contract };
 }

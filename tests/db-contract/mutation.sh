@@ -83,14 +83,23 @@ clock_ts="$root/supabase/functions/_shared/missionWallClock.ts"
 plan_ts="$root/supabase/functions/_shared/smokeAdmissionRefusal.ts"
 planner_ts="$root/supabase/functions/_shared/gptExecutionPlanner.ts"
 brain_writer_sql="$root/supabase/migrations/20261024120000_company_brain_authorized_writer.sql"
+# The held Company Brain V1 memory migration re-creates company_brain_authorized_write
+# (adding only the actor settings for the revision trigger). Applied after the
+# shipped one, it is the writer the lane runs, so writer mutants go to BOTH.
+mem_sql="$root/supabase/migrations-held/20261110120000_company_brain_memory.sql"
 client_sql="$root/supabase/migrations-held/20261024160000_client_company_brain.sql"
 autosave_ts="$root/src/lib/onboardingAutosave.ts"
 brain_draft_ts="$root/supabase/functions/generate-company-brain-draft/index.ts"
 client_save_ts="$root/supabase/functions/_shared/clientBrainSave.ts"
 brain_scope_ts="$root/src/lib/brainScope.ts"
 client_api_ts="$root/src/lib/clientBrainApi.ts"
+lisa_sql="$root/supabase/migrations-held/20261111120000_lisa_signal_engine.sql"
+lisa_pipeline_ts="$root/supabase/functions/_shared/lisa/pipeline.ts"
+lisa_verify_ts="$root/supabase/functions/_shared/lisa/verify.ts"
+collab_sql="$root/supabase/migrations-held/20261112120000_agent_collaboration.sql"
+collab_handler_ts="$root/supabase/functions/agent-collaboration/handler.ts"
 restore_list=()
-for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts" "$brain_scope_ts" "$client_api_ts"; do
+for f in "$adm_sql" "$gate_ts" "$tools_ts" "$credit_ts" "$runner_ts" "$clock_ts" "$plan_ts" "$planner_ts" "$brain_writer_sql" "$mem_sql" "$client_sql" "$autosave_ts" "$brain_draft_ts" "$client_save_ts" "$brain_scope_ts" "$client_api_ts" "$lisa_sql" "$lisa_pipeline_ts" "$lisa_verify_ts" "$collab_sql" "$collab_handler_ts"; do
   cp "$f" "$f.mutation-backup"; restore_list+=("$f")
 done
 trap 'cp "$backup" "$real"; for f in "${restore_list[@]}"; do mv -f "$f.mutation-backup" "$f"; done; rm -f "$backup" "$out"' EXIT
@@ -114,6 +123,31 @@ prove_killed() {
   local status=$?
   set -e
   cp "$file.mutation-backup" "$file"
+  if [ $status -eq 0 ]; then echo "MUTANT SURVIVED ($label)" >&2; exit 1; fi
+  if ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "$name ... FAILED" >/dev/null; then
+    echo "the mutant ($label) failed, but not on '$name':" >&2; tail -30 "$out" >&2; exit 1
+  fi
+  echo "mutant killed: $label"
+  ran=$((ran + 1))
+}
+# prove_killed_in <label> "<file> <file>…" <find> <replace> <tests> <name>: the same
+# mutant in EVERY listed file (each must contain the guarded text), for a function
+# that more than one migration defines.
+prove_killed_in() {
+  local label="$1" files="$2" find="$3" repl="$4" tests="$5" name="$6" f
+  take || return 0
+  for f in $files; do
+    cp "$f.mutation-backup" "$f"
+    FIND="$find" REPL="$repl" perl -0pi -e 's/\Q$ENV{FIND}\E/$ENV{REPL}/' "$f"
+    if cmp -s "$f" "$f.mutation-backup"; then
+      echo "MUTANT DID NOT APPLY ($label) in ${f#$root/}: the guarded text changed; update this proof" >&2; exit 1
+    fi
+  done
+  set +e
+  "$root/tests/db-contract/run.sh" "$tests" >"$out" 2>&1
+  local status=$?
+  set -e
+  for f in $files; do cp "$f.mutation-backup" "$f"; done
   if [ $status -eq 0 ]; then echo "MUTANT SURVIVED ($label)" >&2; exit 1; fi
   if ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "$name ... FAILED" >/dev/null; then
     echo "the mutant ($label) failed, but not on '$name':" >&2; tail -30 "$out" >&2; exit 1
@@ -509,11 +543,11 @@ fi
 # named race or refusal test must then fail. The function is applied by the
 # bootstrap as a normal migration, so the mutant is what the database runs.
 brain_writer_tests="$root/tests/db-contract/companyBrainAuthorizedWrite.contract.test.ts"
-prove_killed "Brain writer: no lock on the session (a logout overtakes the write)" "$brain_writer_sql" \
+prove_killed_in "Brain writer: no lock on the session (a logout overtakes the write)" "$brain_writer_sql $mem_sql" \
   "     and (s.not_after is null or s.not_after > v_now)
    for share;" "     and (s.not_after is null or s.not_after > v_now);" \
   "$brain_writer_tests" "race: logged out in flight → the write waits, then is refused"
-prove_killed "Brain writer: no lock on the membership (a demotion overtakes the write)" "$brain_writer_sql" \
+prove_killed_in "Brain writer: no lock on the membership (a demotion overtakes the write)" "$brain_writer_sql $mem_sql" \
   "   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id
    for share;" "   where m.workspace_id = p_workspace_id and m.user_id = p_actor_id;" \
   "$brain_writer_tests" "race: demoted to viewer in flight → the write waits, then is refused"
@@ -716,6 +750,116 @@ prove_killed "membership surface: TRUNCATE is not guarded" "$ms_sql" \
   before truncate on public.workspace_members
   for each statement execute function public.workspace_members_app_surface();" "" \
   "$ms_tests" "surface: TRUNCATE is refused for application roles, by grant and by trigger"
+
+# ── COMPANY BRAIN V1 MEMORY (held 20261110120000) ──────────────────────────
+# Each removes one guard from the memory writers and requires the named test
+# to FAIL on that behaviour, not on a build error.
+mem_tests="$root/tests/db-contract/companyBrainMemory.contract.test.ts"
+prove_killed "brain memory: the in-transaction authorization always says ok" "$mem_sql" \
+  "  return public.company_brain_write_authorization(p_workspace_id, p_actor_id, p_session_id, p_permission);
+end;" "  return 'ok';
+end;" "$mem_tests" "viewers, outsiders and bad sessions are refused before anything is written"
+prove_killed "brain memory: a model inference may be labelled verified" "$mem_sql" \
+  "  constraint cbm_inference_never_verified check (
+    source_type not in ('model_inference', 'agent_suggestion')" "  constraint cbm_inference_never_verified check (true or
+    source_type not in ('model_inference', 'agent_suggestion')" \
+  "$mem_tests" "the schema refuses a model inference labelled as verified, and an agent item with no approver"
+prove_killed "brain memory: a single-record decision may become a workspace-wide rule" "$mem_sql" \
+  "    if v_scope = 'workspace' and not v_decision_workspace_ok then" "    if false then" \
+  "$mem_tests" "a lead rejection cannot be recorded as a workspace-wide rule, and never creates an exclusion"
+
+# ── LISA V2 SIGNAL ENGINE (held 20261111120000) ────────────────────────────
+# Each removes one guard and requires the named real-database scenario to FAIL.
+lisa_tests="$root/tests/db-contract/lisaSignalEngine.contract.test.ts"
+prove_killed "lisa: the lifecycle transition skips the in-transaction role check" "$lisa_sql" \
+  "  if v_auth <> 'ok' then" "  if false then" \
+  "$lisa_tests" "lifecycle: editor dismisses and restores with an audit trail; viewer and stranger are refused in the transaction"
+prove_killed "lisa: one independent source is projected as verified" "$lisa_sql" \
+  "when v_independent >= 2 then 'provider_verified'" "when v_independent >= 1 then 'provider_verified'" \
+  "$lisa_tests" "04 second round: Series B and Series C are two stored events"
+prove_killed "lisa: 'restore' can revive a retracted event" "$lisa_sql" \
+  "when 'restore' then case when v_from = 'dismissed' then 'active' end" "when 'restore' then 'active'" \
+  "$lisa_tests" "18 retracted: stored retracted; a human 'restore' cannot revive it; never in the digest"
+prove_killed "lisa: a live lease does not block a second scheduler" "$lisa_sql" \
+  "  if v_run.status = 'running' and v_run.lease_until > v_now then" "  if false then" \
+  "$lisa_tests" "19 concurrent jobs: two schedulers in one slot → one claim; two writers of one event → one row, evidence merged"
+prove_killed "lisa: a pass whose every write failed is not reported failed" "$lisa_pipeline_ts" \
+  '    : counts.persist_failed && stored.length === 0 && counts.events > 0 ? "failed"
+' "" \
+  "$lisa_tests" "20 persistence failure: a database refusal is a failed pass, never ok, and nothing half-written"
+prove_killed "lisa: the funding round is not part of the event identity (the Series B defect)" "$lisa_verify_ts" \
+  "      if (a.round) return String(a.round);" '      if (a.round) return "round";' \
+  "$lisa_tests" "04 second round: Series B and Series C are two stored events"
+
+# ── PHASE 5 AGENT COLLABORATION (held 20261112120000) ──────────────────────
+collab_tests="$root/tests/db-contract/agentCollaboration.contract.test.ts"
+prove_killed "collab: approval skips the in-transaction role check" "$collab_sql" \
+  "  v_auth := public.company_brain_write_authorization(p_workspace_id, p_actor_id, p_session_id, 'edit');
+  if v_auth <> 'ok' then" "  v_auth := 'ok';
+  if v_auth <> 'ok' then" \
+  "$collab_tests" "S07 a viewer cannot propose or approve — refused by the endpoint AND in the transaction"
+prove_killed "collab: a single-source signal may back research" "$collab_sql" \
+  "                and coalesce(e.normalized_value->'lisa'->'verification'->>'level', '') not in ('corroborated', 'self_reported')
+             then 'signal_unverified'" "                and false
+             then 'signal_unverified'" \
+  "$collab_tests" "S02 unsupported (single-source) signal is not trusted; neither ORION nor the database lets it back research"
+prove_killed "collab: approval does not re-check the cited signals" "$collab_sql" \
+  "  if v_to = 'approved' then
+    v_problem := public.agent_handoff_signal_problem(p_workspace_id, v_row.kind, v_row.signal_ids);" "  if false then
+    v_problem := public.agent_handoff_signal_problem(p_workspace_id, v_row.kind, v_row.signal_ids);" \
+  "$collab_tests" "S04 a retracted signal is excluded — and one retracted while awaiting review blocks approval"
+prove_killed "collab: completion without a persisted result" "$collab_sql" \
+  "    if not coalesce((p_result->>'persisted')::boolean, false) then
+      return jsonb_build_object('outcome', 'not_persisted', 'status', v_row.status);" "    if false then
+      return jsonb_build_object('outcome', 'not_persisted', 'status', v_row.status);" \
+  "$collab_tests" "S13 a failed persistence never produces a completed status (endpoint and database)"
+prove_killed "collab: a cancelled/rejected handoff can still be queued (no CAS, open transitions)" "$collab_sql" \
+  "  if v_row.status is distinct from p_expected then
+    return jsonb_build_object('outcome', 'conflict', 'status', v_row.status);
+  end if;
+  v_ok := case v_row.status
+    when 'approved' then p_to in ('queued', 'blocked')" "  v_ok := case v_row.status
+    when 'rejected' then true
+    when 'cancelled' then true
+    when 'approved' then p_to in ('queued', 'blocked')" \
+  "$collab_tests" "S08 a rejected proposal cannot execute; a cancelled one cannot run later"
+prove_killed "collab: the ATLAS result hook accepts a user token" "$collab_handler_ts" \
+  '    if (!service || token !== service) return json({ error: "forbidden", reason: "service_key_required" }, 403);' "" \
+  "$collab_tests" "S07b ATLAS results are accepted only from the service key, never from a user (even an owner)"
+prove_killed "collab: approval ignores a changed Company Brain" "$collab_handler_ts" \
+  '      if (!still && h.brain_fingerprint !== (brain?.fingerprint ?? null)) {' '      if (false) {' \
+  "$collab_tests" "S19 a Company Brain change invalidates stale context: approval re-checks against the CURRENT Brain"
+
+# ── PROOF: Workforce V2 security — browser writes to signals / approvals ───
+# Without the held migration a viewer approves through PostgREST and a member
+# forges a signal row; the named tests must fail.
+sec_tests="$root/tests/db-contract/workforceV2Security.contract.test.ts"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261113120000_workforce_v2_security.sql "$root/tests/db-contract/run.sh" "$sec_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "approvals: a viewer reads but cannot approve through PostgREST; the service role can ... FAILED" >/dev/null \
+   || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "signals: a member cannot insert, update or delete signal rows or the watchlist ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: Workforce V2 security tests without the held migration" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the security migration a viewer approves and a member forges a signal"
+ran=$((ran + 1))
+fi
+
+# ── PROOF: the model-spend view lockdown ───────────────────────────────────
+lmc_tests="$root/tests/db-contract/leadModelCallsView.contract.test.ts"
+if take; then
+set +e
+DB_CONTRACT_OMIT_HELD=20261114120000_lead_model_calls_view_lockdown.sql "$root/tests/db-contract/run.sh" "$lmc_tests" >"$out" 2>&1
+status=$?
+set -e
+if [ $status -eq 0 ] || ! sed 's/\x1b\[[0-9;]*m//g' "$out" | grep -F "lead_model_calls: anon and other members cannot read or delete spend rows; the service role still reads ... FAILED" >/dev/null; then
+  echo "MUTANT SURVIVED or failed elsewhere: lead_model_calls tests without the held lockdown" >&2; tail -30 "$out" >&2; exit 1
+fi
+echo "mutant killed: without the lockdown anon reads and deletes model-spend rows"
+ran=$((ran + 1))
+fi
 
 # THE TALLY the workflow's gate adds up. A proof that did not run is not killed.
 echo "MUTATION_TALLY shard=$shard shards=$shards total=$proof_n ran=$ran"

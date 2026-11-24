@@ -104,6 +104,8 @@ Deno.test("G-8 run-agent: an admitted run on a usable Brain gets it as context; 
   const src = read("supabase/functions/run-agent/index.ts");
   assert(/const brainContextAllowed = brainReadinessV2Enabled\([\s\S]{0,120}\)\s*\?\s*companyBrainReadiness\(normalizeCompanyBrain\(brain \?\? \{\}\), brainOnboardingCompleted\)\.state !== "draft"\s*:\s*brainOnboardingCompleted;/.test(src));
   assert(src.includes("renderBrainForAgent(brain, brainContextAllowed)"));
-  assert(src.includes("renderContentBrain(brainContextAllowed ? brain : null"));
+  // Content reads the shared loader's effective profile (Company Brain V1), behind the SAME gate.
+  assert(src.includes("renderContentBrain(brainContextAllowed ? contentProfile : null"));
+  assert(src.includes("(brainContextAllowed && useBrain && memoryBlock ?"), "the memory block is behind the gate too");
   assertFalse(src.includes("renderBrainForAgent(brain, brainOnboardingCompleted)"));
 });

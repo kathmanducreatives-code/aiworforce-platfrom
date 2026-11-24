@@ -5,7 +5,7 @@
 import type { SimResult } from "./harness.ts";
 
 type R = Record<string, unknown>;
-const j = (v: unknown, max = 600) => { const s = JSON.stringify(v); return s.length > max ? s.slice(0, max) + "…" : s; };
+const j = (v: unknown, max = 600) => { const s = JSON.stringify(v) ?? "—"; return s.length > max ? s.slice(0, max) + "…" : s; };
 const arr = <T = R>(v: unknown): T[] => (Array.isArray(v) ? v as T[] : []);
 const obj = (v: unknown): R => (v && typeof v === "object" && !Array.isArray(v) ? v as R : {});
 

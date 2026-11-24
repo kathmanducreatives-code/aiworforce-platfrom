@@ -43,6 +43,7 @@ import {
 import { summarizeDirectAction } from "../_shared/leadActionOutcome.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
 import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
+import { canRunPaidOperation, paidRoleRefusal } from "../_shared/paidOperationRole.ts";
 
 /** Bookkeeping must never fail the run it only describes. */
 async function drainModelCalls(
@@ -121,6 +122,7 @@ Deno.serve((req) => effectScope.run({ principal: null }, async () => {
     bearerIsServiceRole = !!bearer && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     let isMember = false;
+    let memberRole: unknown = null;
     if (!bearerIsServiceRole) {
       try {
         const userClient = createClient(
@@ -131,15 +133,18 @@ Deno.serve((req) => effectScope.run({ principal: null }, async () => {
         authenticatedUserId = userData?.user?.id ?? null;
         if (authenticatedUserId) {
           const { data: member } = await supabase
-            .from("workspace_members").select("workspace_id")
+            .from("workspace_members").select("workspace_id, role")
             .eq("workspace_id", workspace_id).eq("user_id", authenticatedUserId).maybeSingle();
           isMember = !!member;
+          memberRole = (member as { role?: unknown } | null)?.role ?? null;
         }
       } catch (_e) { /* treated as unauthenticated below */ }
     }
 
     const access = decideWorkspaceAccess({ bearerIsServiceRole, authenticatedUserId, isMember });
     if (!access.ok) return json({ error: access.error }, access.status);
+    // A lead unlock spends credits: a browser caller needs owner/admin/editor.
+    if (!bearerIsServiceRole && !canRunPaidOperation(memberRole)) return json(paidRoleRefusal(memberRole), 403);
   }
 
   // THE LEGACY PRE-EFFECT GUARD (legacyExecutionGuard.ts), before the agent

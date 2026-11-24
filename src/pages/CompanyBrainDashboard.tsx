@@ -25,6 +25,8 @@ import { saveCompanyBrainPatch } from '@/lib/companyBrainSave';
 import { describeUnsaved, keepUnsaved, type UnsavedEdit } from '@/lib/companyBrainUnsaved';
 import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { BrainEditableContext } from '@/components/company-brain/brainEditable';
+import { BrainMemoryPanel } from '@/components/company-brain/memory/BrainMemoryPanel';
+import { companyBrainWritesBlocked, COMPANY_BRAIN_UNAVAILABLE_MESSAGE, COMPANY_BRAIN_UNAVAILABLE_TITLE } from '@/lib/env/companyBrainAvailability';
 
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
@@ -46,6 +48,10 @@ export default function CompanyBrainDashboard() {
   const dataVersion = scope.kind === 'client' ? (data?.version == null ? null : String(data.version)) : (data?.updated_at ?? null);
   // Viewers get a read-only page (Phase 3a). The server refuses their writes regardless.
   const { canEditBrain } = useWorkspaceRole();
+  // The isolated TEST project refuses every Brain write at the database: the
+  // page is read-only there and says why, instead of failing a save as a
+  // "conflict" (TEST, 2026-11-12).
+  const brainWritesBlocked = companyBrainWritesBlocked(import.meta.env);
   const [openSection, setOpenSection] = useState<DrawerSectionKey | null>(null);
   const [restartOpen, setRestartOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState<SectionKey | null>(null);
@@ -154,7 +160,9 @@ export default function CompanyBrainDashboard() {
       if (!result.ok) {
         batchFailed.current = true;
         lastFailureWasConflict.current = result.conflict === true;
-        toast.error(result.conflict ? 'Company Brain was changed elsewhere' : 'Save failed', { description: result.message });
+        toast.error(
+          'unavailable' in result && result.unavailable ? COMPANY_BRAIN_UNAVAILABLE_TITLE : result.conflict ? 'Company Brain was changed elsewhere' : 'Save failed',
+          { description: result.message });
         return false;
       }
       const next = scope.kind === 'client' ? (result as { version?: string }).version : (result as { updatedAt?: string }).updatedAt;
@@ -241,6 +249,13 @@ export default function CompanyBrainDashboard() {
           </div>
         )}
 
+        {brainWritesBlocked && (
+          <div role="status" data-testid="brain-unavailable" className="mb-4 rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-3 text-sm">
+            <div className="font-medium text-sky-700 dark:text-sky-300">{COMPANY_BRAIN_UNAVAILABLE_TITLE}</div>
+            <div className="mt-0.5 text-muted-foreground">{COMPANY_BRAIN_UNAVAILABLE_MESSAGE}</div>
+          </div>
+        )}
+
         {unsaved.length > 0 && (
           <div role="alert" className="brain-unsaved mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
             <div className="font-medium text-amber-700 dark:text-amber-300">Changed on another tab or device</div>
@@ -255,9 +270,13 @@ export default function CompanyBrainDashboard() {
         )}
 
         {error && <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 p-4 text-sm"><span>Company Brain could not refresh. Please try again.</span><Button size="sm" variant="outline" onClick={() => refresh()}>Retry</Button></div>}
-        {(!error || data) && <BrainEditableContext.Provider value={canEditBrain}><BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={scope.kind === 'agency' ? () => setRestartOpen(true) : undefined} onStartSetup={scope.kind === 'agency' ? () => navigate('/onboarding/company-brain') : undefined} onSaveFields={saveFields}
+        {(!error || data) && <BrainEditableContext.Provider value={canEditBrain && !brainWritesBlocked}><BrainOverview brain={brain} active={!!data?.onboarding_completed} activatedAt={lastUpdated} saved={savedFlash} syncing={isRefreshing} onEdit={setOpenSection} onRestart={scope.kind === 'agency' && !brainWritesBlocked ? () => setRestartOpen(true) : undefined} onStartSetup={scope.kind === 'agency' && !brainWritesBlocked ? () => navigate('/onboarding/company-brain') : undefined} onSaveFields={saveFields}
           clientName={brainScope.currentClient?.name ?? null}
           scopeSwitcher={brainScope.available ? <BrainScopeSwitcher scope={scope} clients={brainScope.clients} onSelect={brainScope.select} disabled={openSection !== null} /> : undefined} /></BrainEditableContext.Provider>}
+        {/* Company memory: decisions, preferences, approved facts, agent
+            suggestions and history. The agency Brain only — client Brains are
+            a separate, held feature with their own store. */}
+        {scope.kind === 'agency' && workspaceId && <BrainMemoryPanel workspaceId={workspaceId} canEdit={canEditBrain && !brainWritesBlocked} />}
       </div>
 
       <CompanyBrainEditDrawer
