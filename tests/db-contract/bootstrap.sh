@@ -29,6 +29,7 @@ held_v2=(
 # The held billing fix: refunded credit keys are re-armed, not replayed.
 held_billing=(
   20261015130000_credits_rearm_settled_key.sql
+  20261022120000_credits_reaper_charges_confirmed_purchase.sql
 )
 # The held smoke admission: one durable authorization per queue row. Depends on
 # the V2 chain above.
