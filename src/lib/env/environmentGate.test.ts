@@ -4,7 +4,7 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { resolveEnvironmentGate, environmentBadge, containsSecret } from "./environmentGate.ts";
 
-const TEST_URL = "https://ohsdatpvfdjdemstoiuj.supabase.co";
+const TEST_URL = "https://tlvnfrxzjhsjgdofwehb.supabase.co";
 const PROD_URL = "https://ohsdatpvfdjdemstoiuj.supabase.co";
 // Deliberately not a real key — only its SHAPE matters for the leak assertion.
 const FAKE_KEY = "eyJhbGciOiJIUzI1NiJ9.ZmFrZQ.ZmFrZQ";
@@ -35,7 +35,7 @@ Deno.test("TEST URL → TEST badge", () => {
   const g = resolveEnvironmentGate({ DEV: true, VITE_SUPABASE_URL: TEST_URL, VITE_SUPABASE_PUBLISHABLE_KEY: FAKE_KEY });
   assertEquals(g.status, "ok");
   assertEquals(g.environment, "test");
-  assertEquals(g.badge, "TEST — ohsdatpvfdjdemstoiuj");
+  assertEquals(g.badge, "TEST — tlvnfrxzjhsjgdofwehb");
 });
 
 Deno.test("an explicit local PRODUCTION target boots but is loudly labelled", () => {
@@ -75,6 +75,18 @@ Deno.test("no secret can reach the rendered output", () => {
 
 Deno.test("environmentBadge is null only for production", () => {
   assertEquals(environmentBadge("production", "ohsdatpvfdjdemstoiuj"), null);
-  assert(environmentBadge("test", "ohsdatpvfdjdemstoiuj") !== null);
+  assert(environmentBadge("test", "tlvnfrxzjhsjgdofwehb") !== null);
   assert(environmentBadge("unknown", null) !== null);
+});
+
+Deno.test("setup instructions name the isolated TEST project, never the production URL", () => {
+  const g = resolveEnvironmentGate({ DEV: true });
+  const text = g.instructions.join(" ");
+  assert(text.includes("https://tlvnfrxzjhsjgdofwehb.supabase.co"));
+  assertFalse(text.includes("ohsdatpvfdjdemstoiuj"));
+});
+
+Deno.test("production is never classified as TEST", () => {
+  const g = resolveEnvironmentGate({ DEV: true, VITE_SUPABASE_URL: PROD_URL, VITE_SUPABASE_PUBLISHABLE_KEY: FAKE_KEY });
+  assertEquals(g.environment, "production");
 });

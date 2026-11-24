@@ -26,7 +26,7 @@ import { EMPLOYEE_BY_ID, type Employee } from './employees';
 import { AgentPortrait } from './agentSystem';
 import { SECTION_VIEWPORT } from './scrollSystem';
 
-const LISA = EMPLOYEE_BY_ID.mira;
+const LISA = EMPLOYEE_BY_ID.lisa;
 const ATLAS = EMPLOYEE_BY_ID.atlas;
 const LYRA = EMPLOYEE_BY_ID.lyra;
 const ORION = EMPLOYEE_BY_ID.orion;

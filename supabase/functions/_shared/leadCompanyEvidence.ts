@@ -59,6 +59,8 @@ export interface CompanyEvidenceRecord {
   linkedin_member_count_evidence: number | null;
   industry_evidence: string[];
   description: string | null;
+  /** The row that supplied THIS field. Absent on older cached records: unknown. */
+  description_provenance?: { actor_key: string; source_id: string | number | null } | null;
 
   /** The exact query or concept that surfaced this company. */
   source_query: string | null;
@@ -140,6 +142,7 @@ export function buildCompanyEvidence(i: BuildEvidenceInput): CompanyEvidenceReco
 
   const geography = clean(rich?.geography) ?? clean(base.geography);
   const description = clean(rich?.description) ?? clean(base.description);
+  const descriptionRow = clean(rich?.description) ? rich : description ? base : null;
   // THE ENRICHED INDUSTRY IDS ARE EVIDENCE; the provider's own label is not.
   // `provider_industry` is kept last and marked, because a broad vendor label
   // has repeatedly been read as proof of a business model it does not establish.
@@ -174,6 +177,7 @@ export function buildCompanyEvidence(i: BuildEvidenceInput): CompanyEvidenceReco
     linkedin_member_count_evidence: members,
     industry_evidence: industries,
     description,
+    description_provenance: descriptionRow?.raw_ref ? { ...descriptionRow.raw_ref } : null,
     source_query: clean(i.source_query),
     source_capability: i.source_capability,
     commercial_job_evidence: jobs,

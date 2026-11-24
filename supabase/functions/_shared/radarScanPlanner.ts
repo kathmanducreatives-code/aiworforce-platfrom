@@ -5,6 +5,7 @@
 // exceeds caps, and attaches a Brain-derived reason to every source.
 
 import type { CompanyBrainContext } from "./companyBrainCompiler.ts";
+import { effectiveIndustryExclusions } from "./brainIndustryExclusions.ts";
 
 export type RadarSource =
   | "hiring" | "funding" | "linkedin_posts" | "linkedin_comments" | "competitor" | "workflow_trends";
@@ -81,7 +82,11 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
   const capScale = weak ? 0.5 : options.mode === "load_more" ? 1.6 : 1;
   const capOf = (s: RadarSource) => Math.max(3, Math.round(CAPS[s] * capScale));
 
-  const negatives = uniq([...brain.query_strategy.negative_terms, ...brain.disqualifiers.industries]);
+  // Generic default exclusions the workspace's own ICP overrules are removed
+  // from the negative terms too (they were merged in by the compiler).
+  const industryExcl = effectiveIndustryExclusions(brain);
+  const overruled = new Set(industryExcl.suppressed.map((x) => x.term.toLowerCase()));
+  const negatives = uniq([...brain.query_strategy.negative_terms.filter((t) => !overruled.has(t.toLowerCase())), ...industryExcl.industries]);
   const seeds = seedCategories(brain);
   const roles = brain.query_strategy.hiring_role_terms.length ? brain.query_strategy.hiring_role_terms : ["Founding Account Executive", "RevOps"];
   const watchlist = brain.competitors_and_tools.watchlist;

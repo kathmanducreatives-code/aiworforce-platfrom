@@ -23,8 +23,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   X, ExternalLink, Copy, RefreshCcw, Building2, Target, User, Mail,
   Activity as ActivityIcon, Code2, Sparkles, Tag, ListChecks, Search,
-  Linkedin,
+  Linkedin, Database,
 } from "lucide-react";
+import { verificationBadge } from "@/lib/providerDiscovery";
+
+const PROVIDER_LABEL: Record<string, string> = { leadocean: "LeadOcean", apollo: "Apollo", apify: "Apify (web)" };
+const CHECK_LABEL: Record<string, string> = {
+  matched: "Matched", provider_filter: "Provider filter", unknown: "Unverified", conflicting: "Conflicting", contradicted: "Contradicted",
+};
 
 export function LeadDetailDrawer({
   lead,
@@ -126,6 +132,10 @@ export function LeadDetailDrawer({
             v={lead.fitScore != null ? `${lead.fitScore}/100 · ${fitTierLabel(lead.fitTier)}` : null}
           />
           {lead.whySelected && <Field k="Why" v={lead.whySelected} />}
+          {/* A requirement no evidence established yet is shown as such: not met, not failed. */}
+          {lead.unverifiedRequirements && lead.unverifiedRequirements.length > 0 && (
+            <Field k="Needs verification" v={lead.unverifiedRequirements.map((d) => d.replace(/_/g, " ")).join(", ")} />
+          )}
         </Section>
 
         {/* Why this lead appeared */}
@@ -143,6 +153,33 @@ export function LeadDetailDrawer({
             <Empty text="Original discovery source was not recorded." />
           )}
         </Section>
+
+        {/* Data providers (provider discovery): who found it, how it was checked */}
+        {lead.providerDiscovery && (
+          <Section icon={Database} title="Data providers">
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              <Chip tone={verificationBadge(lead.providerDiscovery).tone === "evidence" ? "success" : verificationBadge(lead.providerDiscovery).tone === "attested" ? "info" : "warning"}>
+                {verificationBadge(lead.providerDiscovery).text}
+              </Chip>
+              {lead.providerDiscovery.conflicts.length > 0 && <Chip tone="warning">Providers disagree: {lead.providerDiscovery.conflicts.join(", ")}</Chip>}
+            </div>
+            <Field
+              k="Found by"
+              v={lead.providerDiscovery.providers.map((p) => `${PROVIDER_LABEL[p.provider] ?? p.provider}${p.retrievedAt ? ` · ${formatDistanceToNowStrict(new Date(p.retrievedAt))} ago` : ""}`).join(", ")}
+            />
+            <ul className="mt-2 space-y-1">
+              {lead.providerDiscovery.checks.map((c) => (
+                <li key={c.label} className="flex items-baseline gap-2 text-[12.5px]">
+                  <span className={c.outcome === "matched" ? "text-emerald-300" : c.outcome === "provider_filter" ? "text-sky-300" : "text-amber-300"}>
+                    {CHECK_LABEL[c.outcome] ?? c.outcome}
+                  </span>
+                  <span className="text-[#D9E1E8]">{c.label}</span>
+                  {c.sources.length > 0 && <span className="text-[#7D8590]">· {c.sources.map((x) => PROVIDER_LABEL[x] ?? x).join(", ")}</span>}
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
 
         {/* Selected recipient */}
         <Section icon={User} title="Selected recipient">
@@ -162,7 +199,11 @@ export function LeadDetailDrawer({
                 k="Status"
                 v={lead.selectedRecipient.verified
                   ? <span className="text-emerald-300">Verified buyer</span>
-                  : <span className="text-amber-200/80">Needs review</span>}
+                  : lead.selectedRecipient.roleVerification === "employment_mismatch"
+                    ? <span className="text-rose-300">Not at this company per the provider's own record</span>
+                    : lead.selectedRecipient.roleVerification === "requires_role_verification"
+                      ? <span className="text-amber-200/80">Role and current employment unverified (provider title only)</span>
+                      : <span className="text-amber-200/80">Needs review</span>}
               />
               {lead.alternateRecipients.length > 0 && (
                 <div className="text-[11.5px] text-[#7D8590]">

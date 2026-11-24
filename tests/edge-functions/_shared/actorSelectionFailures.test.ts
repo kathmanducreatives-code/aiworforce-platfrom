@@ -100,7 +100,7 @@ Deno.test("6. malformed model output blocks — after the provider's own repair"
       return Promise.resolve({
         ok: true, status: 200,
         text: () => Promise.resolve(JSON.stringify({
-          choices: [{ message: { content: "{ this is not json" } }],
+          choices: [{ finish_reason: "stop", message: { content: "{ this is not json" } }],
         })),
       });
     },

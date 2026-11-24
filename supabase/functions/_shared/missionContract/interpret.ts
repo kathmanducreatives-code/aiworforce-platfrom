@@ -1,0 +1,525 @@
+// CONTRACT v4 INTERPRETATION: the model's ONE structured reading → a validated Mission Contract.
+//
+// The model answers a closed-vocabulary schema with no free-form field: there is no
+// second channel (no `hard_constraints[{field, operator, value}]`, no `company_types`
+// beside the industries) for a restatement to arrive through — the bug class behind 54
+// of the 58 failures in live study run #24 cannot occur here.
+//
+// Deterministic validation (`contractFromProposal`):
+//   * every item quotes the user's words, and a quote not in the request is REJECTED
+//     (the existing typo-tolerant `validateUnderstanding`; titles and places are checked
+//     against their registries) — a requirement the user never stated is never admitted;
+//   * windows the user stated come from `signal_windows`; any other window is the named
+//     system default (`DEFAULT_SIGNAL_WINDOWS`, the one default table), recorded as an
+//     assumption the approval card shows;
+//   * what the vocabulary cannot express becomes an `unsupported` requirement (disclosed;
+//     a required one blocks approval) — never dropped, never silently enforced;
+//   * ambiguities block approval (the user is asked).
+//
+//   * an explicit restriction the contract does not represent (an audience word, an
+//     exclusion, a negatively written bound — coverage.ts) blocks approval as a question.
+//
+// The original sentence is used to check quotes and to find what must be covered. It
+// never adds a requirement: an uncovered restriction is asked, never guessed.
+
+import { AUDIENCE_PERMIT_RE, AUDIENCE_REQUIRE_RE, audienceDescriptor, audienceIntent } from "../missionCriteria.ts";
+import { coverageQuestions, explicitCues, redundantUnsupported, spanAlreadyEnforced } from "./coverage.ts";
+import { type CompanyStatus, meaningUnits, OPERATION_APPLIED_BY, operationsOnly, type PipelineOperation } from "./semanticClasses.ts";
+
+const AUDIENCE_NEGATION_RE = /\b(?:exclude[sd]?|excluding|no|not|non|without|except|avoid|never|other\s+than)\b/i;
+import { DEFAULT_SIGNAL_WINDOWS, type CanonicalSignalKind } from "../signalKinds.ts";
+import { SIGNAL_WINDOWS_PROPERTY } from "../missionInterpretationContract.ts";
+import { canonicalTitleOf } from "../roleFamilies.ts";
+import {
+  familyOfTitle, parseUnderstanding, PLACE_IDS, spanInRequest, titleTerm, UNDERSTANDING_INSTRUCTION, UNDERSTANDING_SCHEMA,
+  validateUnderstanding,
+} from "../missionUnderstanding.ts";
+import {
+  assumptionsOf, type ContractOperation, isExecutable, type MergedDuplicate, type MissionContract, MISSION_CONTRACT_VERSION, type Necessity, type Origin, type Requirement, type SignalWindow,
+} from "./contract.ts";
+
+export const CONTRACT_INTERPRETER_VERSION = "gpt-contract-v4" as const;
+
+/** Dimensions a user may forbid relaxing (the planner's canonical broadening vocabulary). */
+export const BROADENING_DIMENSIONS = ["geography", "industry", "business_model", "stage", "size", "role", "recency"] as const;
+
+/** The ONE schema the model answers (OpenAI strict mode: every key required, closed enums). */
+const OP_SPAN = { type: "string" as const, description: "The user's own words, copied exactly as written." };
+export const GPT_CONTRACT_SCHEMA_V4 = Object.freeze({
+  type: "object" as const,
+  additionalProperties: false,
+  required: ["understanding", "signal_windows", "deliverable", "company_size", "funding_stages", "forbid_broadening", "operations", "company_status"],
+  properties: {
+    understanding: UNDERSTANDING_SCHEMA,
+    signal_windows: SIGNAL_WINDOWS_PROPERTY,
+    deliverable: {
+      type: "object" as const, additionalProperties: false, required: ["entity", "count", "count_span", "person_roles"],
+      properties: {
+        entity: { type: "string" as const, enum: ["company", "person"], description: "What the user wants back: companies, or people at companies." },
+        count: { type: ["integer", "null"] as const, description: "How many results the user asked for; null when no number is stated." },
+        count_span: { type: ["string", "null"] as const, description: "The user's words for the count, copied exactly; null when none." },
+        person_roles: { type: "array" as const, items: { type: "string" as const }, description: "The people to return (e.g. 'founder', 'VP Sales'), only when the user wants people." },
+      },
+    },
+    company_size: {
+      type: ["object", "null"] as const, additionalProperties: false, required: ["min", "max", "necessity", "span"],
+      description: "The employee count the user stated, or null. 'Preferred' when hedged ('ideally', 'prefer').",
+      properties: {
+        min: { type: ["integer", "null"] as const }, max: { type: ["integer", "null"] as const },
+        necessity: { type: "string" as const, enum: ["required", "preferred"] },
+        span: { type: "string" as const },
+      },
+    },
+    funding_stages: {
+      type: "array" as const, description: "Company funding stages the user named ('Series A', 'seed'), each with its words.",
+      items: {
+        type: "object" as const, additionalProperties: false, required: ["stage", "necessity", "span"],
+        properties: { stage: { type: "string" as const }, necessity: { type: "string" as const, enum: ["required", "preferred"] }, span: { type: "string" as const } },
+      },
+    },
+    forbid_broadening: {
+      type: "array" as const, items: { type: "string" as const, enum: [...BROADENING_DIMENSIONS] },
+      description: "Dimensions the user said must not be relaxed ('only', 'must', 'strictly').",
+    },
+    operations: {
+      type: "array" as const,
+      description: "Instructions about how the RESULTS are produced, which describe no company: 'no duplicates', 'exclude duplicates', 'skip companies already in my CRM / leads'. Never a requirement.",
+      items: {
+        type: "object" as const, additionalProperties: false, required: ["span", "operation"],
+        properties: { span: OP_SPAN, operation: { type: "string" as const, enum: ["deduplicate", "exclude_known_records"] } },
+      },
+    },
+    company_status: {
+      type: "array" as const,
+      description: "Whether the company must be operating: 'active', 'operating', 'still in business' (active); 'defunct', 'closed' (inactive). Not a signal and not an industry.",
+      items: {
+        type: "object" as const, additionalProperties: false, required: ["span", "status", "necessity"],
+        properties: { span: OP_SPAN, status: { type: "string" as const, enum: ["active", "inactive"] }, necessity: { type: "string" as const, enum: ["required", "preferred"] } },
+      },
+    },
+  },
+});
+
+export const CONTRACT_INSTRUCTION = [
+  UNDERSTANDING_INSTRUCTION,
+  "Answer ONLY in the schema: every requirement is expressed once, in its own field. There is no free-form constraint field —",
+  "anything the vocabulary cannot express goes in understanding.unsupported with the user's words, never elsewhere.",
+  "Put each stated timeframe in signal_windows; never invent one.",
+  // TEST dry run 2026-11-06: "describes the companies" was read as "is not a requirement",
+  // and B2B was omitted or filed as unsupported. An audience word IS expressible.
+  "An audience word (B2B, B2C, D2C, consumer) is a business model: put it in understanding.industries with the user's words,",
+  "never in unsupported and never omitted. Include 'only'/'must' in its span when the user says so; 'no B2C' is necessity excluded.",
+  "Every exclusion the user states ('excluding X', 'but not X', 'no X', 'without X', 'except X') must appear: an excluded role in roles",
+  "(relation excluded, abbreviations like 'SDRs' resolved to their title), an excluded place or industry with necessity excluded.",
+  // TEST live pilot 2026-11-21: "active B2B companies" and "duplicates" were filed as unsupported,
+  // and a REQUIRED unsupported item blocks approval. Each phrase has ONE kind of meaning.
+  "Split a phrase that combines several meanings into one entry per meaning, each quoting its own words:",
+  "'active B2B companies' is a business model (B2B, in industries) AND a company status (active, in company_status).",
+  "How the results are produced is an operation, never a requirement: 'no duplicates', 'exclude duplicates',",
+  "'not companies already in my CRM' go in operations. 'unsupported' is ONLY for a property of a company the vocabulary cannot express.",
+].join(" ");
+
+export interface ContractProposalV4 {
+  understanding: unknown;
+  signal_windows: { event: string; days: number | null; phrase: string; signal: string | null }[];
+  deliverable: { entity: "company" | "person"; count: number | null; count_span: string | null; person_roles: string[] };
+  company_size: { min: number | null; max: number | null; necessity: "required" | "preferred"; span: string } | null;
+  funding_stages: { stage: string; necessity: "required" | "preferred"; span: string }[];
+  forbid_broadening: string[];
+  /** Pipeline operations ("no duplicates"). Optional: proposals before 2026-11-21 lack it. */
+  operations?: { span: string; operation: PipelineOperation }[];
+  /** Company status ("active"). Optional, as above. */
+  company_status?: { span: string; status: CompanyStatus; necessity: "required" | "preferred" }[];
+}
+
+export interface InterpretationResult {
+  contract: MissionContract;
+  /** Items refused because they did not quote the request, or named an unknown title / place. */
+  rejected: { item: string; reason: string }[];
+}
+
+const slug = (s: string) => s.toLowerCase().normalize("NFKC").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 60) || "x";
+const userOrigin = (span: string): Origin => ({ source: "user_explicit", span, policy: null });
+/** The named policy that makes a descriptive audience ("B2B companies") a preference. */
+export const AUDIENCE_POLICY = "audience_descriptor_is_preference";
+/** The named policy that keeps a WIDENING clause ("include strong opportunities outside that range") from becoming a requirement. */
+export const PERMISSION_POLICY = "permission_widens_search";
+
+/** The user's own text for a meaning unit's words inside `span` (case and hyphens kept). */
+function ownWords(span: string, words: string[]): string {
+  const re = new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^\\p{L}\\p{N}]+"), "iu");
+  return re.exec(span)?.[0] ?? span;
+}
+
+/** The model's v4 proposal → a validated contract (deterministic; see the header). */
+export function contractFromProposal(query: string, p: ContractProposalV4, opts: { model?: string | null } = {}): InterpretationResult {
+  const raw = parseUnderstanding(p.understanding);
+  if (!raw) throw new Error("the model's answer carries no understanding");
+  // A ROLE THE USER NAMED IS NEVER DROPPED (live study v4, M07 repeat 3: the model quoted
+  // "SDRs" as excluded but gave no role id; validation rejected it and the user's exclusion
+  // vanished). The registry resolves the user's own word first; a role it cannot identify
+  // becomes a question that blocks approval, never a silent omission.
+  // AN AUDIENCE WORD IS EXPRESSIBLE (TEST dry run 2026-11-06: "B2B" filed as unsupported was
+  // shown as "Not checked" and never enforced). The model's own unsupported item whose words
+  // are only an audience descriptor is read as the business model it is — unless the
+  // request excludes that audience, where including it would invert the meaning (the
+  // coverage check below then asks instead).
+  const audienceItems = raw.unsupported.filter((x) => {
+    const a = audienceDescriptor(x.span);
+    return a !== null && !AUDIENCE_NEGATION_RE.test(x.span) && audienceIntent(query, a) !== "exclude";
+  });
+  // A COMPOUND PHRASE IS SPLIT INTO ITS MEANINGS (semanticClasses.ts). An unsupported item
+  // that NAMES an audience ("active B2B companies") states that business model: it becomes the
+  // industry it names (unless the request excludes it, or already states it). The rest of the
+  // phrase is resolved — or kept, blocking — in the unsupported pass below.
+  // Already stated when any industry the reading kept names that audience ("B2B SaaS" names B2B).
+  const haveAudience = (a: "b2b" | "consumer") => [...raw.industries.map((i) => `${i.span} ${i.industry}`), ...audienceItems.map((x) => x.span)]
+    .some((t) => meaningUnits(t).units.some((un) => un.kind === "audience" && un.audience === a));
+  const audienceFromUnits = raw.unsupported.filter((x) => !audienceItems.includes(x)).flatMap((x) => {
+    const m = meaningUnits(x.span);
+    return m.units.filter((un): un is Extract<typeof un, { kind: "audience" }> => un.kind === "audience")
+      .filter((un) => audienceIntent(query, un.audience) !== (m.negated ? "require" : "exclude") && !haveAudience(un.audience))
+      // The new requirement quotes ONLY its own words ("B2B"), never the whole phrase: otherwise
+      // the rest of the phrase ("family-owned") would look already enforced and vanish.
+      .map((un) => ({ span: ownWords(x.span, un.words), industry: un.audience === "b2b" ? "B2B" : "consumer", necessity: (m.negated ? "excluded" : "required") as Necessity }));
+  }).filter((x, i, a) => a.findIndex((y) => y.industry === x.industry) === i);
+  const parsed = {
+    ...raw,
+    roles: raw.roles.map((r) => (!r.title && !r.family ? { ...r, title: canonicalTitleOf(r.span) } : r)),
+    industries: [...raw.industries, ...audienceItems.map((x) => ({ span: x.span, industry: audienceDescriptor(x.span) === "b2b" ? "B2B" : x.span.trim(), necessity: "required" as const })), ...audienceFromUnits],
+    unsupported: raw.unsupported.filter((x) => !audienceItems.includes(x)),
+    // A PLACE THE USER NAMED IS NEVER DROPPED (V5 validation 2026-11-20). The model may put a
+    // state or city ("texas") in `place`, which holds COUNTRY ids only; validation rejected it
+    // as `unknown_place_id` and the user's location vanished — the search ran worldwide. When
+    // the user's own quoted words ARE that name, it is the named place the schema keeps in
+    // `other_place` (a slot correction, not a reading). Anything else becomes a question below.
+    places: raw.places.map((p) => (p.place && !PLACE_IDS.includes(p.place) && normPlace(p.span) === normPlace(p.place)
+      ? { ...p, place: null, other_place: p.span.trim() } : p)),
+  };
+  const u = validateUnderstanding(query, parsed);
+  const rejected = [...u.rejected];
+  const unidentifiedRoles = rejected.filter((x) => x.reason === "no_role_id").map((x) => x.item.replace(/^role:/, ""));
+  const unidentifiedPlaces = rejected.filter((x) => x.reason === "unknown_place_id" || x.reason === "no_place").map((x) => x.item.replace(/^place:/, ""));
+  const reqs: Requirement[] = [];
+  const ids = new Set<string>();
+  const idOf = (base: string) => { let id = base, n = 2; while (ids.has(id)) id = `${base}:${n++}`; ids.add(id); return id; };
+  const base = (id: string, necessity: Necessity, origin: Origin, label: string, rationale: string) =>
+    ({ id: idOf(id), necessity, origin, evaluability: "ok" as const, alternatives: null, display: { label, rationale } });
+
+  // ── Places ──
+  for (const pl of u.places) {
+    const place = pl.place ? placeLabel(pl.place) : String(pl.other_place ?? "").trim();
+    if (!place) continue;
+    if (pl.necessity === "excluded") {
+      reqs.push({ ...base(`exclusion:geography:${slug(place)}`, "required", userOrigin(pl.span), `Excluding: ${place}`, `excluded in the request ("${pl.span}")`),
+        dimension: "exclusion", field: "excluded_geographies", values: [place] });
+      continue;
+    }
+    reqs.push({ ...base(`geography:${slug(place)}`, pl.necessity, userOrigin(pl.span),
+      `${pl.scope === "headquarters" ? "Headquarters" : "Geography"}: ${place}`, `stated in the request ("${pl.span}")`),
+      dimension: "geography", polarity: "include", place, scope: pl.scope });
+  }
+
+  // ── Industries and business models ──
+  for (const ind of u.industries) {
+    if (ind.necessity === "excluded") {
+      reqs.push({ ...base(`exclusion:industry:${slug(ind.industry)}`, "required", userOrigin(ind.span), `Excluding: ${ind.industry}`, `excluded in the request ("${ind.span}")`),
+        dimension: "exclusion", field: "excluded_company_types", values: [ind.industry] });
+      continue;
+    }
+    const facet = audienceDescriptor(ind.industry) !== null ? "business_model" : "industry";
+    // AN AUDIENCE DESCRIPTOR DESCRIBES; IT GATES ONLY IN THE USER'S OWN STRONG WORDS (owner
+    // rule, corpus M01): "US B2B companies" ranks by B2B, "only B2B" requires it. Decided on
+    // the item's OWN quoted span, never by re-reading the sentence; recorded as an assumption.
+    // The user's strong word may sit just outside the model's quote ("must operate as | B2B
+    // businesses", TEST 2026-11-07): the words touching the quoted span in the request count.
+    // And a request may say it twice: "Find 5 active B2B companies … Companies must be B2B."
+    // (live TEST plan 2026-11-09). The model quoted the first, descriptive mention; the
+    // user's strong words are the second. The same deterministic reader the coverage guard
+    // uses (audienceIntent) decides: if the user's own words REQUIRE this audience anywhere,
+    // the item is not downgraded — otherwise every such request stopped for clarification.
+    const audience = facet === "business_model" ? audienceDescriptor(ind.industry) : null;
+    const requiredElsewhere = audience !== null && audienceIntent(query, audience) === "require";
+    const descriptive = facet === "business_model" && ind.necessity === "required" && !AUDIENCE_REQUIRE_RE.test(ind.span) && !elevatedAround(query, ind.span) && !requiredElsewhere;
+    const necessity: Necessity = descriptive ? "preferred" : ind.necessity;
+    const origin: Origin = descriptive ? { source: "user_explicit", span: ind.span, policy: AUDIENCE_POLICY } : userOrigin(ind.span);
+    reqs.push({ ...base(`${facet}:${slug(ind.industry)}`, necessity, origin,
+      `${facet === "industry" ? "Industry" : "Business model"}: ${ind.industry}`, `stated in the request ("${ind.span}")`),
+      dimension: "industry", facet, polarity: "include", value: ind.industry });
+  }
+
+  // ── Size and stages ──
+  if (p.company_size && (p.company_size.min !== null || p.company_size.max !== null)) {
+    const s = p.company_size;
+    if (!s.span || !spanInRequest(query, s.span)) rejected.push({ item: `company_size:${JSON.stringify(s.span)}`, reason: "quote_not_in_request" });
+    else {
+      const label = `Company size: ${s.min ?? "any"}–${s.max ?? "any"} employees`;
+      reqs.push({ ...base(`company_size:${s.min ?? "x"}_${s.max ?? "x"}`, s.necessity, userOrigin(s.span), label, `stated in the request ("${s.span}")`),
+        dimension: "company_size", min: s.min, max: s.max });
+    }
+  }
+  for (const st of p.funding_stages) {
+    if (!spanInRequest(query, st.span)) { rejected.push({ item: `funding_stage:${JSON.stringify(st.span)}`, reason: "quote_not_in_request" }); continue; }
+    reqs.push({ ...base(`company_stage:${slug(st.stage)}`, st.necessity, userOrigin(st.span), `Stage: ${st.stage}`, `stated in the request ("${st.span}")`),
+      dimension: "company_stage", stage: st.stage });
+  }
+
+  // ── Signals (hiring carries the roles) ──
+  const reqRoles = u.roles.filter((r) => r.relation === "required");
+  const excRoles = u.roles.filter((r) => r.relation === "excluded");
+  const signals = [...u.signals];
+  // ROLES QUALIFY A HIRING SIGNAL; THEY NEVER CREATE ONE. "growing the sales team" names a
+  // team for a growth signal (M20, live run #24): no hiring requirement is invented. Roles
+  // the reading ties to no hiring signal are disclosed (shown, never executed).
+  if ((reqRoles.length || excRoles.length) && !signals.some((s) => s.kind === "hiring")) {
+    for (const r of [...reqRoles, ...excRoles]) {
+      reqs.push({ ...base(`unsupported:role:${slug(r.span)}`, "required", userOrigin(r.span), `Not checked: ${r.span}`,
+        "a role the reading ties to no hiring signal; no evidence dimension measures it on its own"),
+        evaluability: "unrepresentable", dimension: "unsupported", polarity: r.relation === "excluded" ? "exclude" : "include", compiledAs: "disclosed", value: r.span });
+    }
+  }
+  const signalIds: string[] = [];
+  for (const s of signals) {
+    // A STATED window states a duration ("in the last 14 days", "past quarter"). A word like
+    // "actively" or "recently" is not one (TEST 2026-11-07: "actively" arrived as a stated
+    // 90 days, hidden from the assumptions): it gets the named default, shown as an assumption.
+    const stated = p.signal_windows.find((w) => w.event === s.kind && typeof w.days === "number" && DURATION_RE.test(w.phrase ?? "") && spanInRequest(query, w.phrase));
+    const def = DEFAULT_SIGNAL_WINDOWS[s.kind as CanonicalSignalKind];
+    const window: SignalWindow | null = stated
+      ? { days: stated.days!, basis: def?.basis ?? "observed", origin: { source: "user_explicit", span: stated.phrase, policy: def?.rule ?? null }, enforced: null }
+      : def ? { days: def.days, basis: def.basis, origin: { source: "system_default", span: "", policy: def.rule }, enforced: null } : null;
+    const hiring = s.kind === "hiring";
+    const terms = hiring ? [...new Set(reqRoles.filter((r) => r.title).map((r) => titleTerm(r.title!)))] : [];
+    const families = hiring ? [...new Set(reqRoles.map((r) => r.family ?? (r.title ? familyOfTitle(r.title) : null)).filter((f): f is string => !!f))] : [];
+    const excluded = hiring ? [...new Set(excRoles.map((r) => (r.title ? titleTerm(r.title) : r.span)))] : [];
+    // Card text only (outside the hash): a family reads as words, never as its id ("gtm_sales").
+    const label = hiring && terms.length ? `Hiring: ${terms.join(" or ")}` : hiring && families.length ? `Hiring: ${families.map((f) => FAMILY_DISPLAY[f] ?? f.replace(/_/g, " ")).join(" or ")}` : `Signal: ${s.kind}`;
+    const r: Requirement = {
+      ...base(`${s.kind}:${slug(s.span)}`, s.necessity, userOrigin(s.span), label, `a signal the request requires ("${s.span}")`),
+      dimension: "signal", kind: s.kind, event: s.kind, subject: "company", topics: [],
+      roleTerms: hiring && terms.length ? terms : null, roleFamilies: hiring && families.length ? families : null,
+      excludedRoleTerms: hiring && excluded.length ? excluded : null, roleMatch: hiring && terms.length > 1 ? u.role_match : null,
+      qualifiers: {}, qualifierPresent: true, window,
+    };
+    reqs.push(r);
+    if (s.necessity === "required") signalIds.push(r.id);
+  }
+  const anyOf: string[][] = [];
+  if (u.signal_logic === "any" && signalIds.length > 1) {
+    anyOf.push(signalIds);
+    const kinds = signalIds.map((id) => (reqs.find((r) => r.id === id) as Extract<Requirement, { dimension: "signal" }>).kind);
+    for (const r of reqs) if (signalIds.includes(r.id)) r.alternatives = kinds.map((k) => `signal:${k}`);
+  }
+  // ── Alternatives among places and industries (V5 validation 2026-11-20, case 9) ──
+  // "HQ in Texas or Ohio", "manufacturers or distributors" compiled as ANDed hard criteria:
+  // a Texas manufacturer was rejected as "outside Ohio". The eligibility engine already
+  // treats criteria sharing an `any_of` as ONE requirement (candidateEligibility anyOfResolved,
+  // RC02); the contract now forms those groups, from the user's own joining words.
+  for (const g of alternativeGroups(query, reqs)) {
+    anyOf.push(g.map((r) => r.id));
+    const values = g.map((r) => (r.dimension === "geography" ? r.place : (r as Extract<Requirement, { dimension: "industry" }>).value));
+    // The card names the WHOLE group ("Headquarters: Texas or Ohio"): display only, outside the hash.
+    const prefix = g[0].display.label.split(":")[0];
+    for (const r of g) { r.alternatives = values; r.display = { ...r.display, label: `${prefix}: ${values.join(" or ")}` }; }
+  }
+
+  // ── What the vocabulary cannot express: disclosed at approval, never dropped, never executed ──
+  // Except an exact duplicate of a requirement already enforced (TEST live attempt
+  // 2026-11-07: the SDR/BDR exclusion was both enforced AND filed as unsupported, and the
+  // "Not checked" copy blocked a correct plan). It is merged into what enforces it and
+  // recorded in `mergedDuplicates`; anything short of the same restriction stays below.
+  const mergedDuplicates: MergedDuplicate[] = [];
+  const operations: ContractOperation[] = [];
+  const quotedInQuery = (sp: string) => !!sp?.trim() && query.toLowerCase().replace(/\s+/g, " ").includes(sp.toLowerCase().replace(/\s+/g, " ").trim());
+  const addOperation = (sp: string, op: PipelineOperation) => { if (!operations.some((o) => o.operation === op)) operations.push({ span: sp, operation: op, appliedBy: OPERATION_APPLIED_BY[op] }); };
+  // A COMPANY STATUS ("active") is proven by an enforced, dated, REQUIRED signal: a job posted in
+  // the last N days shows the company is operating. Without one, no approved tool checks it and
+  // it stays a blocking requirement (below) — it is never assumed.
+  const datedSignals = () => reqs.filter((r): r is Extract<Requirement, { dimension: "signal" }> => r.dimension === "signal" && r.necessity === "required" && isExecutable(r) && !!r.window?.days);
+  const statusLeft: { span: string; status: CompanyStatus; necessity: "required" | "preferred" }[] = [];
+  const resolveStatus = (sp: string, status: CompanyStatus, necessity: "required" | "preferred") => {
+    const sig = status === "active" ? datedSignals() : [];
+    if (sig.length) {
+      mergedDuplicates.push({ kind: "implied", span: sp, coveredBy: sig.map((r) => r.id),
+        reason: `a dated ${sig.map((r) => r.kind).join(" or ")} signal (last ${Math.max(...sig.map((r) => r.window!.days))} days) shows the company is operating` });
+    } else statusLeft.push({ span: sp, status, necessity });
+  };
+  // The model's own operations and statuses (quoted from the request).
+  for (const o of p.operations ?? []) if (quotedInQuery(o.span) && o.operation in OPERATION_APPLIED_BY) addOperation(o.span, o.operation);
+  for (const st of p.company_status ?? []) if (quotedInQuery(st.span)) resolveStatus(st.span, st.status, st.necessity === "preferred" ? "preferred" : "required");
+  const countWordsAll = p.deliverable.count !== null ? [String(p.deliverable.count), p.deliverable.count_span ?? ""].join(" ") : null;
+  for (const x of u.unsupported) {
+    // EVERY WORD EXPLAINED, OR NOTHING CHANGES: the item's meaning units (audience, status,
+    // operation) plus words the contract already enforces must account for all of it.
+    const m = meaningUnits(x.span);
+    if (m.units.length) {
+      const rest = m.residual.length ? spanAlreadyEnforced(m.residual.join(" "), reqs, countWordsAll) : null;
+      if (!m.residual.length || rest) {
+        for (const un of m.units) {
+          if (un.kind === "operation") addOperation(x.span, un.operation);
+          else if (un.kind === "status") resolveStatus(x.span, m.negated ? (un.status === "active" ? "inactive" : "active") : un.status, "required");
+        }
+        if (rest?.coveredBy.length) mergedDuplicates.push({ span: x.span, kind: "same_words", coveredBy: rest.coveredBy, reason: rest.reason });
+        continue;
+      }
+    }
+    const dup = redundantUnsupported(x.span, reqs);
+    if (dup) { mergedDuplicates.push({ span: x.span, ...dup }); continue; }
+    // Words the contract already enforces (or the requested count) are not a second, unchecked
+    // requirement (coverage.ts `spanAlreadyEnforced`). Merged only when it names what enforces
+    // them; a count-only item ("Find 5") is recorded as covered by the deliverable.
+    const countWords = p.deliverable.count !== null ? [String(p.deliverable.count), p.deliverable.count_span ?? ""].join(" ") : null;
+    const enforced = spanAlreadyEnforced(x.span, reqs, countWords);
+    if (enforced) { mergedDuplicates.push({ span: x.span, ...enforced }); continue; }
+    // An unsupported item that is itself an exclusion ("not owned by private equity") keeps
+    // its polarity (audit E2: 10 exclusions were stored as inclusions). Read from the item's
+    // OWN quoted words by the shared negation reader, never from the rest of the sentence.
+    const excludes = explicitCues(x.span).some((cue) => cue.polarity === "exclude" && x.span.trim().toLowerCase().startsWith(cue.span.split(/\s+/)[0].toLowerCase()));
+    // A PERMISSION RESTRICTS NOTHING (TEST smoke 2026-11-08, after MRLE Phase 0 made a REQUIRED
+    // "Not checked" item block approval): "Prefer 20–500 employees, but include strong
+    // opportunities outside that range" WIDENS the search. Filed as unsupported, it blocked
+    // every plan for that request. It stays disclosed ("Not checked"), as a preference.
+    const permits = !excludes && permissionAround(query, x.span);
+    reqs.push({ ...base(`unsupported:${slug(x.span)}`, permits ? "preferred" : "required",
+      permits ? { source: "user_explicit", span: x.span, policy: PERMISSION_POLICY } : userOrigin(x.span), `Not checked: ${x.span}`, x.why || "not expressible in the mission vocabulary"),
+      evaluability: "unrepresentable", dimension: "unsupported", polarity: excludes ? "exclude" : "include", compiledAs: "disclosed", value: x.span });
+  }
+
+  for (const st of statusLeft) {
+    reqs.push({ ...base(`unsupported:status_${st.status}`, st.necessity, userOrigin(st.span), `Not checked: company status ${st.status} ("${st.span}")`,
+      st.status === "active" ? "no approved tool checks that a company is operating without a dated signal (e.g. hiring in the last 30 days)" : "no approved tool checks that a company has closed"),
+      evaluability: "unrepresentable", dimension: "unsupported", polarity: "include", compiledAs: "disclosed", value: `company status: ${st.status}` });
+  }
+
+  const count = p.deliverable.count !== null && Number.isInteger(p.deliverable.count) && p.deliverable.count > 0 ? p.deliverable.count : null;
+  const contract: MissionContract = {
+    version: MISSION_CONTRACT_VERSION,
+    objective: query,
+    deliverable: { entity: p.deliverable.entity, count, personRoles: p.deliverable.entity === "person" ? [...p.deliverable.person_roles] : [] },
+    forbidBroadening: p.forbid_broadening.filter((d) => (BROADENING_DIMENSIONS as readonly string[]).includes(d)),
+    requirements: reqs,
+    anyOf,
+    assumptions: assumptionsOf(reqs),
+    ambiguities: [
+      ...u.ambiguities.map((a) => ({ span: a.span, question: a.question })),
+      ...unidentifiedRoles.map((span) => ({ span: JSON.parse(span) as string,
+        question: `Which job title do you mean by ${span}? I couldn't match it to a role I can check, and I won't run without it.` })),
+      ...unidentifiedPlaces.map((p) => { const span = p.startsWith('"') ? JSON.parse(p) as string : p; return { span,
+        question: `Which place do you mean by "${span}"? I couldn't match it to a country, state or city I can check, and I won't search without it.` }; }),
+    ],
+    authorizedActions: ["discover", "verify"],
+    budget: null,
+    completion: { targetCount: count, stopWhen: "target_reached_or_budget_exhausted" },
+    provenance: { interpreter: "gpt_contract_v4", model: opts.model ?? null, from: null },
+    ...(mergedDuplicates.length ? { mergedDuplicates } : {}),
+    ...(operations.length ? { operations } : {}),
+  };
+  // AN OPERATION THE USER STATED IS RECORDED EVEN WHEN THE MODEL FILED IT NOWHERE: a negated
+  // phrase made only of pipeline operations ("no duplicates") describes the results, not a
+  // company. Recording it adds no criterion (the pipeline always performs it); without it the
+  // coverage check below would ask about it as an unenforced company exclusion.
+  for (const cue of explicitCues(query)) {
+    if (cue.kind !== "exclusion") continue;
+    for (const op of operationsOnly(cue.object) ?? []) {
+      if (!(contract.operations ??= []).some((o) => o.operation === op)) contract.operations.push({ span: cue.span, operation: op, appliedBy: OPERATION_APPLIED_BY[op] });
+    }
+  }
+  if (contract.operations && !contract.operations.length) delete contract.operations;
+  // NOTHING THE USER STATED EXPLICITLY MAY VANISH (coverage.ts): an audience word or a
+  // negative constraint the contract does not represent — omitted by the model, rejected
+  // by validation, or only disclosed — is a blocking question, never a silent omission.
+  // One question per thing: a restriction already asked about ("growth hackers") is not asked twice.
+  const asked = contract.ambiguities.map((a) => a.span.replace(/^"|"$/g, ""));
+  for (const q of coverageQuestions(query, contract)) if (!asked.some((a) => spanInRequest(q.span, a))) contract.ambiguities.push(q);
+  // NOTHING LEFT TO CHECK IS A QUESTION, NEVER A CRASH (ATLAS inventory 2026-11-20): "Find
+  // companies using HubSpot" reads as one disclosed, never-executed requirement. Compiling
+  // that froze an empty criteria list and threw — HTTP 500 from lead-pipeline. When no
+  // requirement can be executed (and nothing was asked already), ask what qualifies a result.
+  if (!contract.ambiguities.length && !reqs.some(isExecutable)) {
+    const unchecked = reqs.filter((r) => r.dimension === "unsupported").map((r) => `"${r.origin.span}"`);
+    contract.ambiguities.push({
+      span: unchecked.length ? unchecked.join(", ").replace(/"/g, "") : query.trim(),
+      question: unchecked.length
+        ? `I can't check ${unchecked.join(" or ")} with the tools I have. What else should a company match — industry, location, size, or a signal such as hiring?`
+        : "What should a company match — industry, location, size, or a signal such as hiring?",
+    });
+  }
+  return { contract, rejected };
+}
+
+const DURATION_RE = /\d|\b(?:days?|weeks?|fortnights?|months?|quarters?|years?|yr|wk|mo)\b/i;
+
+/** Do the request's words touching this quoted span make it hard ("must be | B2B", "B2B | only")? */
+/**
+ * The quoted item GRANTS rather than restricts: it, or the words just before it in its own
+ * clause, say "include / also / open to / consider / allow…", and nothing in them requires,
+ * restricts or excludes. Read from the user's words around the quote, like `elevatedAround`.
+ */
+function permissionAround(query: string, span: string): boolean {
+  const s = span.trim();
+  if (!s) return false;
+  const i = query.toLowerCase().indexOf(s.toLowerCase());
+  if (i < 0) return false;
+  const clauseStart = Math.max(query.lastIndexOf(",", i), query.lastIndexOf(";", i), query.lastIndexOf(".", i - 1)) + 1;
+  const before = query.slice(clauseStart, i).trim().split(/\s+/).slice(-4).join(" ");
+  const words = `${before} ${s}`;
+  const restricts = AUDIENCE_REQUIRE_RE.test(words) || /\b(?:exclude[sd]?|excluding|no|not|never|without|except|avoid)\b/i.test(words);
+  return !restricts && AUDIENCE_PERMIT_RE.test(words);
+}
+
+function elevatedAround(query: string, span: string): boolean {
+  const s = span.trim();
+  if (!s) return false;
+  const i = query.toLowerCase().indexOf(s.toLowerCase());
+  if (i < 0) return false;
+  const clauseStart = Math.max(query.lastIndexOf(",", i), query.lastIndexOf(";", i), query.lastIndexOf(".", i - 1)) + 1;
+  const before = query.slice(clauseStart, i).trim().split(/\s+/).slice(-4).join(" ");
+  const after = query.slice(i + s.length).split(/[,.;]/)[0].trim().split(/\s+/).slice(0, 2).join(" ");
+  return AUDIENCE_REQUIRE_RE.test(before) || /^(?:\w+\s+)?(?:only|exclusively)\b/i.test(after);
+}
+
+const placeLabel = (id: string) => (id.length <= 4 ? id.toUpperCase() : id.replace(/\b\w/g, (c) => c.toUpperCase()));
+const FAMILY_DISPLAY: Readonly<Record<string, string>> = {
+  gtm_sales: "sales roles", sales_operations: "sales operations roles", marketing_growth: "marketing roles", growth: "growth roles",
+  customer_success: "customer success roles", engineering: "engineering roles", finance: "finance roles", ops: "operations roles",
+};
+const normPlace = (s: string | null | undefined) => String(s ?? "").toLowerCase().replace(/[^a-z]+/g, " ").trim();
+
+/** The request's words between two quoted spans (in request order), or null when they overlap or are missing. */
+function wordsBetween(query: string, a: string, b: string): string | null {
+  const q = query.toLowerCase();
+  const i = q.indexOf(a.toLowerCase()), j = q.indexOf(b.toLowerCase());
+  if (i < 0 || j < 0) return null;
+  const [first, second] = i <= j ? [{ at: i, len: a.length }, { at: j }] : [{ at: j, len: b.length }, { at: i }];
+  return second.at >= first.at + first.len ? q.slice(first.at + first.len, second.at) : null;
+}
+
+/**
+ * Groups of REQUIRED include requirements that are ALTERNATIVES ("any of"), read from the
+ * user's joining words — deterministic, never a second model reading:
+ *
+ *   headquarters places  always one group: a company has ONE headquarters, so "in Texas and
+ *                        Ohio" can only mean either (ANDing them could never be satisfied)
+ *   presence places      one group unless the words between them say "and" / "both"
+ *                        ("offices in Austin and Denver" requires both)
+ *   industries           one group unless the words between them say "both" / "also" /
+ *                        "as well as" (a company is classified in one industry; "fintech and
+ *                        healthcare companies" means either)
+ *
+ * The business-model facet (B2B), exclusions, preferences and signals are never grouped here.
+ */
+function alternativeGroups(query: string, reqs: Requirement[]): Requirement[][] {
+  const out: Requirement[][] = [];
+  const req = reqs.filter((r) => r.necessity === "required");
+  // The joining words between members, plus the three words just before the first one
+  // ("both fintech and healthcare": "both" precedes the list).
+  const before = (span: string) => { const i = query.toLowerCase().indexOf(span.toLowerCase()); return i < 0 ? "" : query.slice(0, i).toLowerCase().split(/\s+/).slice(-3).join(" "); };
+  const conj = (g: Requirement[], re: RegExp) => re.test(before(g[0].origin.span)) || g.some((r, k) => k > 0 && re.test(wordsBetween(query, g[k - 1].origin.span, r.origin.span) ?? ""));
+  const hq = req.filter((r): r is Extract<Requirement, { dimension: "geography" }> => r.dimension === "geography" && r.polarity === "include" && r.scope === "headquarters");
+  if (hq.length > 1) out.push(hq);
+  const presence = req.filter((r): r is Extract<Requirement, { dimension: "geography" }> => r.dimension === "geography" && r.polarity === "include" && r.scope !== "headquarters");
+  if (presence.length > 1 && !conj(presence, /\b(and|both)\b/)) out.push(presence);
+  const industries = req.filter((r): r is Extract<Requirement, { dimension: "industry" }> => r.dimension === "industry" && r.facet === "industry" && r.polarity === "include");
+  if (industries.length > 1 && !conj(industries, /\b(both|also|as well as)\b/)) out.push(industries);
+  return out;
+}

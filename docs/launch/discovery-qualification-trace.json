@@ -1,0 +1,411 @@
+{
+  "base": "b1ea21eb8d5b2589bafd142c9adaf7cdfddbdf63",
+  "environment": "Disposable localhost PostgreSQL 17.6 / PostgREST 12.2.3; all provider/model responses and prices synthetic. No live spending.",
+  "compiler": "First model request is offline mocked compilation, excluded from admitted runtime attempts.",
+  "before": {
+    "passed": [
+      "S01",
+      "S07"
+    ],
+    "incorrectly_qualified": [
+      "S03b",
+      "S10",
+      "S10b",
+      "S13",
+      "S13b"
+    ]
+  },
+  "after": [
+    {
+      "scenario": "S01",
+      "qualified": [
+        "S01 Software"
+      ],
+      "models": 4,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 59920,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "completed",
+      "response_leads": 1,
+      "response_count_entity": "qualified_company",
+      "response_success": true
+    },
+    {
+      "scenario": "S02",
+      "qualified": [],
+      "models": 3,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 47440,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S03",
+      "qualified": [],
+      "models": 3,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 47440,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S04",
+      "qualified": [],
+      "models": 1,
+      "reads": 3,
+      "provider_starts": 1,
+      "reserved_microusd": 17480,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S05a",
+      "qualified": [],
+      "models": 3,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 47440,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S05b",
+      "qualified": [],
+      "models": 2,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 34960,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S06",
+      "qualified": [],
+      "models": 1,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 22480,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S07",
+      "qualified": [],
+      "models": 1,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 22480,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S08a",
+      "qualified": [
+        "S08a Software"
+      ],
+      "models": 4,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 59920,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "completed",
+      "response_leads": 1,
+      "response_count_entity": "qualified_company",
+      "response_success": true
+    },
+    {
+      "scenario": "S08b",
+      "qualified": [],
+      "models": 1,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 22480,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S08c",
+      "qualified": [],
+      "models": 1,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 22480,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S08d",
+      "qualified": [
+        "S08d Software"
+      ],
+      "models": 4,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 59920,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "completed",
+      "response_leads": 1,
+      "response_count_entity": "qualified_company",
+      "response_success": true
+    },
+    {
+      "scenario": "S09",
+      "qualified": [],
+      "models": 1,
+      "reads": 3,
+      "provider_starts": 1,
+      "reserved_microusd": 17480,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S10",
+      "qualified": [],
+      "models": 1,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 22480,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S11",
+      "qualified": [],
+      "models": 3,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 47440,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S12",
+      "qualified": [
+        "S12 Software"
+      ],
+      "models": 4,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 59920,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "completed",
+      "response_leads": 1,
+      "response_count_entity": "qualified_company",
+      "response_success": true
+    },
+    {
+      "scenario": "S13",
+      "qualified": [],
+      "models": 3,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 47440,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S14",
+      "qualified": [],
+      "models": 3,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 47440,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S15",
+      "qualified": [],
+      "models": 3,
+      "reads": 3,
+      "provider_starts": 1,
+      "reserved_microusd": 42440,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "search_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S10b",
+      "qualified": [],
+      "models": 1,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 22480,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S03b",
+      "qualified": [],
+      "models": 3,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 47440,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S13b",
+      "qualified": [],
+      "models": 3,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 47440,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S10c",
+      "qualified": [
+        "S10c Software"
+      ],
+      "models": 4,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 59920,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "completed",
+      "response_leads": 1,
+      "response_count_entity": "qualified_company",
+      "response_success": true
+    },
+    {
+      "scenario": "S10d-fail",
+      "qualified": [],
+      "models": 4,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 59920,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S10d-unknown",
+      "qualified": [],
+      "models": 4,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 59920,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S03c",
+      "qualified": [
+        "s03c Software"
+      ],
+      "models": 4,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 59920,
+      "max_runtime_request_bytes": 29400,
+      "terminal": "completed",
+      "response_leads": 1,
+      "response_count_entity": "qualified_company",
+      "response_success": true
+    },
+    {
+      "scenario": "S10e",
+      "qualified": [],
+      "models": 4,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 59920,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S13c",
+      "qualified": [],
+      "models": 3,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 47440,
+      "max_runtime_request_bytes": 29431,
+      "terminal": "budget_exhausted",
+      "response_leads": 0,
+      "response_count_entity": "qualified_company",
+      "response_success": false
+    },
+    {
+      "scenario": "S03d",
+      "qualified": [
+        "s03d Software"
+      ],
+      "models": 4,
+      "reads": 5,
+      "provider_starts": 2,
+      "reserved_microusd": 59920,
+      "max_runtime_request_bytes": 29400,
+      "terminal": "completed",
+      "response_leads": 1,
+      "response_count_entity": "qualified_company",
+      "response_success": true
+    }
+  ]
+}

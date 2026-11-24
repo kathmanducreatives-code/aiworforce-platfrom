@@ -26,9 +26,11 @@
 // So "the model may omit this" is spelled `["string", "null"]`, and the parser's
 // defensive readers (`strArray`, `numOrNull`) already treat null as empty.
 
+import { UNDERSTANDING_SCHEMA } from "./missionUnderstanding.ts";
 import { MISSION_STRATEGIES, REQUESTED_OUTPUTS } from "./leadMission.ts";
 import { PUBLIC_CAPABILITY_IDS } from "./leadCapabilityCatalogue.ts";
 import { SOURCE_STRATEGIES } from "./leadMissionCompiler.ts";
+import { type MissionContractVersion, SIGNAL_WINDOWS_PROPERTY } from "./missionInterpretationContract.ts";
 
 export const GPT_MISSION_SCHEMA_VERSION = "gpt-mission-schema-v1" as const;
 
@@ -85,6 +87,11 @@ export const MISSION_PROPOSAL_PROPERTIES = {
     "this is ['AI', 'startup'] — never a house ICP the request did not mention.",
   ),
   geographies: strings("Places named in the request, e.g. ['United States']."),
+  geography_scope: {
+    type: ["string", "null"] as const,
+    enum: ["headquarters", "presence", null],
+    description: "Interpret the location requirement: explicit HQ versus offices/market presence. Null if unstated or mixed; retain individual scope in criterion evaluation. Never infer headquarters from presence.",
+  },
   employee_range: employeeRange(
     "Company size IF the request states one. Both null when it does not — do " +
     "not supply a default range.",
@@ -134,7 +141,10 @@ export const MISSION_PROPOSAL_PROPERTIES = {
       employee_range: employeeRange(""),
     },
   },
-  disallowed_broadening: strings("Dimensions that must never be widened."),
+  disallowed_broadening: strings(
+    "Dimensions that must never be widened, by these names: geography, industry, business_model, " +
+      "stage, size, role, recency.",
+  ),
   required_evidence: strings("Evidence a candidate must carry to qualify."),
   required_capabilities: {
     ...strings("Pipeline stages this request needs, from the catalogue only."),
@@ -199,3 +209,39 @@ export const GPT_MISSION_SCHEMA = {
     properties: MISSION_PROPOSAL_PROPERTIES,
   },
 } as unknown as { name: string; schema: Record<string, unknown> };
+
+/**
+ * CONTRACT v2 (`missionInterpretationContract`): v1 plus `signal_windows`, each
+ * signal's own timeframe in the user's words. Used only when
+ * AGENTORY_MISSION_CONTRACT=v2; v1 above is unchanged.
+ */
+export const GPT_MISSION_SCHEMA_V2 = {
+  name: "lead_mission_proposal_v2",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: [...MISSION_PROPOSAL_FIELDS, "signal_windows"],
+    properties: { ...MISSION_PROPOSAL_PROPERTIES, signal_windows: SIGNAL_WINDOWS_PROPERTY },
+  },
+} as unknown as { name: string; schema: Record<string, unknown> };
+
+/**
+ * CONTRACT v3 (S4, `missionUnderstanding`): v2 plus `understanding` — the request's
+ * meaning in a closed vocabulary (registered titles, role families, registry places,
+ * scope, necessity, AND/OR), each item quoting the user's words. Used only when
+ * AGENTORY_MISSION_CONTRACT=v3.
+ */
+export const GPT_MISSION_SCHEMA_V3 = {
+  name: "lead_mission_proposal_v3",
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: [...MISSION_PROPOSAL_FIELDS, "signal_windows", "understanding"],
+    properties: { ...MISSION_PROPOSAL_PROPERTIES, signal_windows: SIGNAL_WINDOWS_PROPERTY, understanding: UNDERSTANDING_SCHEMA },
+  },
+} as unknown as { name: string; schema: Record<string, unknown> };
+
+/** The structured-output schema for a contract version. */
+export function gptMissionSchemaFor(contract: MissionContractVersion) {
+  return contract === "v3" ? GPT_MISSION_SCHEMA_V3 : contract === "v2" ? GPT_MISSION_SCHEMA_V2 : GPT_MISSION_SCHEMA;
+}

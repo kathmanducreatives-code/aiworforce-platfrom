@@ -18,6 +18,7 @@ import {
   applyRegroundedVerification, companyEvidenceItems, restoreWorkingSet, toResumeRecord,
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { buildCompanyEvidenceGraph } from "../../../supabase/functions/_shared/evidenceGraph.ts";
+import { missionCandidatesFrom } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { evaluateEligibility } from "../../../supabase/functions/_shared/candidateEligibility.ts";
 import { deriveMissionCriteria } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { compileLeadMission } from "../../../supabase/functions/_shared/leadMissionCompiler.ts";
@@ -177,7 +178,7 @@ Deno.test("Phase C: the slice is bounded — one model call per company, at most
 
 Deno.test("Phase C: accepted ⇒ PASS, review ⇒ PENDING, verified contradiction ⇒ FAIL", () => {
   const graphOf = (c: ReturnType<typeof company>) =>
-    buildCompanyEvidenceGraph("k", companyEvidenceItems(c, "task"), { now: new Date(NOW) });
+    buildCompanyEvidenceGraph(c.key, companyEvidenceItems(c, "task"), { now: new Date(NOW) });
   const check = (c: ReturnType<typeof company>) =>
     evaluateEligibility(CRITERIA, graphOf(c)).checks.find((x) => x.dimension === "industry" && x.kind === "hard")!;
 
@@ -230,7 +231,7 @@ Deno.test("Phase C: a READY route without a canonical executor is never chosen",
       canonical_executor: false, executor_note: "runs, but nothing turns its result into a claim",
     }],
   });
-  const graph = buildCompanyEvidenceGraph("k", companyEvidenceItems(company(), "task"), { now: new Date(NOW) });
+  const graph = buildCompanyEvidenceGraph(company().key, companyEvidenceItems(company(), "task"), { now: new Date(NOW) });
   const [gap] = evidenceGapsFor(
     [{ criterion_id: "industry:b2b_saas", dimension: "industry", result: "unknown", reason: "x" }],
     graph, noExecutor);
@@ -286,10 +287,11 @@ Deno.test("Phase C: the business-model gap now names an EXECUTABLE route, and co
 
   // A company whose LinkedIn details were already bought and whose pages were
   // not: Firecrawl is the untried, executable route.
-  const graph = buildCompanyEvidenceGraph("k", companyEvidenceItems(company(), "task"), { now: new Date(NOW) });
+  const graph = buildCompanyEvidenceGraph(company().key, companyEvidenceItems(company(), "task"), { now: new Date(NOW) });
+  // The routes production passes: an answered enrichment is a tried route (`attemptedRoutesOf`).
   const gaps = evidenceGapsFor(
     [{ criterion_id: "industry:b2b_saas", dimension: "industry", result: "unknown", reason: "business model is not established" }],
-    graph);
+    graph, undefined, new Set(missionCandidatesFrom({ companies: [company()] })[0].attempted_routes));
   assertEquals(gaps[0].next, "verify");
   assertEquals(gaps[0].route?.actor, "firecrawl");
   const summary = summarizeGaps([{ gaps }]);
@@ -312,7 +314,7 @@ Deno.test("Phase C: pages already bought are not bought again — the gap is blo
   const graph = buildCompanyEvidenceGraph(withPages.key, companyEvidenceItems(withPages, "task"), { now: new Date(NOW) });
   const gaps = evidenceGapsFor(
     [{ criterion_id: "industry:b2b_saas", dimension: "industry", result: "unknown", reason: "the quote does not state saas delivery" }],
-    graph);
+    graph, undefined, new Set(missionCandidatesFrom({ companies: [withPages] })[0].attempted_routes));
   assertEquals(gaps[0].next, "blocked");
   const why = gaps[0].considered.find((r) => r.actor === "firecrawl")!.why;
   assert(/already answered/.test(why), why);

@@ -39,6 +39,17 @@ import {
 } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 import { entityHintFromCompany, type EvidenceItem } from "../../../supabase/functions/_shared/candidateObservation.ts";
 
+/**
+ * Q3 — a company record that flags ONE headquarters proves it
+ * (\`li_record_single_headquarters_flag\`). Since Q3 an unscoped hard geography
+ * ("a US company") is a HEADQUARTERS requirement, so a proven location in these
+ * fixtures carries the authority a real company-details record gives it.
+ */
+const HQ_AUTHORITY = {
+  version: "evidence-authority-v1", claim: "headquarters", level: "proven",
+  rule: "li_record_single_headquarters_flag", reason: "the company record flags one headquarters",
+} as never;
+
 globalThis.fetch = () => { throw new Error("these tests must not reach the network"); };
 
 const TASK = "d2d15d7e-9f9d-40a4-9a2f-6f157de1800e";
@@ -113,7 +124,7 @@ function fuse(): EngineCompany {
     evidence_id: `ev_${dimension}`, company_key: KEY, dimension, value, status: "proven",
     source: { provider: "apify", actor: "apify_linkedin_company_details", provider_call_id: "pc_1", url: KEY, excerpt: null },
     method: "provider_field", observed_at: AT, valid_until: null, confidence: "high", derived_from: [], mission_id: TASK,
-    origin: "lead_mission",
+    origin: "lead_mission", ...(dimension === "geography" ? { authority: HQ_AUTHORITY } : {}),
   });
   return {
     key: KEY, company, hiring_jobs: [], yc_open_jobs: [], hiring_assessment: null, first_in_function: null,

@@ -16,11 +16,11 @@ const opts = { sanitizeOps: false, sanitizeResources: false };
  * document a false qualification (see the A7 scenario report). They are
  * skipped by default so CI stays a regression gate, and run with
  * `A7_AUDIT_KNOWN_GAPS=1` (the convention #109 uses). Remove an id from the set
- * when its fix lands: S03b/S13/S13b (Codex HQ/provenance), S10/S10b (role
- * terms, reported on #109). S07 (future-dated posting) was fixed by #109 and
- * now runs on every build.
+ * when its fix lands. S07 was fixed by #109; S10/S10b (role terms) and S13/S13b
+ * (description provenance) by #113; S03b (HQ without a flag) by Q3's frozen
+ * geography scope. All now run on every build.
  */
-const KNOWN_GAPS = new Set(["S03b", "S10", "S10b", "S13", "S13b"]);
+const KNOWN_GAPS = new Set<string>([]);
 const gapOpts = (id: string) => ({ ...opts, ignore: KNOWN_GAPS.has(id) && Deno.env.get("A7_AUDIT_KNOWN_GAPS") !== "1" });
 const DAY = 86_400_000;
 

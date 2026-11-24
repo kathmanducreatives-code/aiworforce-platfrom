@@ -49,3 +49,29 @@ export function supabaseTargetMismatch(url: string, key: string): string | null 
   if (!urlRef || !keyRef || urlRef === keyRef) return null;
   return `Supabase URL is project ${urlRef} but the publishable key belongs to project ${keyRef}`;
 }
+
+/**
+ * NO SERVER KEY IN A PUBLIC VARIABLE. Vite inlines every `VITE_*` value into the
+ * browser bundle — and the Lovable MCP plugin inlined the whole `import.meta.env`
+ * object into `supabase/functions/mcp/index.ts` (2026-11-07: a TEST `sb_secret_`
+ * key, paired with the production URL in `.env.local`). Returns the names of the
+ * `VITE_*` variables that hold a secret (`sb_secret_…`) or a `service_role` JWT;
+ * never their values. Empty ⇒ safe.
+ */
+export function secretKeysInPublicEnv(env: Record<string, string | undefined>): string[] {
+  const out: string[] = [];
+  for (const [name, raw] of Object.entries(env)) {
+    if (!name.startsWith("VITE_")) continue;
+    const v = String(raw ?? "").trim();
+    if (!v) continue;
+    if (v.startsWith("sb_secret_")) { out.push(name); continue; }
+    const parts = v.split(".");
+    if (parts.length !== 3) continue;
+    try {
+      const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const json = JSON.parse(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)));
+      if (json?.role === "service_role" || json?.role === "supabase_admin") out.push(name);
+    } catch { /* not a JWT */ }
+  }
+  return out.sort();
+}

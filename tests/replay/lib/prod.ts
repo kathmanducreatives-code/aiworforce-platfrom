@@ -23,7 +23,7 @@ import { isUnfinishedFrontier } from "../../../supabase/functions/_shared/leadIn
 import type { LeadMissionV1 } from "../../../supabase/functions/_shared/leadMission.ts";
 import type { MissionCriterion } from "../../../supabase/functions/_shared/missionCriteria.ts";
 import { buildQualificationContext } from "../../../supabase/functions/_shared/missionQualificationContext.ts";
-import { roleMatchesFamily, type RoleFamily } from "../../../supabase/functions/_shared/roleFamilies.ts";
+import { hiringRequirementOf, hiringTitleMatcher } from "../../../supabase/functions/_shared/missionCriteriaReader.ts";
 
 export const BINDING = "PR #24 (bbbaf3ff)";
 
@@ -69,22 +69,9 @@ export function candidateRule(l: SpendLedger, q: Pick<ReserveRequest, "purpose" 
 
 // ── VERBATIM FROM PR #24 run-agent (inline there) ──────────────────────────
 
-export function verifiableCandidatesFrom(
-  engineRun: { companies: readonly EngineCompany[] }, vCriteria: readonly MissionCriterion[], missionId: string,
-): VerifiableCandidate[] {
-  return missionCandidatesFrom(engineRun, { missionId: String(missionId) }).map((cand) => {
-    const e = evaluateEligibility(vCriteria as MissionCriterion[], cand.graph);
-    return {
-      company_key: cand.company_key, name: cand.name, domain: cand.domain, linkedin_url: cand.linkedin_url,
-      graph: cand.graph, eligibility: e.eligibility,
-      hard_checks: e.checks.filter((x) => x.kind === "hard"),
-      attempted_routes: cand.attempted_routes ?? [],
-      unaffordable_routes: cand.unaffordable_routes ?? [],
-      // Triage withheld paid verification: `verificationTargets` skips it.
-      paid_verification_blocked: cand.paid_verification_blocked ?? null,
-    };
-  });
-}
+// The verification phase's candidates: the SHARED production function since
+// canary session 2 (the copy here had lost the verdicts and holds).
+export { verifiableCandidatesFrom } from "../../../supabase/functions/_shared/leadCapabilityEngine.ts";
 
 export function missionHiringVerifier(vMission: LeadMissionV1, vCriteria: readonly MissionCriterion[]) {
   const hiringCriterion = vCriteria.find((c) => c.dimension === "hiring" && c.kind === "hard" && c.status === "ok");
@@ -93,13 +80,12 @@ export function missionHiringVerifier(vMission: LeadMissionV1, vCriteria: readon
     ?.qualifier?.role_families ?? []) as unknown[]).map(String);
   const vocab = buildQualificationContext(vMission, { criteriaAuthority: true }).role_vocabulary;
   const titles = hiringSearchTitles(vocab);
-  const lowered = vocab.required_titles.map((t) => String(t).toLowerCase());
+  // Verbatim with run-agent (S2): the ONE posting test, exclusions on every branch.
+  const req = hiringRequirementOf([hiringCriterion])!;
   return hiringClaimVerifier({
     titles, role_families: families,
     window_days: hiringCriterion.time_window?.days ?? null,
-    matchesRole: (title) => families.length > 0
-      ? families.some((f) => roleMatchesFamily(title, f as RoleFamily))
-      : lowered.some((t) => title.toLowerCase().includes(t)),
+    matchesRole: hiringTitleMatcher({ ...req, roleFamilies: families }, vocab.required_titles),
   });
 }
 
@@ -119,8 +105,7 @@ export function unfinishedFrontierCount(companies: readonly EngineCompany[]): nu
 
 /** What run-agent must carry for the copies above to be the code it runs (source pins). */
 export const RUN_AGENT_PINS = [
-  "const vCandidates = () => missionCandidatesFrom(engineRun, { missionId: String(task.id) }).map((cand) => {",
-  "unaffordable_routes: cand.unaffordable_routes ?? [],",
+  "const vCandidates = () => verifiableCandidatesFrom(engineRun, vCriteria, String(task.id));",
   "const hiringCriterion = vCriteria.find((c) => c.dimension === \"hiring\" && c.kind === \"hard\" && c.status === \"ok\");",
   "const titles = hiringSearchTitles(vocab);",
   "? capabilityRun.companies.filter((c) =>\n            isUnfinishedFrontier(\n              c.investigation_state,",

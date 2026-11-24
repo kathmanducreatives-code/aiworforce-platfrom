@@ -1,3 +1,4 @@
+import { gptStructured } from "../../../supabase/functions/_shared/gptProvider.ts";
 // WHAT THE MODELS COST, WHICH NOTHING HAS EVER RECORDED.
 //
 // ── THE STATE THIS REPLACES ─────────────────────────────────────────────────
@@ -213,16 +214,19 @@ Deno.test("13. both transports emit telemetry from the same builder", () => {
   assert(strategist.includes("readModelUsage("));
 });
 
-Deno.test("14. usage is read BEFORE the content is parsed", () => {
-  // A response whose content fails to parse still consumed tokens and was still
-  // billed. Reading usage after the parse would lose exactly the calls worth
-  // knowing about.
-  const src = Deno.readTextFileSync(new URL(
-    "../../../supabase/functions/_shared/gptProvider.ts", import.meta.url));
-  const usageAt = src.indexOf("const usage = readModelUsage(");
-  const contentAt = src.indexOf("content = choice?.content");
-  assert(usageAt !== -1 && contentAt !== -1);
-  assert(usageAt < contentAt, "a failed parse is still a paid call");
+Deno.test("14. malformed content retains paid usage exactly once", async () => {
+  const events: Array<{ input: number | null; output: number | null; ok: boolean }> = [];
+  const result = await gptStructured({ purpose: "test", system: "JSON", user: "offline" }, {
+    readEnv: (key) => key === "OPENAI_API_KEY" ? "sk-offline" : undefined,
+    fetch: () => Promise.resolve(new Response(JSON.stringify({
+      choices: [{ finish_reason: "stop", message: { content: "{malformed" } }],
+      usage: { prompt_tokens: 42, completion_tokens: 7 },
+    }))),
+    onModelCall: (t, ok) => events.push({ input: t.input_tokens, output: t.output_tokens, ok }),
+  });
+  assert(!result.ok);
+  assertEquals(result.code, "unparseable_json");
+  assertEquals(events, [{ input: 42, output: 7, ok: false }]);
 });
 
 Deno.test("15. the effort reported is the effort SENT", () => {

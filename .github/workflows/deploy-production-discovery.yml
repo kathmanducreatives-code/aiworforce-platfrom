@@ -1,0 +1,230 @@
+# PROMOTE THE DISCOVERY FUNCTIONS TO PRODUCTION — manual, gated, never automatic.
+#
+# Nothing starts this but a person (workflow_dispatch only), from launch/hardening,
+# through the `production` Environment and its required reviewers. It shares the
+# concurrency group of deploy-held-back-functions.yml, so no two production
+# deploys ever overlap.
+#
+# It promotes EXACTLY one commit, and refuses unless ALL of these hold:
+#   * the commit is typed twice (sha + confirm_sha) and is on launch/hardening
+#   * CI passed for it
+#   * TEST passed for it: commit status `agentory/test-smoke` = success
+#     (set by deploy-test-functions.yml after deploy + smoke on TEST)
+#   * migrations: the tables the functions need already exist in production
+#     (checked read-only; this workflow NEVER applies a migration)
+#   * the operator affirms migration review, rollback readiness, flag review and
+#     budget verification (inputs), and the forbidden flags are absent
+#   * the live function (if any) is backed up, encrypted, before it is replaced
+#
+# It never sets a secret or flag, never applies a migration, never calls
+# strategy_plan / strategy_run or any provider. With the discovery flags off in
+# production (the state today) a deployed function answers 404 "disabled".
+#
+# ROLLBACK: download `pre-deploy-discovery-<run_id>`, decrypt with
+# ROLLBACK_ARCHIVE_KEY (openssl enc -d -aes-256-cbc -pbkdf2), and redeploy that
+# source — or, simpler, dispatch this workflow again with the previous sha
+# (docs/launch/test-deploy-loop.md). If the function did not exist before, roll
+# back by turning its flags off (it then answers 404) or deleting it.
+#
+# Secrets (production Environment): SUPABASE_ACCESS_TOKEN, ROLLBACK_ARCHIVE_KEY.
+# THIS REPOSITORY IS PUBLIC: nothing here prints a secret; backups are encrypted.
+name: Promote discovery functions (production)
+run-name: "PRODUCTION discovery promote @ ${{ inputs.sha }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full 40-character commit to promote (must have passed TEST smoke)"
+        required: true
+        type: string
+      confirm_sha:
+        description: "Type the same 40-character commit again"
+        required: true
+        type: string
+      functions:
+        description: "Which functions to promote"
+        required: true
+        type: choice
+        options: ["lead-pipeline provider-connections", "lead-pipeline", "provider-connections"]
+      migrations_reviewed:
+        description: "I reviewed the held migrations this needs and they are applied in production (separately approved)"
+        required: true
+        type: boolean
+        default: false
+      rollback_ready:
+        description: "I read the rollback procedure and know the previous build"
+        required: true
+        type: boolean
+        default: false
+      flags_reviewed:
+        description: "I reviewed the production discovery flags and workspace allowlists"
+        required: true
+        type: boolean
+        default: false
+      budget_verified:
+        description: "I verified provider budgets/ceilings for production"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production-functions
+  cancel-in-progress: false
+
+env:
+  PROD_REF: ohsdatpvfdjdemstoiuj
+  SUPABASE_URL: https://ohsdatpvfdjdemstoiuj.supabase.co
+  SUPABASE_CLI_VERSION: 2.118.0
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  promote:
+    name: Promote to production
+    if: github.ref == 'refs/heads/launch/hardening'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+      statuses: read
+    env:
+      SHA: ${{ inputs.sha }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      FUNCTIONS: ${{ inputs.functions }}
+    steps:
+      - name: Inputs — exact commit, every review affirmed
+        env:
+          CONFIRM: ${{ inputs.confirm_sha }}
+          M: ${{ inputs.migrations_reviewed }}
+          R: ${{ inputs.rollback_ready }}
+          F: ${{ inputs.flags_reviewed }}
+          B: ${{ inputs.budget_verified }}
+        run: |
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::sha must be a full 40-character commit"; exit 1; }
+          [ "$SHA" = "$CONFIRM" ] || { echo "::error::confirm_sha does not match sha"; exit 1; }
+          for v in "M:$M" "R:$R" "F:$F" "B:$B"; do
+            [ "${v#*:}" = "true" ] || { echo "::error::every review must be affirmed (migrations, rollback, flags, budget)"; exit 1; }
+          done
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: On launch/hardening, CI passed, TEST smoke passed
+        run: |
+          test "$(git rev-parse HEAD)" = "$SHA"
+          test -z "$(git status --porcelain)"
+          git fetch --no-tags --quiet origin launch/hardening
+          git merge-base --is-ancestor "$SHA" FETCH_HEAD || { echo "::error::$SHA is not on launch/hardening"; exit 1; }
+          n="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&status=success&per_page=1" --jq '.total_count')"
+          [ "${n:-0}" -gt 0 ] || { echo "::error::no successful CI run for $SHA"; exit 1; }
+          # Statuses are newest first: the latest agentory/test-smoke must be success.
+          st="$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" --jq '[.[] | select(.context=="agentory/test-smoke")][0].state // "missing"')"
+          [ "$st" = "success" ] || { echo "::error::agentory/test-smoke is '$st' for $SHA — TEST must be READY first"; exit 1; }
+          echo "$SHA: on launch/hardening, CI success, TEST smoke success"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Migrations present (read-only), forbidden flags absent, flags listed by name
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          q='select to_regclass($$public.workspace_provider_connections$$) is not null as connections, to_regclass($$public.provider_usage_ledger$$) is not null as ledger, to_regclass($$public.lead_pipeline_checkpoints$$) is not null as checkpoints'
+          r="$(curl -fsS -X POST -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'content-type: application/json' \
+            "https://api.supabase.com/v1/projects/$PROD_REF/database/query" -d "$(jq -n --arg q "$q" '{query:$q}')")"
+          echo "production tables: $r"
+          echo "$r" | jq -e '.[0].connections and .[0].ledger and .[0].checkpoints' > /dev/null \
+            || { echo "::error::held migrations are not applied in production — apply them first under a separate approval"; exit 1; }
+          names="$(curl -fsS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROD_REF/secrets" | jq -r '.[].name')"
+          for f in PROVIDER_APOLLO_ENABLED LEAD_PIPELINE_PHONES_ENABLED LEAD_PIPELINE_SIGNALS_ENABLED APOLLO_COMMERCIAL_TERMS_CONFIRMED; do
+            if printf '%s\n' "$names" | grep -qx "$f"; then echo "::error::$f is set in production — not approved"; exit 1; fi
+          done
+          echo "discovery flags present in production (names only):"
+          printf '%s\n' "$names" | grep -E '^(LEAD_PIPELINE_|PROVIDER_|LEADOCEAN_|DISCOVERY_)' || echo "  (none — functions will answer 404 disabled)"
+
+      - name: Back up the live functions (encrypted)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          ROLLBACK_ARCHIVE_KEY: ${{ secrets.ROLLBACK_ARCHIVE_KEY }}
+        run: |
+          test -n "$ROLLBACK_ARCHIVE_KEY" || { echo "::error::ROLLBACK_ARCHIVE_KEY is not set"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/rollback/supabase"; cp supabase/config.toml "$RUNNER_TEMP/rollback/supabase/config.toml"
+          : > "$RUNNER_TEMP/before.txt"
+          for fn in $FUNCTIONS; do
+            meta="$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROD_REF/functions/$fn" | jq -c '{version, status, verify_jwt}' 2>/dev/null || echo '{}')"
+            build="$(curl -sS -o /dev/null -D - -X OPTIONS "$SUPABASE_URL/functions/v1/$fn" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-agentory-build"{print $2}')"
+            echo "$fn before: $meta build=${build:-none}" | tee -a "$RUNNER_TEMP/before.txt"
+            if echo "$meta" | jq -e '.version != null' > /dev/null; then
+              supabase --workdir "$RUNNER_TEMP/rollback" functions download "$fn" --project-ref "$PROD_REF" > /dev/null
+              echo "$fn: backed up"
+            else
+              echo "$fn: not deployed in production before this run (rollback = flags off / delete)"
+            fi
+          done
+          tar -czf - -C "$RUNNER_TEMP/rollback" . \
+            | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:ROLLBACK_ARCHIVE_KEY -out "$RUNNER_TEMP/pre-deploy-discovery.tgz.enc"
+          sudo rm -rf "$RUNNER_TEMP/rollback"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pre-deploy-discovery-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/pre-deploy-discovery.tgz.enc
+            ${{ runner.temp }}/before.txt
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Stamp the build with the commit
+        run: scripts/deploy/stamp-build.sh stamp
+
+      - name: Deploy (through the production-targeting guard)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_TARGET: production
+        run: |
+          for fn in $FUNCTIONS; do
+            case "$fn" in lead-pipeline|provider-connections) ;; *) echo "::error::refusing $fn"; exit 1 ;; esac
+            node scripts/supabase-target.mjs production -- functions deploy "$fn" --use-docker
+          done
+
+      - name: Verify build, JWT, and the flag state
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          for fn in $FUNCTIONS; do
+            ok=""
+            for i in $(seq 1 20); do
+              b="$(curl -sS -o /dev/null -D - -X OPTIONS "$SUPABASE_URL/functions/v1/$fn" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-agentory-build"{print $2}')"
+              case "$b" in "$SHA@"*) ok=1; break ;; esac; sleep 6
+            done
+            [ -n "$ok" ] || { echo "::error::$fn does not report $SHA"; exit 1; }
+            curl -fsS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROD_REF/functions/$fn" \
+              | jq -e '.verify_jwt == true and .status == "ACTIVE"' > /dev/null || { echo "::error::$fn is not ACTIVE with verify_jwt"; exit 1; }
+            code="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$SUPABASE_URL/functions/v1/$fn" -H 'content-type: application/json' -d '{}')"
+            [ "$code" = "401" ] || { echo "::error::$fn answered $code without auth (expected 401)"; exit 1; }
+            echo "$fn: $b, ACTIVE, verify_jwt on, unauthenticated → 401"
+          done
+          {
+            echo "## Production discovery promote: ✅ $SHA"
+            echo "- Functions: $FUNCTIONS"; echo '```'; cat "$RUNNER_TEMP/before.txt"; echo '```'
+            echo "- Rollback artifact: pre-deploy-discovery-${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: On failure — no automatic rollback
+        if: failure()
+        run: |
+          echo "::warning::Stopped. Functions that report $SHA in x-agentory-build were deployed; the rest were not."
+          echo "::warning::Roll back from artifact pre-deploy-discovery-${{ github.run_id }} or by re-promoting the previous sha (docs/launch/test-deploy-loop.md)."

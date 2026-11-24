@@ -47,12 +47,14 @@
 
 import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import {
-  canonicalSignalType, containsPhrase, isHiringSignal,
+  canonicalSignalType, containsPhrase, hedgedLocations, isHiringSignal, sameLocation,
   type FieldProvenance, type LeadMissionV1, type MissionSignal,
 } from "./leadMission.ts";
-import { isControlledPhrase } from "./businessModelMatch.ts";
+import { isControlledPhrase, readFacets } from "./businessModelMatch.ts";
 import { sizeRangeProvable } from "./companySize.ts";
+import { classifyRoleFamily, roleFamilyAliases } from "./roleFamilies.ts";
 import { readSignalPhrase, type SignalQualifier } from "./missionSignalDescriptor.ts";
+import { placeName, understandingOf, type ValidatedUnderstanding } from "./missionUnderstanding.ts";
 import {
   CANONICAL_SIGNAL_KINDS, DEFAULT_SIGNAL_WINDOWS, EXEC_TITLE_RE, aliasKindFor,
   companyAgeWindowDays, descriptorForReading, explicitWindowDays, explicitWindowMatch, kindForEvent, readCanonicalSignals,
@@ -112,6 +114,7 @@ export interface MissionCriterion {
    * claim (`fundingStageClaim.stageRequirement`). Absent: an ordinary criterion.
    */
   any_of?: string[];
+  geography_scope?: "headquarters" | "presence";
 }
 
 export interface CanonicalSignalRecord {
@@ -149,6 +152,13 @@ export interface MissionSemanticsRecord {
   window_sources: Record<string, { source: CriterionSource; confidence?: number; rule?: string }>;
   /** Named rewrites of legacy carriers, also pushed to `validator_changes`. */
   corrections: string[];
+  /**
+   * CONTRACT v2 only: the window each kind carries because the user stated it
+   * (validated contract window, or the reader's where the contract omitted it).
+   * Read by criteria derivation, which otherwise recognises a stated window
+   * only when this pass's own reader can read it.
+   */
+  stated_windows?: Record<string, number>;
 }
 
 // ── READING THE USER'S WORDS ────────────────────────────────────────────────
@@ -162,6 +172,88 @@ const ELEVATION_RE = /\b(only|must(?:\s+be)?|strictly|exactly|exclusively)\b/i;
 const TEMPORAL_CUE_RE =
   /\b(?:recent(?:ly)?|just|currently|actively|lately|newly|new|now|soon|this\s+(?:week|month|quarter|year)|in\s+the\s+(?:last|past))\b/i;
 const HEDGE_RE = /\b(prefer(?:ably|red|ence for)?|ideally|bonus if|nice to have|if possible)\b/i;
+
+/**
+ * Is the sentence that states this size range hedged? The sentence holding either
+ * bound's digits ("20–500", "under 100") is read for a preference word, or for an
+ * explicit invitation to go outside the range ("include … outside that range").
+ */
+export function sizeClauseHedged(query: string, range: { min?: number | null; max?: number | null }): boolean {
+  const nums = [range.min, range.max].filter((n): n is number => n != null).map(String);
+  if (!nums.length) return false;
+  for (const sentence of String(query ?? "").split(/(?<=[.;!?])\s+|\n+/)) {
+    if (!nums.some((n) => new RegExp(`(^|[^0-9])${n}([^0-9]|$)`).test(sentence.replace(/,/g, "")))) continue;
+    if (HEDGE_RE.test(sentence) || /\b(?:outside|beyond)\s+(?:that|this|the)\s+(?:range|band)\b/i.test(sentence)) return true;
+  }
+  return false;
+}
+
+// ── BUSINESS-MODEL AUDIENCE: REQUIRED ONLY WHEN THE USER SAYS SO ─────────────
+//
+// "Find US B2B companies hiring Account Executives" DESCRIBES the companies; it
+// does not make B2B a filter. The model files "B2B" under company_types, the
+// value is in the request's words, and `profileList` used to compile every such
+// value as a HARD industry — so on TEST (plan 116a1b45) every company stayed
+// needs_verification on "B2B", a label no discovery provider can establish.
+//
+// An AUDIENCE descriptor (B2B / B2C / D2C, read by the controlled vocabulary in
+// businessModelMatch.ts, never by substring) is a business model, and how hard it
+// is comes from the user's own words in the clause that names it:
+//   exclude   "exclude B2C", "no B2C", "not D2C"           → hard exclusion
+//   require   "only B2B", "must be B2B", "B2B only"         → hard requirement
+//             (no provider verifies it, so a company without evidence stays
+//             needs_verification — missing evidence is never proof)
+//   prefer    "prefer B2B", "ideally B2B"                    → preference
+//   permit    "include strong B2C opportunities"             → no restriction
+//   describe  "US B2B companies"                             → preference
+// A value mixing in anything else ("B2B SaaS", "fintech") is not an audience
+// descriptor and keeps the existing rule.
+
+const B2B_WORDS_RE = /\b(?:b2b|business[\s-]+to[\s-]+business)\b/i;
+const CONSUMER_WORDS_RE = /\b(?:b2c|d2c|dtc|direct[\s-]+to[\s-]+consumers?|business[\s-]+to[\s-]+consumers?|consumers?)\b/i;
+const AUDIENCE_EXCLUDE_RE = /\b(?:exclude[sd]?|excluding|no|not|non|without|except|avoid|never|other\s+than)\b/i;
+export const AUDIENCE_REQUIRE_RE = /\b(?:only|must|required?|requires|requirement|exclusively|strictly|solely|mandatory)\b/i;
+export const AUDIENCE_PERMIT_RE = /\b(?:include|including|also|open\s+to|welcome|fine|ok(?:ay)?|acceptable|consider|allow(?:ed)?)\b/i;
+
+export type AudienceIntent = "exclude" | "require" | "prefer" | "permit" | "describe" | "absent";
+
+/** Does this text name the audience at all ("B2B SaaS" names b2b; "D2C brands" names consumer)? */
+export function namesAudience(text: unknown, audience: "b2b" | "consumer"): boolean {
+  return (audience === "b2b" ? B2B_WORDS_RE : CONSUMER_WORDS_RE).test(String(text ?? ""));
+}
+
+/** The audience a value names when it is ONLY an audience descriptor ("B2B", "B2C companies"), else null. */
+export function audienceDescriptor(value: unknown): "b2b" | "consumer" | null {
+  const text = String(value ?? "");
+  const f = readFacets(text);
+  if (f.audience === null || f.delivery !== null || f.ai || f.other.length) return null;
+  const re = f.audience === "b2b" ? B2B_WORDS_RE : CONSUMER_WORDS_RE;
+  return re.test(text) ? f.audience : null;
+}
+
+/** How the request's own words treat this audience (see the table above). "absent": the request never names it. */
+export function audienceIntent(query: string, audience: "b2b" | "consumer"): AudienceIntent {
+  const re = audience === "b2b" ? B2B_WORDS_RE : CONSUMER_WORDS_RE;
+  const clauses = String(query ?? "").split(/[.;!?\n]+|,?\s+but\s+|,\s*(?=(?:and\s+)?(?:exclude|excluding|include|prefer|ideally|only)\b)/i);
+  let found: AudienceIntent = "absent";
+  const rank: AudienceIntent[] = ["absent", "describe", "permit", "prefer", "require", "exclude"];
+  for (const clause of clauses) {
+    const m = re.exec(clause);
+    if (!m) continue;
+    // Only the words just before the term speak about it ("Only include verified B2B",
+    // "exclude B2C"); a "no" further back ("no outside funding … B2B") does not.
+    const before = clause.slice(0, m.index).trim().split(/\s+/).slice(-4).join(" ");
+    const after = clause.slice(m.index + m[0].length).split(/\s+/).slice(0, 4).join(" ");
+    const intent: AudienceIntent = AUDIENCE_EXCLUDE_RE.test(before) ? "exclude"
+      : AUDIENCE_REQUIRE_RE.test(before) || /^\s*(?:\w+\s+)?(?:only|exclusively)\b/i.test(after) ? "require"
+      : HEDGE_RE.test(clause) ? "prefer"
+      : AUDIENCE_PERMIT_RE.test(before) ? "permit"
+      : "describe";
+    // The strongest statement about the audience anywhere in the request wins.
+    if (rank.indexOf(intent) > rank.indexOf(found)) found = intent;
+  }
+  return found;
+}
 
 const STAGE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bpre-?seed\b/i, "pre-seed"],
@@ -426,6 +518,184 @@ const kindOfSignal = (s: Partial<MissionSignal>): CanonicalSignalKind | null => 
   return kindForEvent(readSignalPhrase(label)?.event) ?? aliasKindFor(label);
 };
 
+/**
+ * A `hard_constraints` entry that only RESTATES the mission's one hiring signal.
+ *
+ * Canary session 2 (queue 763fc2b9…, "Find one US company hiring Account
+ * Executives…"): the model put `hiring: {operator: "currently_hiring", value:
+ * "Account Executives"}` in `hard_constraints` beside the hiring signal that
+ * already carries those role terms. The value is in the query, so it became a
+ * second HARD criterion with dimension `constraint` — which no evidence
+ * dimension answers. Every candidate stayed `unknown` on it, `canStillQualify`
+ * found a hard gap with no route, and the funding verifier was never run for
+ * any of the three companies.
+ *
+ * Skipped only when all of it is the same: a hiring field from a closed list,
+ * a non-excluding operator from a closed list, exactly one hiring signal, and
+ * the same set of role terms (case and a plural "s" aside). Any other field,
+ * operator or role is kept exactly as before.
+ */
+const RESTATED_HIRING_FIELDS = new Set(["hiring", "hiring_role", "hiring_roles", "hiring_signal", "open_role",
+  "open_roles", "job_title", "job_titles"]);
+const RESTATED_HIRING_OPS = new Set(["", "currently_hiring", "actively_hiring", "is_hiring", "hiring", "has_open_role",
+  "has_open_roles", "equals", "eq", "is", "in", "includes", "contains", "matches"]);
+/**
+ * TEST plan 6999eff6 ("Find 5 US B2B companies actively hiring salespeople …"):
+ * the model added `hiring_activity: "actively hiring salespeople"` beside the
+ * hiring signal that already carries "salespeople" (family gtm_sales). The field
+ * was not on the closed list and the value was not the role terms word for word,
+ * so it compiled to a hard `constraint` no evidence answers — every company would
+ * have stayed needs_verification on it.
+ *
+ * Also a restatement, read by meaning rather than spelling: a field that NAMES
+ * hiring (HIRING_FIELD_RE), a non-excluding, non-numeric operator, one hiring
+ * signal, and a value that — once the generic hiring words are removed — says
+ * nothing more ("actively hiring", true), says the same role terms, or names the
+ * same role FAMILY as the signal ("salespeople" ↔ gtm_sales). Kept as its own
+ * requirement: an exclusion, a count or threshold ("at least 5 open roles", any
+ * digit), a different family ("also hiring engineers"), or two hiring signals.
+ */
+const HIRING_FIELD_RE =
+  /^(?:is_|currently_|actively_|recent(?:ly)?_)?(?:hiring|hires?|open_?roles?|job_?(?:titles?|postings?|openings?|listings?)|vacanc(?:y|ies)|recruit(?:ing|ment)?)(?:_[a-z]+)*$/;
+const NOT_A_RESTATEMENT_OP_RE = /not|exclud|except|other_?than|unless|outside|^neq?$|none|false|without|!=|<>|gte|lte|>|<|min|max|at_?least|at_?most|count|number|threshold|greater|less|above|below|more|fewer|over|under|between|range|before|after|older|newer/;
+const HIRING_FILLER_RE =
+  /\b(?:actively|currently|recently|now|still|is|are|be|being|hiring|hires?|hired|for|open|roles?|positions?|jobs?|postings?|openings?|vacanc(?:y|ies)|new|the|a|an|in|of|any|some|true|yes|active|activity|recruiting)\b/g;
+
+/**
+ * A constraint FIELD name in one spelling: "hiring.role", "hiring role", "hiring-role",
+ * "hiringRole" and "HiringRole" are all "hiring_role" (TEST plan run 41466774814: the
+ * model wrote the field with a dot, which the closed lists below did not match).
+ */
+export function normaliseFieldName(field: string): string {
+  return String(field ?? "").trim().replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().replace(/[.\s-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+}
+
+/**
+ * The role words a HARD HIRING CONSTRAINT quotes from the user's request — for the
+ * compiler to offer to the hiring signal, exactly like `required_signal_terms`.
+ *
+ * TEST deploy 9fee47ba (2026-11-02): for "Find 5 US B2B companies actively hiring
+ * salespeople" the model left `required_signal_terms` empty and wrote the role as
+ * `hiring_status: "actively hiring salespeople"`. The signal reached the mission with
+ * no role, so Apify had nothing to search, the plan was blocked, and the constraint
+ * compiled as an `unmappable` hard requirement. The role is the USER'S, word for word.
+ *
+ * Only a field that names hiring, a non-excluding non-count operator, no digit, and a
+ * value found verbatim in the request: never the model's own words, never a count or an
+ * exclusion. Whether the words qualify the signal is still decided by the signal reader.
+ */
+export function quotedHiringRoleWords(hardConstraints: unknown, query: string): string[] {
+  const q = String(query ?? "").toLowerCase().replace(/\s+/g, " ");
+  const list = Array.isArray(hardConstraints) ? hardConstraints : [];
+  const out: string[] = [];
+  for (const c of list) {
+    if (!c || typeof c !== "object") continue;
+    const { field, operator, value } = c as { field?: unknown; operator?: unknown; value?: unknown };
+    const f = normaliseFieldName(String(field ?? ""));
+    if (!RESTATED_HIRING_FIELDS.has(f) && !HIRING_FIELD_RE.test(f)) continue;
+    if (NOT_A_RESTATEMENT_OP_RE.test(String(operator ?? "").trim().toLowerCase())) continue;
+    for (const v of Array.isArray(value) ? value : [value]) {
+      if (typeof v !== "string" || /\d/.test(v)) continue;
+      const t = v.trim().toLowerCase().replace(/\s+/g, " ");
+      if (t.length <= 2 || !q.includes(t)) continue;
+      // The ROLE words only: "actively hiring salespeople" offers "salespeople" (the same
+      // filler restatesHiringSignal strips). "actively hiring" alone names no role.
+      const role = t.replace(HIRING_FILLER_RE, " ").replace(/[^a-z\s-]/g, " ").replace(/\s+/g, " ").trim();
+      if (role) out.push(role);
+    }
+  }
+  return out;
+}
+
+export function restatesHiringSignal(field: string, raw: unknown, signals: readonly Partial<MissionSignal>[]): boolean {
+  const f = normaliseFieldName(field);
+  const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as
+    { operator?: unknown; value?: unknown };
+  const op = String(c.operator ?? "").trim().toLowerCase();
+  const hiring = signals.filter((s) => kindOfSignal(s) === "hiring");
+  if (hiring.length !== 1) return false;
+  const form = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ").replace(/s$/, "");
+  const values = Array.isArray(c.value) ? c.value : [c.value];
+  const carried = new Set((hiring[0].qualifier?.role_terms ?? []).map(form).filter(Boolean));
+  // The original, exact rule (canary session 2).
+  if (RESTATED_HIRING_FIELDS.has(f) && RESTATED_HIRING_OPS.has(op)) {
+    const stated = new Set(values.map(form).filter(Boolean));
+    if (stated.size > 0 && stated.size === carried.size && [...stated].every((t) => carried.has(t))) return true;
+  }
+  // The same statement in other words.
+  if (!RESTATED_HIRING_FIELDS.has(f) && !HIRING_FIELD_RE.test(f)) return false;
+  if (op && NOT_A_RESTATEMENT_OP_RE.test(op)) return false;
+  if (!values.length || values.some((v) => typeof v === "number" || /\d/.test(String(v ?? "")))) return false;
+  const families = new Set<string>([
+    ...(hiring[0].qualifier?.role_families ?? []),
+    ...[...(hiring[0].qualifier?.role_terms ?? []), hiring[0].phrase ?? ""].map((t) => classifyRoleFamily(t)).filter((x): x is NonNullable<typeof x> => !!x),
+  ]);
+  return values.every((v) => {
+    if (v === true) return true;
+    const rest = String(v ?? "").toLowerCase().replace(HIRING_FILLER_RE, " ").replace(/[^a-z\s-]/g, " ").replace(/\s+/g, " ").trim();
+    if (!rest) return true; // "actively hiring": the signal itself
+    if (carried.has(form(rest))) return true;
+    const fam = classifyRoleFamily(rest);
+    if (!fam || !families.has(fam)) return false;
+    // A SPECIFIC title (a listed alias of its family: "SDR", "Account Executive") that
+    // the signal does not carry is a different role, kept. Only a generic word for the
+    // same family ("salespeople", "sellers") is the same statement.
+    const norm = (x: string) => x.toLowerCase().replace(/[^a-z ]/g, "").replace(/s$/, "").trim();
+    return !roleFamilyAliases(fam).some((a) => norm(a) === norm(rest));
+  });
+}
+
+/**
+ * The same restatement for the funding WINDOW: canary session 2's proposal also
+ * carried `funding_event announced_within_last_days 180` beside the funding
+ * signal's own 180-day window. It compiled to a second, unanswerable
+ * `constraint` row. Skipped only for a funding field and a within-days operator
+ * from closed lists, one funding signal, and the SAME number of days; a
+ * different window, a minimum amount or any other operator is kept.
+ */
+const RESTATED_FUNDING_FIELDS = new Set(["funding_event", "funding", "funding_round", "recent_funding", "funding_recency",
+  "funding_recency_days", "last_funding_days", "funding_window_days"]);
+const RESTATED_FUNDING_OPS = new Set(["announced_within_last_days", "within_last_days", "within_days", "within",
+  "raised_within_days", "announced_within_days", "max_age_days", "at_most_days", "<=", "lte"]);
+export function restatesFundingWindow(field: string, raw: unknown, signals: readonly Partial<MissionSignal>[]): boolean {
+  if (!RESTATED_FUNDING_FIELDS.has(normaliseFieldName(field))) return false;
+  const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as
+    { operator?: unknown; value?: unknown };
+  if (!RESTATED_FUNDING_OPS.has(String(c.operator ?? "").trim().toLowerCase())) return false;
+  const funding = signals.filter((s) => kindOfSignal(s) === "funding");
+  if (funding.length !== 1 || typeof funding[0].timeframe_days !== "number") return false;
+  const days = typeof c.value === "number" ? c.value : /^\d{1,4}$/.test(String(c.value ?? "").trim()) ? Number(c.value) : NaN;
+  return days === funding[0].timeframe_days;
+}
+
+/**
+ * The same restatement for the SIZE bound: "under 100 employees" arrives as
+ * `employee_range.max = 100` AND as `employee_max lte 100` in hard_constraints.
+ * The second compiled to a hard `constraint` no evidence dimension answers —
+ * `unprovable_today`, so every candidate of such a mission was held blocked
+ * (PR #198's provider tests failed on the merge with this branch for the same
+ * row). Skipped only for a size field and a bound operator from closed lists
+ * whose value EQUALS the mission's own range bound; a different bound ("at
+ * most 50" beside 100) is a requirement of its own and is kept.
+ */
+const RESTATED_MAX_FIELDS = new Set(["employee_max", "max_employees", "employee_count_max", "employees_max", "headcount_max"]);
+const RESTATED_MIN_FIELDS = new Set(["employee_min", "min_employees", "employee_count_min", "employees_min", "headcount_min"]);
+const RESTATED_MAX_OPS = new Set(["lte", "<=", "max", "at_most", "less_than_or_equal", "maximum"]);
+const RESTATED_MIN_OPS = new Set(["gte", ">=", "min", "at_least", "greater_than_or_equal", "minimum"]);
+export function restatesEmployeeBound(
+  field: string, raw: unknown, range: { min?: number | null; max?: number | null } | null | undefined,
+): boolean {
+  const f = normaliseFieldName(field);
+  const isMax = RESTATED_MAX_FIELDS.has(f), isMin = RESTATED_MIN_FIELDS.has(f);
+  if (!isMax && !isMin) return false;
+  const c = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : { value: raw }) as { operator?: unknown; value?: unknown };
+  const op = String(c.operator ?? "").trim().toLowerCase();
+  if (!(isMax ? RESTATED_MAX_OPS : RESTATED_MIN_OPS).has(op)) return false;
+  const n = typeof c.value === "number" ? c.value : /^\d{1,7}$/.test(String(c.value ?? "").trim()) ? Number(c.value) : NaN;
+  const bound = isMax ? range?.max : range?.min;
+  return typeof bound === "number" && n === bound;
+}
+
 function signalWords(s: Partial<MissionSignal>): string {
   return [
     s.phrase ?? "", ...(s.qualifier?.role_terms ?? []), ...(s.role_families ?? []),
@@ -439,6 +709,20 @@ export interface SemanticsInput {
   mission: LeadMissionV1;
   /** The validated model proposal's signal-level facts, when a model ran. */
   proposal?: { signal_recency_days: number | null; confidence: number } | null;
+  /**
+   * CONTRACT v2: each signal's window as the model attributed it and the
+   * compiler validated it against the request (`missionInterpretationContract`).
+   * Present ⇒ it is the ONLY source of a stated window: a kind absent here was
+   * stated without one, and this pass's own sentence reader is recorded where
+   * it disagrees, never applied. Absent ⇒ v1, unchanged.
+   */
+  signalWindows?: Readonly<Record<string, number>> | null;
+  /**
+   * CONTRACT v2: kinds whose signals already carry their OWN window, set per
+   * signal by the compiler ("AEs in the last 2 weeks, SDRs in the last 90
+   * days"). This pass leaves those windows alone and only checks the reader.
+   */
+  contractPerSignalKinds?: readonly string[] | null;
 }
 
 /**
@@ -487,10 +771,54 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
 
   // 4. Every signal with a temporal meaning gets a visible window.
   const windowSources: MissionSemanticsRecord["window_sources"] = {};
+  const statedWindows: Record<string, number> = {};
   signals = signals.map((s) => {
     const k = kindOfSignal(s);
     if (!k || k === "technology") return s;
-    const statedForK = lang.window_days_by_kind[k];
+    const readerForK = lang.window_days_by_kind[k];
+    let statedForK: number | null = readerForK ?? null;
+    if (i.signalWindows) {
+      // ── CONTRACT v2: THE MODEL ATTRIBUTES, THE READER CHECKS ────────────
+      //
+      // The reader is an INDEPENDENT check, not a record: where the model
+      // omitted a window the reader reads, the reader's window is kept (so a
+      // stated requirement is never downgraded by an omission); where both
+      // read a window and disagree, the conflict is named and the compiler
+      // refuses the mission. Both are capped at the compiler's 730-day limit.
+      const cap = (d: number | null | undefined) => d == null ? null : Math.min(d, 730);
+      const reader = cap(readerForK);
+      const once = (c: string) => { if (!changes.includes(c)) changes.push(c); };
+      if (i.contractPerSignalKinds?.includes(k)) {
+        windowSources[k] = { source: "user_explicit" };
+        const own = signals.filter((x) => kindOfSignal(x) === k).map((x) => x.timeframe_days);
+        if (reader != null && !own.some((d) => d != null && sameWindow(d, reader))) {
+          once(`window_conflict:${k}:contract=per_signal:reader=${readerForK}`);
+        }
+        return s;
+      }
+      const contract = cap(i.signalWindows[k]);
+      // The reader puts this window on ANOTHER signal and none on this one:
+      // the model copied one signal's timeframe onto a second (review R1's
+      // shape, "hiring AEs whose funding closed within 6 months" read as a
+      // hiring window too). A disagreement like any other.
+      const elsewhere = contract != null && reader == null
+        ? Object.entries(lang.window_days_by_kind).find(([other, d]) => other !== k && d != null && sameWindow(cap(d)!, contract))?.[0]
+        : undefined;
+      if (contract != null && reader != null && !sameWindow(contract, reader)) {
+        once(`window_conflict:${k}:contract=${contract}:reader=${readerForK}`);
+        statedForK = contract;
+      } else if (elsewhere) {
+        once(`window_conflict:${k}:contract=${contract}:reader=none:reader_assigns_it_to=${elsewhere}`);
+        statedForK = contract;
+      } else if (contract == null && reader != null) {
+        once(`window_from_reader_contract_omitted:${k}:${reader}d`);
+        statedForK = reader;
+      } else {
+        statedForK = contract;
+      }
+      if (readerForK != null && readerForK > 730 && statedForK === 730) once(`window_capped:${k}:${readerForK}->730`);
+      if (statedForK != null) statedWindows[k] = statedForK;
+    }
     if (statedForK != null) {
       windowSources[k] = { source: "user_explicit" };
       if (s.timeframe_days !== statedForK) {
@@ -500,7 +828,7 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
     }
     // A window the user stated for ANOTHER signal is not this one's: the
     // default applies, and a carried copy of that window is replaced.
-    if (lang.explicit_window_days != null && s.timeframe_days != null &&
+    if (!i.signalWindows && lang.explicit_window_days != null && s.timeframe_days != null &&
         sameWindow(s.timeframe_days, lang.explicit_window_days) && DEFAULT_SIGNAL_WINDOWS[k]) {
       windowSources[k] = { source: "system_default", rule: DEFAULT_SIGNAL_WINDOWS[k]!.rule };
       changes.push(`window_belongs_to_another_signal:${k}:${DEFAULT_SIGNAL_WINDOWS[k]!.days}d`);
@@ -509,7 +837,7 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
     // The sentence dates the COMPANY ("founded in the last 3 years") and this
     // signal's own clause names no window: a carried one is the model filing
     // the company's age under the signal, not a window the user gave it.
-    if (lang.company_age_window_days != null && s.timeframe_days != null && DEFAULT_SIGNAL_WINDOWS[k] &&
+    if (!i.signalWindows && lang.company_age_window_days != null && s.timeframe_days != null && DEFAULT_SIGNAL_WINDOWS[k] &&
         !FUNDING_WINDOW_WORDS_RE.test(signalClause(k, query) ?? "")) {
       windowSources[k] = { source: "system_default", rule: DEFAULT_SIGNAL_WINDOWS[k]!.rule };
       changes.push(`window_belongs_to_company_age:${k}:${DEFAULT_SIGNAL_WINDOWS[k]!.days}d`);
@@ -527,6 +855,9 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
     if (calendar) {
       windowSources[k] = { source: "user_explicit", rule: calendar.rule };
       changes.push(`window_from_calendar:${k}:${calendar.days}d`);
+      // Under contract v2 it is a stated window like any other: the timeframe
+      // audit must see it accounted for.
+      if (i.signalWindows) statedWindows[k] = calendar.days;
       return { ...s, timeframe_days: calendar.days };
     }
     const d = DEFAULT_SIGNAL_WINDOWS[k];
@@ -624,6 +955,7 @@ export function compileMissionSemantics(i: SemanticsInput): { mission: LeadMissi
     stage: lang.stage,
     window_sources: windowSources,
     corrections: changes,
+    ...(i.signalWindows ? { stated_windows: statedWindows } : {}),
   };
   const mission: LeadMissionV1 = {
     ...i.mission,
@@ -728,6 +1060,15 @@ function signalDetail(k: CanonicalSignalKind, s: Partial<MissionSignal>, subkind
 const SIGNAL_CUE: Partial<Record<CanonicalSignalKind, RegExp>> = {
   hiring: /\b(?:hiring|recruit(?:ing|s)?|open\s+(?:\w+\s+){0,2}(?:roles?|positions?|jobs?|openings?)|job openings?|to hire)\b/,
   funding: /\b(?:fund(?:ed|ing|raise|raising)?|rais(?:ed|e|es|ing)|round|series [a-e]\b|seed)\b/,
+  // Q3 (Codex routing audit C01, L08, C04): without a cue, a social clause's own
+  // "must" and "in the last 30 days" were never read as its own — "whose founder
+  // must have discussed …" compiled as a preference on another clause's window.
+  social_activity:
+    /\b(?:comment(?:ed|ing|s)?|discuss(?:ed|es|ing)?|post(?:ed|ing|s)?|talk(?:ed|ing|s)?\s+about|wr(?:ote|iting|ites)\s+about|shar(?:ed|ing|es)|mention(?:ed|ing|s)?|engag(?:ed|ing|es)\s+with)\b/,
+  // Q3 (H04): "must be rapidly expanding its sales team" is a requirement on
+  // team growth; with no cue its "must" was never read as its own.
+  headcount_growth:
+    /\b(?:growing|expanding|scaling|increasing)\b(?:\s+[\w-]+){0,3}?\s+(?:headcount|teams?|workforce)\b|\bheadcount\b|\bhiring spree\b/,
 };
 const REQUIREMENT_MODAL =
   /\b(must(?:\s+(?:currently|already|actively|still))?(?:\s+(?:be|have))?|required to|requires?|needs? to|has to|have to|only|strictly)\b/;
@@ -858,6 +1199,28 @@ export function requirementElevation(kind: CanonicalSignalKind, phrase: string, 
   return idx > 0 ? q.slice(Math.max(0, idx - 30), idx).match(/\b(must(?: currently)?(?: be)?|only|required to|strictly)\b[^.]*$/) : null;
 }
 
+/**
+ * Q3 — the geography scope the customer's own words state. PRESENCE when they
+ * speak of an office, presence, operations, a team or a location IN the place;
+ * HEADQUARTERS otherwise. Read only from the request, never from a rewrite.
+ * ("50 employees in the US" states a size, not a presence, so headcount words
+ * are not presence words.)
+ */
+/** The company-kind noun itself — "startup(s)", "start-up(s)" — as the customer wrote it. */
+const STARTUP_NOUN = /\bstart-?ups?\b/i;
+/**
+ * Q3 — the company kind made MANDATORY by the customer's own words: "only …
+ * startups", "must be a startup", "strictly early-stage startups". The modal
+ * must govern the noun inside the same clause.
+ */
+const STARTUP_REQUIRED =
+  /\b(only|must(?:\s+currently)?(?:\s+be)?|strictly|exclusively|required\s+to\s+be|ha(?:s|ve)\s+to\s+be|needs?\s+to\s+be)\b[^.,;]{0,40}?\bstart-?ups?\b/i;
+
+export function scopeFromWords(query: string): "headquarters" | "presence" {
+  return /\b(?:offices?|presence|operations|operating|operates|branch(?:es)?|locations?|teams?)\s+(?:in|across|throughout)\b/i.test(query)
+    ? "presence" : "headquarters";
+}
+
 export function deriveMissionCriteria(
   mission: LeadMissionV1,
   /**
@@ -939,14 +1302,65 @@ export function deriveMissionCriteria(
       rationale, ...(evaluable ? {} : { status: "unprovable_today" as const }),
     });
   };
+  /**
+   * Compile an audience descriptor by the request's own words (see `audienceIntent`).
+   * Returns false when the value is not an audience descriptor or the request never
+   * names that audience (the caller's existing rule then applies: not in the
+   * request's words → a target).
+   */
+  const audienceCriterion = (v: string, how: string): boolean => {
+    const audience = audienceDescriptor(v);
+    if (!audience) return false;
+    const intent = audienceIntent(query, audience);
+    if (intent === "absent") return false;
+    const said = inQuery(v) ? v : "";
+    if (intent === "exclude") {
+      push({
+        kind: "hard", dimension: "exclusion", value: { field: "excluded_company_types", value: [v] },
+        label: `Excluding: ${v}`, source: "user_explicit", elevated_by: "excluding", user_phrase: said,
+        rationale: "the request excludes it; a company is rejected only on evidence that it is one",
+      });
+    } else if (intent === "require") {
+      push({
+        kind: "hard", dimension: "business_model", value: v, label: `Business model: ${v}`, source: "user_explicit",
+        user_phrase: said,
+        rationale: "the request requires it; no discovery provider verifies a business model, so a company " +
+          "without evidence stays needs_verification — missing evidence is never taken as proof",
+      });
+    } else if (intent === "prefer" || intent === "describe") {
+      push({
+        kind: "target", dimension: "business_model", value: v, label: `Business model preference: ${v}`,
+        source: "user_explicit", user_phrase: said,
+        rationale: intent === "prefer"
+          ? "stated as a preference; can rank, never reject"
+          : `${how} describing the companies, not a stated requirement: it ranks and never rejects ` +
+            "(no provider can verify a business model; say \"only\" to require it)",
+      });
+    }
+    // "permit" ("include strong B2C opportunities"): nothing restricts it, so no criterion.
+    return true;
+  };
   const profileList = (
     dimension: CriterionDimension, field: string, values: readonly string[], label: string,
   ) => {
     // "AI or developer-tools", "New York or California": alternatives of ONE
     // requirement (RC02). Only values the request itself joins by "or".
     const ors = orAlternatives(values, query);
+    const hedged = dimension === "geography" ? hedgedLocations(query, values) : [];
     for (const v of values) {
+      // Q4 — A HEDGED LOCATION RANKS AND NEVER REJECTS. "…, ideally in the US"
+      // is the customer's own word for a preference, whatever a carrier says.
+      if (hedged.length && sameLocation(v, hedged)) {
+        push({
+          kind: "target", dimension, value: v, label: `${label} preference: ${v}`, source: "user_explicit",
+          user_phrase: inQuery(v) ? v : "", rationale: "stated as a preference (\"ideally\"); can rank, never reject",
+        });
+        continue;
+      }
       const source = sourceFromProvenance(prov[field], inQuery(v));
+      // An audience descriptor ("B2B") the request names: hard only in the user's words.
+      if ((dimension === "industry" || dimension === "business_model") && source !== "company_brain_policy" &&
+        source !== "company_brain_preference" && audienceCriterion(v, "proposed as a company type")) continue;
       const split = source === "user_explicit" && !inQuery(v) ? QUALIFIED.exec(v.trim()) : null;
       const head = split?.[1]?.trim() ?? "";
       const tail = (split?.[2] ?? split?.[3] ?? split?.[4] ?? "").trim();
@@ -980,9 +1394,103 @@ export function deriveMissionCriteria(
       source: "user_explicit", user_phrase: "", rationale: "the request names these companies",
     });
   }
-  profileList("industry", "company_profile.verticals", cp.verticals ?? [], "Industry");
-  profileList("business_model", "company_profile.business_models", cp.business_models ?? [], "Business model");
-  profileList("geography", "company_profile.locations", cp.locations ?? [], "Geography");
+  // S4 (D2): a v3 mission's stated industries carry the model's validated necessity;
+  // the request's own words need not repeat the value letter for letter ("insurance
+  // agency" for "insurance agencies", a typo, a synonym).
+  const U4 = understandingOf(mission);
+  const sing = (x: string) => x.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().replace(/ies$/, "y").replace(/s$/, "");
+  const industryOf = (v: string) => U4?.industries?.find((x) => sing(x.industry) === sing(v)) ?? null;
+  for (const [field, list, dimension, label] of [
+    ["company_profile.verticals", cp.verticals ?? [], "industry", "Industry"],
+    ["company_profile.business_models", cp.business_models ?? [], "business_model", "Business model"],
+  ] as const) {
+    const rest: string[] = [];
+    for (const v of list) {
+      const x = industryOf(v);
+      if (!x || x.necessity === "excluded" || audienceDescriptor(v) !== null) { rest.push(v); continue; }
+      push({
+        kind: x.necessity === "required" ? "hard" : "target", dimension, value: v,
+        label: x.necessity === "required" ? `${label}: ${v}` : `${label} preference: ${v}`, source: "user_explicit", user_phrase: x.span,
+        rationale: x.necessity === "required" ? `stated in the request ("${x.span}")` : `stated as a preference ("${x.span}"); can rank, never reject`,
+      });
+    }
+    // A v3 MISSION'S INDUSTRIES ARE ITS VALIDATED UNDERSTANDING'S (live study run #24): a
+    // legacy company type the understanding does not name ("businesses", "US companies")
+    // is the model's word, not the user's requirement — it ranks, it never rejects. A
+    // Company Brain value keeps its own rules.
+    // Named = its words lie within an understood industry ("saas" within "B2B SaaS", the
+    // compiler's own split of it), not only an exact match.
+    const words = (x: string) => sing(x).split(" ").filter(Boolean);
+    const withinUnderstood = (v: string) => (U4?.industries ?? []).some((x) => x.necessity !== "excluded" &&
+      words(v).length > 0 && words(v).every((w) => words(x.industry).includes(w) || words(x.span).includes(w)));
+    const unnamed = U4 && field === "company_profile.verticals"
+      ? rest.filter((v) => audienceDescriptor(v) === null && !withinUnderstood(v) &&
+        !String(sourceFromProvenance(prov[field], inQuery(v))).startsWith("company_brain"))
+      : [];
+    for (const v of unnamed) {
+      push({
+        kind: "target", dimension, value: v, label: `${label} preference: ${v}`, source: "user_inferred", user_phrase: "",
+        rationale: "a company type the model proposed outside its validated understanding; can rank, never reject",
+      });
+    }
+    const kept = rest.filter((v) => !unnamed.includes(v));
+    if (field === "company_profile.verticals") profileList("industry", field, kept, label);
+    else profileList("business_model", field, kept, label);
+  }
+  // ── S4: A v3 MISSION'S PLACES ARE THE MODEL'S VALIDATED READING ─────────
+  //
+  // Necessity and scope come from the understanding (each place quoted from the
+  // request and checked against the registry), not from a fixed list of country words
+  // (NL3: "the states" was demoted to a preference) or office words (NL4). A location
+  // the understanding does not name keeps the v1 reading.
+  const U = understandingOf(mission);
+  const placeOf = (v: string) => U?.places.find((p) =>
+    (p.place ? placeName(p.place) : String(p.other_place ?? "")).toLowerCase() === String(v).toLowerCase()) ?? null;
+  if (U && U.places.length) {
+    const rest: string[] = [];
+    for (const v of cp.locations ?? []) {
+      const p = placeOf(v);
+      if (!p || p.necessity === "excluded") { if (!p) rest.push(v); continue; }
+      push({
+        kind: p.necessity === "required" ? "hard" : "target", dimension: "geography", value: v,
+        label: p.necessity === "required" ? `${p.scope === "headquarters" ? "Headquarters" : "Geography"}: ${v}` : `Geography preference: ${v}`,
+        source: "user_explicit", user_phrase: p.span, geography_scope: p.scope,
+        rationale: p.necessity === "required" ? `stated in the request ("${p.span}")` : `stated as a preference ("${p.span}"); can rank, never reject`,
+      });
+    }
+    profileList("geography", "company_profile.locations", rest, "Geography");
+  } else {
+    profileList("geography", "company_profile.locations", cp.locations ?? [], "Geography");
+  }
+  // ── Q3 — A HARD GEOGRAPHY IS ALWAYS COMPILED WITH A SCOPE (A7 S02, S03b) ──
+  //
+  // The scope reached a criterion only from the model's proposal; when that was
+  // null the RUNTIME evaluator's answer chose it, and a model reading "US
+  // company" as office presence qualified a Canadian-HQ company with a US office.
+  // The scope is fixed here, from the customer's own words, where the intent is:
+  // the proposal's scope when it gives one; otherwise PRESENCE when the request
+  // itself speaks of an office / presence / operations in the place; otherwise
+  // HEADQUARTERS — "a US company" is a company headquartered in the US. A
+  // compiled scope is never replaced by an evaluator's (#113 refuses a verdict
+  // whose scope disagrees).
+  //
+  // PRESENCE ONLY IN THE USER'S WORDS. The model's "presence" is kept only when the
+  // request itself speaks of an office / presence / operations in the place; a bare
+  // "US companies" stays HEADQUARTERS whatever the model proposed (TEST smoke on
+  // ea30436: "Find 5 US B2B companies …" compiled as US presence). The model's
+  // "headquarters" is always kept: it is the stricter reading.
+  const wordsScope = scopeFromWords(query);
+  const geographyScope = cp.geography_scope === "presence" && wordsScope !== "presence"
+    ? "headquarters" : cp.geography_scope ?? wordsScope;
+  for (const c of out) {
+    if (c.dimension !== "geography") continue;
+    if (U && placeOf(String(c.value))) continue; // S4: its scope is the understanding's own
+    const scope = cp.geography_scope || c.kind === "hard" ? geographyScope : undefined;
+    if (scope) {
+      c.geography_scope = scope;
+      if (scope === "headquarters") c.label = `Headquarters: ${String(c.value)}`;
+    }
+  }
 
   // ── Company Brain refinements of what the user closed: targets, never hard ──
   const REFINED: Record<string, [CriterionDimension, string]> = {
@@ -1015,6 +1523,22 @@ export function deriveMissionCriteria(
     // Brain rung is pushed exactly as before.
     if (stageIntent?.kind === "hard" && slug(stageIntent.value) === slug(st)) continue;
     const source = sourceFromProvenance(prov["company_profile.stages"], true);
+    // Q3 — NO COMPANY KIND THE CUSTOMER DID NOT STATE. The deterministic parser
+    // files stage and cohort words ("seed-stage", "Series A", "early stage",
+    // "YC") under the company kind "startup" for ROUTING, with
+    // explicit-request provenance — so "must be seed-stage" compiled a
+    // MANDATORY, user_explicit "Company kind: startup" nothing can prove. The
+    // stage word is already its own criterion (`stageIntent`); the company kind
+    // is a criterion only when the request itself says "startup".
+    //
+    // A MONITORING mission has no request text: its profile IS the workspace's
+    // stored ICP (field_provenance.company_profile = "monitoring_subject") and its
+    // query is a placeholder. The test above is about the user's words, so it
+    // cannot apply — skipping there silently dropped the ICP's "startup" from
+    // every monitor (production replay, Stage 7). The ICP states it; it is kept,
+    // disclosed and ranking, as the target the code below makes it.
+    const fromMonitor = (prov as Record<string, unknown>)["company_profile"] === "monitoring_subject";
+    if (st === "startup" && source === "user_explicit" && !fromMonitor && !STARTUP_NOUN.test(query)) continue;
     if (st === "startup") {
       // The noun ("startups") is the company kind; a stage word, when the
       // sentence has one, is pushed separately below.
@@ -1027,12 +1551,24 @@ export function deriveMissionCriteria(
       // canary d1eff17a surfaced 0 of 36 for a fact nothing could establish.
       // Disclosed on the card under "will not be established", exactly as the
       // stage word "seed" already is, instead of quietly rejecting everyone.
+      //
+      // MANDATORY ONLY WHEN SAID TO BE (Q3, audit G08). Every mandatory
+      // requirement is now enforced, so an unprovable one keeps a company
+      // pending unless its own words establish it. "Find B2B SaaS startups"
+      // describes the population, and is disclosed and ranks as a target;
+      // "only startups" / "must be a startup" makes it a requirement, enforced.
+      const required = source === "user_explicit" ? query.match(STARTUP_REQUIRED) : null;
       push({
-        kind: source === "company_brain_preference" ? "target" : "hard",
+        kind: source === "company_brain_policy" || required ? "hard" : "target",
         dimension: "company_stage", value: "startup", label: "Company kind: startup",
         source, user_phrase: source === "user_explicit" ? "startup" : "",
+        ...(required ? { elevated_by: (/^(?:only|strictly|exclusively)$/i.test(required[1])
+          ? required[1].toLowerCase() : "must") as MissionCriterion["elevated_by"] } : {}),
         rationale: source === "company_brain_preference"
-          ? "your Company Brain's ICP" : "the company kind in the request",
+          ? "your Company Brain's ICP"
+          : required ? `"${required[0]}" makes it a requirement`
+          : fromMonitor ? "the monitored ICP names the company kind; disclosed, it ranks and never rejects"
+          : "the company kind in the request, stated as a description, so a target",
         status: "unprovable_today",
       });
       continue;
@@ -1083,7 +1619,14 @@ export function deriveMissionCriteria(
     // it is never widened to them silently. A Brain policy range keeps its old
     // behaviour (out of RC03's scope), and a target only ranks.
     const exact = er.min != null && er.max != null && er.min === er.max;
-    const kind = source === "user_explicit" || source === "company_brain_policy" ? "hard" : "target";
+    // A HEDGED SIZE RANKS AND NEVER REJECTS (TEST planning, 2026-11-01). "Prefer
+    // 20–500 employees, but include strong opportunities outside that range" was
+    // compiled to a HARD 20–500 criterion, so a company whose declared band lay
+    // outside it was disproven — the opposite of what was asked. The clause that
+    // states the range is read with the same HEDGE_RE that softens a stated stage
+    // and location; an unhedged stated range stays a requirement.
+    const sizeHedged = source === "user_explicit" && sizeClauseHedged(query, er);
+    const kind = !sizeHedged && (source === "user_explicit" || source === "company_brain_policy") ? "hard" : "target";
     const value = { min: er.min ?? null, max: er.max ?? null };
     const range = sizeRangeProvable(value);
     const unprovable = kind === "hard" && source === "user_explicit" && !range.provable;
@@ -1101,7 +1644,8 @@ export function deriveMissionCriteria(
         : source === "company_brain_policy"
         ? "your Company Brain's size rule, enforced on every mission"
         : source === "company_brain_preference"
-        ? "your Company Brain's size band; you did not state one" : "stated in the request",
+        ? "your Company Brain's size band; you did not state one"
+        : sizeHedged ? "stated as a preference: it ranks and never rejects" : "stated in the request",
       ...(unprovable ? { status: "unprovable_today" as const } : {}),
     });
   }
@@ -1111,11 +1655,32 @@ export function deriveMissionCriteria(
     "company_type", "company_types", "industry", "industries", "vertical", "verticals"]);
   for (const [field, raw] of Object.entries(mission.hard_constraints ?? {})) {
     if (handled.has(field)) continue;
+    if (restatesHiringSignal(field, raw, mission.required_signals ?? [])) continue;
+    if (restatesFundingWindow(field, raw, mission.required_signals ?? [])) continue;
+    if (restatesEmployeeBound(field, raw, cp.employee_range)) continue;
     const c = (raw ?? {}) as { operator?: string; value?: unknown; reason?: string };
     const value = c.value ?? raw;
     const values = Array.isArray(value) ? value.map(String) : [String(value ?? "")];
     const stated = values.some(inQuery);
     const excluding = /not|exclud/i.test(String(c.operator ?? ""));
+    // AN AUDIENCE THE MODEL MARKED HARD IS STILL DECIDED BY THE USER'S WORDS. "B2B" in
+    // hard_constraints is the model's reading, not the request's; an exclusion of an
+    // audience the request already excludes (compiled above) is not added twice.
+    const audiences = values.map(audienceDescriptor);
+    if (values.length && audiences.every((a) => a !== null)) {
+      if (excluding && audiences.every((a) => out.some((x) => x.dimension === "exclusion" &&
+        ((x.value as { value?: unknown[] })?.value ?? []).some((e) => audienceDescriptor(e) === a)))) continue;
+      if (!excluding && values.every((v) => audienceCriterion(v, "proposed as a hard constraint") ||
+        out.some((x) => x.dimension === "business_model" && audienceDescriptor(x.value) === audienceDescriptor(v)))) continue;
+    }
+    // A HARD `constraint` IS A REQUIREMENT NO EVIDENCE DIMENSION ANSWERS. It used
+    // to compile as status "ok", so the approval card called it provable, the
+    // interpretation gate passed it, and every candidate stayed unknown on it
+    // with no route — the shape that held canary session 2 at zero. Marked
+    // `unprovable_today` like every other requirement no source establishes:
+    // disclosed at approval (`assessRequestFeasibility`), answerable only by the
+    // evaluator citing the company's own words, and never silently "ok".
+    const unprovable = stated && !excluding;
     push({
       kind: stated || excluding ? "hard" : "target",
       dimension: excluding ? "exclusion" : "constraint", value: { field, value },
@@ -1125,6 +1690,7 @@ export function deriveMissionCriteria(
       user_phrase: stated ? values.find(inQuery) ?? "" : "",
       rationale: stated ? "stated in the request"
         : "proposed by the model without the request's words; never a hard requirement",
+      ...(unprovable ? { status: "unprovable_today" as const } : {}),
     });
   }
   for (const [field, raw] of Object.entries(mission.soft_preferences ?? {})) {
@@ -1165,8 +1731,13 @@ export function deriveMissionCriteria(
     // sales role" names hiring although the reader did not label it, so it was
     // tagged `user_inferred` — the request's own cue says otherwise.
     const cueStated = SIGNAL_CUE[k]?.test(q) ?? false;
-    const source: CriterionSource = userKinds.has(k) || cueStated ? "user_explicit" : "user_inferred";
-    const asserted = !elevated && statedHiringRequirement(k, source, query);
+    // S4 (NL2): a v3 mission's necessity is the model's validated reading of the user's
+    // words, however indirect ("looking to bring on…", "need sales ppl"), not a cue word.
+    const uSig = understandingSignal(U, k);
+    const source: CriterionSource = uSig || userKinds.has(k) || cueStated ? "user_explicit" : "user_inferred";
+    const asserted = uSig
+      ? uSig.necessity === "required" && k !== "funding" && !elevated
+      : !elevated && statedHiringRequirement(k, source, query);
     const def = DEFAULT_SIGNAL_WINDOWS[k];
     const ws = sem?.window_sources?.[k];
     const carried = s.timeframe_days != null;
@@ -1216,6 +1787,9 @@ export function deriveMissionCriteria(
     const fundingWindow = fundingCandidate &&
       time_window?.source === "user_explicit" &&
       sameWindow(time_window.days,
+        // Contract v2: the validated window IS the user's, even in a form the
+        // reader cannot read ("within 6 months").
+        sem?.stated_windows?.funding ??
         (lang ?? readMissionLanguage(query)).window_days_by_kind.funding ?? explicitWindowDays(query));
     // ── "RECENT FUNDING" IS A REQUIREMENT TOO, ON THE CANONICAL DEFAULT ─────
     //
@@ -1270,7 +1844,8 @@ export function deriveMissionCriteria(
       ? "venture" : null;
     if (presenceClaim) time_window = undefined; // presence has no window; a bound is `before`
     push({
-      kind: elevated || fundingWindow || fundingRecency || calendar || fundingPresence || asserted ? "hard" : "target",
+      kind: uSig?.necessity === "preferred" ? "target"
+        : elevated || fundingWindow || fundingRecency || calendar || fundingPresence || asserted ? "hard" : "target",
       dimension: k, value: {
         event: eventOf(s), subject: s.subject ?? "company", qualifier: s.qualifier ?? {},
         ...(presenceClaim ? { presence: presenceKind, ...(presenceBefore ? { before: presenceBefore } : {}) } : {}),
@@ -1338,7 +1913,78 @@ export function deriveMissionCriteria(
       rationale: "evidence the system has no vocabulary or source for",
     });
   }
+  // ── CROSS-SIGNAL OR (Q3, Codex routing audit C02) ──
+  //
+  // "hiring Account Executives OR having raised funding" is ONE requirement
+  // either signal satisfies. Read as two, it rejected every company that had
+  // only one of them. The mandatory signal criteria the request joins by "or"
+  // carry the same `any_of` (`signal:<kind>`), and `anyOfGroupKey` makes them
+  // one group wherever a decision is made. AND keeps them two requirements; a
+  // member the request hedged is not part of the requirement at all.
+  // S4: a v3 mission's AND/OR is the model's validated `signal_logic` (D3: "hiring OR
+  // expansion" lost its OR because "expansion" has no cue word here).
+  const signalGroups = U
+    ? (U.signal_logic === "any"
+      ? [[...new Set(out.filter((c) => c.kind === "hard" && U.signals.some((x) => x.necessity === "required" && x.kind === c.dimension))
+        .map((c) => c.dimension as CanonicalSignalKind))]]
+      : [])
+    : crossSignalAlternatives(query,
+      out.filter((c) => c.kind === "hard" && SIGNAL_CUE[c.dimension as CanonicalSignalKind]).map((c) => c.dimension as CanonicalSignalKind));
+  for (const group of signalGroups) {
+    const members = out.filter((c) => c.kind === "hard" && group.includes(c.dimension as CanonicalSignalKind));
+    if (new Set(members.map((c) => c.dimension)).size < 2) continue;
+    const anyOf = group.map((k) => `signal:${k}`);
+    for (const c of members) c.any_of = anyOf;
+  }
   return out;
+}
+
+/**
+ * The signal kinds a request joins by "or", in groups ("hiring … OR raised
+ * funding" → [["hiring", "funding"]]). Two kinds are alternatives when the text
+ * between the cue of one and the cue of the next says "or" and not "and": a
+ * conjunction of the request's own, read only between signals it actually
+ * states. One kind's alternatives ("Series A or Series B") are its own any_of.
+ */
+export function crossSignalAlternatives(query: string, kinds: readonly CanonicalSignalKind[]): CanonicalSignalKind[][] {
+  const t = query.toLowerCase();
+  const hits = [...new Set(kinds)].flatMap((k) => {
+    const cue = SIGNAL_CUE[k];
+    return cue ? [...t.matchAll(new RegExp(cue.source, "g"))].map((m) => ({ k, start: m.index!, end: m.index! + m[0].length })) : [];
+  }).sort((a, b) => a.start - b.start);
+  const parent = new Map<CanonicalSignalKind, CanonicalSignalKind>();
+  const find = (k: CanonicalSignalKind): CanonicalSignalKind => (parent.get(k) ?? k) === k ? k : find(parent.get(k)!);
+  const joined = new Set<CanonicalSignalKind>();
+  for (let i = 0; i + 1 < hits.length; i++) {
+    const a = hits[i], b = hits[i + 1];
+    if (a.k === b.k || b.start < a.end) continue;
+    const between = t.slice(a.end, b.start);
+    if (!/\bor\b/.test(between) || /\band\b|\bas well as\b|\bplus\b/.test(between)) continue;
+    parent.set(find(b.k), find(a.k));
+    joined.add(a.k).add(b.k);
+  }
+  const groups = new Map<CanonicalSignalKind, CanonicalSignalKind[]>();
+  for (const k of joined) groups.set(find(k), [...(groups.get(find(k)) ?? []), k]);
+  return [...groups.values()].map((g) => g.sort());
+}
+
+/**
+ * The ONE key that makes hard criteria a single any-of requirement, used by
+ * every decision (eligibility and the evaluator's verdict): alternatives of one
+ * dimension ("AI or developer-tools") group within it; cross-signal
+ * alternatives (`signal:<kind>`) group across dimensions. Null: an ordinary AND.
+ */
+export function anyOfGroupKey(c: Pick<MissionCriterion, "kind" | "dimension" | "any_of">): string | null {
+  if (c.kind !== "hard" || (c.any_of?.length ?? 0) < 2) return null;
+  const sorted = [...c.any_of!].sort().join("|");
+  return c.any_of!.every((a) => a.startsWith("signal:")) ? `signals|${sorted}` : `${c.dimension}|${sorted}`;
+}
+
+/** The understanding's statement about one signal kind (S4), when the mission has one. */
+function understandingSignal(u: ValidatedUnderstanding | null, kind: string) {
+  if (!u) return null;
+  const k = kind === "headcount_growth" ? ["headcount_growth"] : [kind];
+  return u.signals.find((s) => k.includes(s.kind)) ?? null;
 }
 
 /** Attach freshly derived criteria (after a Company Brain merge, say). */

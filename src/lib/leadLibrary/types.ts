@@ -83,6 +83,8 @@ export interface SelectedRecipient {
   email: string | null;
   phone: string | null;
   verified: boolean;
+  /** Discovery pipeline verdict on the person's role / current employment, when it wrote the contact. */
+  roleVerification?: string | null;
 }
 
 export interface OpenerPreview {
@@ -121,6 +123,8 @@ export interface LeadRow {
   fitScore: number | null;
   fitTier: FitTier;
   whySelected: string | null;
+  /** Discovery-pipeline leads: hard requirements not yet established by evidence (needs verification). */
+  unverifiedRequirements?: string[];
 
   sources: LeadSource[];             // preserved history, never overwritten
   strongestSource: LeadSource | null;
@@ -157,6 +161,9 @@ export interface LeadRow {
    * re-deriving. Optional so any legacy construction path still type-checks.
    */
   canonical?: import("./canonicalLeadView").CanonicalLeadView;
+
+  /** Which data providers found this lead and how it was verified (provider discovery). */
+  providerDiscovery?: import("../providerDiscovery").LeadAttribution | null;
 }
 
 // ---------- labels ----------

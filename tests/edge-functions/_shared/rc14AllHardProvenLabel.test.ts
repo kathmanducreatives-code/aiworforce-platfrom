@@ -107,12 +107,12 @@ Deno.test("RC14 guard: an anchor the mission asked for as a target still has to 
 });
 
 Deno.test("RC14 guard: a hard requirement no source can prove blocks the lift", async () => {
-  // Disclosed, not enforced (P5.2): it cannot strand the candidate, but it was
-  // not proven either, so the company has not proven EVERY hard requirement.
+  // Enforced (Q3, audit G08): it was not proven, so the company has not proven
+  // EVERY hard requirement — it stays pending, with no label at all.
   const unprovable: MissionCriterion = { ...CRITERIA[0], id: "company_stage:startup", dimension: "company_stage",
     value: "startup", label: "Company kind: startup", status: "unprovable_today" };
   const c = ceilingOf([...CRITERIA, unprovable], await acmeGraph(), COMPANY_PROFILE);
-  assertEquals([c.eligibility, c.ceiling], ["eligible", "low_priority"]);
+  assertEquals([c.eligibility, c.ceiling], ["pending", null]);
 });
 
 Deno.test("RC14 guard: targets still decide between strong and exact, and two gaps stay worth_considering", async () => {

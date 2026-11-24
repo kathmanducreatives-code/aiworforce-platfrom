@@ -30,7 +30,7 @@ interface Agent {
 // scribe) still power execution, but `@/config/agentRegistry` states they must
 // never be rendered publicly — this simulation used to show all five by name.
 const AGENTS: Agent[] = [
-  { id: "mira", name: "Lisa", title: "Signal Intelligence", department: "intelligence", icon: Target, job: "Watches hiring, funding, growth and competitor moves, and tells you what changed.", tools: ["firecrawl","perplexity"], talksTo: ["Atlas","Founder"] },
+  { id: "lisa", name: "Lisa", title: "Signal Intelligence", department: "intelligence", icon: Target, job: "Watches hiring, funding, growth and competitor moves, and tells you what changed.", tools: ["firecrawl","perplexity"], talksTo: ["Atlas","Founder"] },
   { id: "atlas", name: "Atlas", title: "Lead Intelligence", department: "talent", icon: Search, job: "Searches the market, matches companies to your ICP, and ranks who is worth your time.", tools: ["apify","firecrawl"], talksTo: ["Lyra","Orion"] },
   { id: "lyra", name: "Lyra", title: "Content Intelligence", department: "content", icon: PenLine, job: "Turns company knowledge and market intelligence into content worth publishing.", tools: ["claude"], talksTo: ["Founder"] },
   { id: "orion", name: "Orion", title: "Executive Intelligence", department: "growth", icon: MessageSquare, job: "Combines what the team found into one short briefing, and says what deserves your attention.", tools: ["claude"], talksTo: ["Founder"] },
@@ -42,7 +42,7 @@ interface FeedMessage {
 }
 
 const MESSAGES: FeedMessage[] = [
-  { agentId: "mira", agentName: "Lisa", department: "intelligence", tools: ["firecrawl","perplexity"], time: "07:00 AM",
+  { agentId: "lisa", agentName: "Lisa", department: "intelligence", tools: ["firecrawl","perplexity"], time: "07:00 AM",
     text: "Overnight scan done. A competitor changed their pricing, and two companies in your market raised. Flagging the pricing change for you.",
     passedTo: "You", passedToDept: "founder" },
   { agentId: "founder", agentName: "You", department: "founder", tools: [], time: "07:12 AM", isFounder: true,

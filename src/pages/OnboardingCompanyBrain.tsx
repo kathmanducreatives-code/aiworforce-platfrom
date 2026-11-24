@@ -15,7 +15,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { companyBrainKey } from '@/hooks/useCompanyBrain';
+import { companyBrainKey, useCompanyBrain } from '@/hooks/useCompanyBrain';
+import { AGENCY_SCOPE, guidedSetupStorageKey } from '@/lib/brainScope';
+import { useOnboardingAutosave } from '@/hooks/useOnboardingAutosave';
+import { answersFromForms, type ProgressCopy } from '@/lib/onboardingAutosave';
+import { brainReadinessV2 } from '@/lib/brainReadinessFlag';
 import { safeReturnPath } from '@/lib/routeGuard';
 import { toast } from 'sonner';
 
@@ -29,7 +33,8 @@ import { preserveSetupEdits } from '@/lib/guidedSetup';
 const FN = 'generate-company-brain-draft';
 
 export default function OnboardingCompanyBrain() {
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, principal } = useWorkspace();
+  const setupUserId = principal?.userId ?? null;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -54,12 +59,15 @@ export default function OnboardingCompanyBrain() {
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [restoredWorkspace, setRestoredWorkspace] = useState<string | null>(null);
   const [sessionSaved, setSessionSaved] = useState(false);
+  // Roadmap Phase 2 (VITE_BRAIN_READINESS_V2): progress is also saved to the server.
+  const [localCopy, setLocalCopy] = useState<ProgressCopy | null>(null);
   const snapshot = JSON.stringify({ founder, company, draft, edited, founderResearch, companyResearch, companyLinkedIn, setupStep });
 
   useEffect(() => {
     if (!workspaceId) return;
     try {
-      const raw = sessionStorage.getItem(`agentory:guided-setup:${workspaceId}`);
+      // The offline buffer is the signed-in user's own, never another's in the same workspace.
+      const raw = setupUserId ? sessionStorage.getItem(guidedSetupStorageKey(setupUserId, workspaceId)) : null;
       if (raw) {
         const value = JSON.parse(raw);
         if (value.version === 1 && value.founder && value.company) {
@@ -70,24 +78,46 @@ export default function OnboardingCompanyBrain() {
           setCompanyResearch(value.companyResearch ?? null);
           setCompanyLinkedIn(value.companyLinkedIn ?? null);
           setSetupStep(Math.max(0, Math.min(5, Number(value.setupStep) || 0)));
+          setLocalCopy({
+            step: Math.max(0, Math.min(5, Number(value.setupStep) || 0)),
+            answers: answersFromForms({ company: value.company, founder: value.founder }),
+            updated_at: typeof value.saved_at === 'string' ? value.saved_at : '',
+          });
         }
       }
     } catch { /* Storage can be unavailable; the in-memory setup still works. */ }
     setRestoredWorkspace(workspaceId);
-  }, [workspaceId]);
+  }, [workspaceId, setupUserId]);
 
   useEffect(() => {
-    if (!workspaceId || restoredWorkspace !== workspaceId) return;
+    if (!workspaceId || !setupUserId || restoredWorkspace !== workspaceId) return;
     setSessionSaved(false);
     const timer = window.setTimeout(() => {
       try {
-        if (activated) sessionStorage.removeItem(`agentory:guided-setup:${workspaceId}`);
-        else sessionStorage.setItem(`agentory:guided-setup:${workspaceId}`, JSON.stringify({ version: 1, ...JSON.parse(snapshot) }));
+        if (activated) sessionStorage.removeItem(guidedSetupStorageKey(setupUserId, workspaceId));
+        else sessionStorage.setItem(guidedSetupStorageKey(setupUserId, workspaceId), JSON.stringify({ version: 1, saved_at: new Date().toISOString(), ...JSON.parse(snapshot) }));
         setSessionSaved(true);
       } catch { setSessionSaved(false); }
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [snapshot, workspaceId, restoredWorkspace, activated]);
+  }, [snapshot, workspaceId, setupUserId, restoredWorkspace, activated]);
+
+  const { data: brainRow } = useCompanyBrain();
+  const progressAnswers = useMemo(() => answersFromForms({ company, founder }), [company, founder]);
+  const restoreProgress = useCallback((copy: ProgressCopy) => {
+    // Typed values only; consent is never restored from saved progress.
+    setCompany({ ...emptyCompanyForm(), ...(copy.answers.company ?? {}) });
+    setFounder((f) => ({ ...emptyFounderForm(), ...(copy.answers.founder ?? {}), enrichment_consent: f.enrichment_consent }));
+    setSetupStep(Math.max(0, Math.min(5, copy.step)));
+  }, []);
+  const autosave = useOnboardingAutosave({
+    enabled: brainReadinessV2() && restoredWorkspace === workspaceId && !activated,
+    workspaceId, row: brainRow ?? undefined, step: setupStep, answers: progressAnswers, localCopy,
+    onRestore: restoreProgress,
+    onConflicts: (conflicts) => toast.warning('Changed on another device', {
+      description: `Kept the other device's ${conflicts.map((c) => c.field.replace(/_/g, ' ')).join(', ')}. Yours: ${conflicts.map((c) => `"${c.mine}"`).join(', ')}.`,
+    }),
+  });
 
   // Same live-preview merge as before: draft + user edits + typed values.
   // Preserves suggested_fixes / claims / signal_preferences etc. by keeping the
@@ -250,7 +280,7 @@ export default function OnboardingCompanyBrain() {
         //
         // `await` before navigating: refetching after the route change would
         // race the gate and reintroduce the same bounce, just less often.
-        await queryClient.invalidateQueries({ queryKey: companyBrainKey(workspaceId) });
+        await queryClient.invalidateQueries({ queryKey: companyBrainKey(workspaceId, AGENCY_SCOPE, principal) });
         setActivated(true);
       }
     } catch {
@@ -265,7 +295,7 @@ export default function OnboardingCompanyBrain() {
     founder={founder} onFounder={setFounder} company={company} onCompany={setCompany}
     brain={brain} onBrain={setEdited} completeness={completeness}
     busy={busy} error={error} activated={activated} hasDraft={!!draft}
-    saved={activated ? 'Company Brain saved' : busy === 'save' ? 'Saving draft…' : savedSnapshot === snapshot ? 'Draft saved' : sessionSaved ? 'Saved in this tab' : 'Unsaved changes'}
+    saved={activated ? 'Company Brain saved' : busy === 'save' ? 'Saving draft…' : savedSnapshot === snapshot ? 'Draft saved' : autosave === 'saving' ? 'Saving…' : autosave === 'saved' ? 'Progress saved' : autosave === 'offline' ? 'Offline — saved in this tab' : sessionSaved ? 'Saved in this tab' : 'Unsaved changes'}
     companyResearched={!!companyResearch} founderResearched={!!founderResearch}
     onResearchCompany={analyzeCompany} onResearchFounder={analyzeFounder} onDraft={draftBrain}
     onSave={() => persist(false)} onActivate={() => persist(true)}

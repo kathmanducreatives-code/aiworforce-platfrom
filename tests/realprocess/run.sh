@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# The real-process crash rehearsal on the contract lane's disposable database:
+#   PG_ADMIN_URL=… POSTGREST_BIN=… tests/realprocess/run.sh
+# CI runs it in the `realprocess` job (.github/workflows/ci.yml), whenever the
+# database contract is planned. It needs to spawn worker processes
+# (--allow-run) and write their event files; the lane's own runner grants
+# neither, hence this wrapper.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+DB_CONTRACT_EXTRA_DENO_FLAGS="--allow-run=$(readlink -f "$(command -v deno)"),$(command -v psql) --allow-write" \
+  exec "$root/tests/db-contract/run.sh" "$root/tests/realprocess/workerKill.rehearsal.ts"

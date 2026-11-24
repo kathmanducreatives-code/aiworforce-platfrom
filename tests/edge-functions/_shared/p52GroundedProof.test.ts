@@ -56,6 +56,17 @@ import { normalizeApifyJobRow } from "../../../supabase/functions/_shared/apifyJ
 import { buildCompanyEvidence } from "../../../supabase/functions/_shared/leadCompanyEvidence.ts";
 import { observationFromCompany } from "../../../supabase/functions/_shared/candidateObservation.ts";
 
+/**
+ * Q3 — a company record that flags ONE headquarters proves it
+ * (\`li_record_single_headquarters_flag\`). Since Q3 an unscoped hard geography
+ * ("a US company") is a HEADQUARTERS requirement, so a proven location in these
+ * fixtures carries the authority a real company-details record gives it.
+ */
+const HQ_AUTHORITY = {
+  version: "evidence-authority-v1", claim: "headquarters", level: "proven",
+  rule: "li_record_single_headquarters_flag", reason: "the company record flags one headquarters",
+} as never;
+
 globalThis.fetch = () => { throw new Error("P5.2 tests must not reach the network"); };
 
 const NOW = new Date("2026-09-18T12:00:00.000Z");
@@ -84,7 +95,7 @@ function ev(dimension: EvidenceDimension, value: unknown, over: Partial<Evidence
     evidence_id: `ev_${dimension}_${++seq}`, company_key: "c1", dimension, value, status: "proven",
     source: { provider: "apify", actor: "apify_linkedin_company_details", provider_call_id: "pc_1", url: null, excerpt: null },
     method: "provider_field", observed_at: "2026-09-17T00:00:00.000Z", valid_until: null,
-    confidence: "high", derived_from: [], mission_id: "task", origin: "lead_mission", ...over,
+    confidence: "high", derived_from: [], mission_id: "task", origin: "lead_mission", ...(dimension === "geography" ? { authority: HQ_AUTHORITY } : {}), ...over,
   };
 }
 /** A grounded business-model item as the engine builds it: `bm` is the claim's own decision. */
@@ -149,10 +160,19 @@ Deno.test("BRAIN-1: the approved canary 62c8b188 mission, verbatim, now derives 
   const proven = [US(), SMALL(), grounded("b2b saas", "accepted")];
   assertEquals(evaluateEligibility(cs, graphOf(proven)).eligibility, "pending", "no open role proven yet");
 
-  // And the candidate the canary could never surface now can, once its open role is proven.
+  // An open Growth Marketer role alone is not "its FIRST growth marketer" (Q2,
+  // Codex routing audit H03): the canary's own words make the first hire part of
+  // the requirement, so the role leaves it pending — blocked, nothing to buy.
   const role = ev("hiring", { open_role: true, role_families: ["marketing_growth"], titles: ["Growth Marketer"] },
     { source: { provider: "apify", actor: "apify_linkedin_job_search", provider_call_id: "pc_2", url: null, excerpt: "Growth Marketer" } });
-  const e = evaluateEligibility(cs, graphOf([...proven, role]));
+  const roleOnly = evaluateEligibility(cs, graphOf([...proven, role]));
+  assertEquals(roleOnly.eligibility, "pending");
+  const hiringCheck = roleOnly.checks.find((c) => c.dimension === "hiring" && c.kind === "hard")!;
+  assertEquals([hiringCheck.result, hiringCheck.blocked], ["unknown", "unproven:first_in_function"]);
+  // And the candidate the canary could never surface now can, once its open role
+  // is proven to be the first in the function — the posting's own words.
+  const first = ev("team_composition", { first_in_function: "supported", source: "job_posting", quote: "you will be our first growth marketer" });
+  const e = evaluateEligibility(cs, graphOf([...proven, role, first]));
   assertEquals(e.eligibility, "eligible", JSON.stringify(e.checks.filter((c) => c.kind === "hard")));
 });
 
@@ -309,7 +329,17 @@ Deno.test("MATCH-1: controlled vocabulary, whole words, no substrings", () => {
 // ═════════════════════════════════════════════════════════════════ E2E-1 ══
 
 const PROBE = JSON.parse(Deno.readTextFileSync(new URL("../../fixtures/lead-v2/p3-job-discovery-probe.json", import.meta.url)));
-const ROWS = PROBE.probes["harvestapi~linkedin-job-search"].items as Array<Record<string, unknown>>;
+/**
+ * SYNTHETIC FIRST-HIRE WORDS. The mission asks for a company hiring its FIRST
+ * growth marketer, and since Q2 (Codex routing audit H03) an ordinary opening
+ * does not prove that. Audicus — the company this test surfaces — is given the
+ * sentence the engine's own first-hire detector reads (`firstHireLanguage`).
+ */
+const FIRST_HIRE_POSTING: Record<string, string> = { "Audicus": " You will be our first growth marketer." };
+const ROWS = (PROBE.probes["harvestapi~linkedin-job-search"].items as Array<Record<string, unknown>>).map((r) => {
+  const add = FIRST_HIRE_POSTING[String((r.company as { name?: string } | undefined)?.name)];
+  return add ? { ...r, descriptionText: `${String(r.descriptionText ?? "")}${add}` } : r;
+});
 /**
  * SYNTHETIC SELF-DESCRIPTIONS. The fixture's real descriptions do not state a
  * business model (Audicus is a hearing-aid company; its real first words are

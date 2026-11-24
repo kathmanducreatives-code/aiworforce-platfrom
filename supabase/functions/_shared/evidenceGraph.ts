@@ -92,7 +92,13 @@ export function buildCompanyEvidenceGraph(
 ): CompanyEvidenceGraph {
   const now = opts.now ?? new Date();
   const byId = new Map<string, EvidenceItem>();
-  for (const e of items) if (!byId.has(e.evidence_id)) byId.set(e.evidence_id, e);
+  // Q2 — ANOTHER COMPANY'S EVIDENCE IS NOT THIS COMPANY'S (audit G04). The union
+  // re-keys every item it assigns, so an item explicitly keyed to a DIFFERENT
+  // company never belongs here. Unassigned (null) items stay valid.
+  for (const e of items) {
+    if (e.company_key !== null && e.company_key !== undefined && e.company_key !== company_key) continue;
+    if (!byId.has(e.evidence_id)) byId.set(e.evidence_id, e);
+  }
   const byDim = new Map<EvidenceDimension, EvidenceItem[]>();
   for (const e of byId.values()) {
     const list = byDim.get(e.dimension) ?? [];
@@ -200,6 +206,8 @@ export function evidenceFromRegistry(r: EvidenceRegistry | null, missionId: stri
         provider_call_id: null, url: it.source_url, excerpt: it.source_text ? it.source_text.slice(0, 280) : null,
       },
       method: "provider_field", observed_at: observed,
+      // Q2 — the event's own date, carried rather than inferred.
+      ...(it.occurred_at ? { occurred_at: it.occurred_at } : {}),
       // The registry's own freshness: a stale item is past its validity now.
       valid_until: it.freshness === "stale" ? new Date(0).toISOString() : null,
       confidence: it.verification_state === "verified" ? "high" : "medium",

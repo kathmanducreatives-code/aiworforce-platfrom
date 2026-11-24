@@ -60,7 +60,7 @@ function stub(answers: unknown[], record: string[] = []): JudgeDeps {
         status: 200,
         text: () =>
           Promise.resolve(JSON.stringify({
-            choices: [{ message: { content: JSON.stringify(a) } }],
+            choices: [{ finish_reason: "stop", message: { content: JSON.stringify(a) } }],
             usage: { prompt_tokens: 400, completion_tokens: 60 },
             model: body.model,
           })),

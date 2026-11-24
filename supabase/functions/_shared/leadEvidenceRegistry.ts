@@ -105,6 +105,13 @@ export interface EvidenceItem {
   /** The provider's own words. NEVER rewritten, never model-authored. */
   source_text: string | null;
   observed_at: string | null;
+  /**
+   * Q2 — the EVENT's own date (a posting's date, an article's publication, a
+   * round's announcement); null when the source gives none. `observed_at` is
+   * a fetch date for some types (web pages), so a customer's time window is
+   * judged against this field only.
+   */
+  occurred_at: string | null;
   freshness: Freshness;
   verification_state: VerificationState;
   metadata: Record<string, unknown>;
@@ -329,6 +336,7 @@ export function buildEvidenceRegistry(i: RegistryInput): EvidenceRegistry {
       structured_value: null,
       source_text: null,
       observed_at: null,
+      occurred_at: null,
       freshness: "unknown",
       verification_state: "reported",
       metadata: {},
@@ -352,7 +360,10 @@ export function buildEvidenceRegistry(i: RegistryInput): EvidenceRegistry {
       // text is quoted verbatim, so it is verified in the only sense this
       // registry uses: we know where it came from and we did not rewrite it.
       verification_state: "verified",
-      freshness: w.fetched_at ? "current" : "unknown",
+      // Q2 — FROM THE FETCH DATE ITSELF (audit G05–G07). Any non-empty value
+      // used to be "current": a 2020 fetch or "bad-date" included. A fetch date
+      // is still never an EVENT date — `occurred_at` stays null for a page.
+      freshness: freshnessOf(w.fetched_at, now),
       metadata: { page_intent: w.page_intent },
     });
   }
@@ -362,7 +373,14 @@ export function buildEvidenceRegistry(i: RegistryInput): EvidenceRegistry {
     push("company_description", "linkedin", e.description, {
       source_text: e.description,
       source_url: e.linkedin_company_url,
-      verification_state: e.identity_state === "resolved" ? "verified" : "reported",
+      verification_state: e.identity_state === "resolved" &&
+          e.description_provenance?.actor_key === "apify_linkedin_company_details"
+        ? "verified" : "reported",
+      metadata: {
+        field_provenance: e.description_provenance ?? null,
+        field_origin: e.description_provenance?.actor_key === "apify_linkedin_company_details"
+          ? "company_record" : e.description_provenance ? "discovery" : "unknown",
+      },
     });
   }
   const yc = clean(i.yc_description);
@@ -457,6 +475,7 @@ export function buildEvidenceRegistry(i: RegistryInput): EvidenceRegistry {
         source_text: a.title ?? a.description ?? null,
         source_url: a.url,
         observed_at: a.published_at,
+        occurred_at: a.published_at,
         freshness: freshnessOf(a.published_at, now),
         // A PUBLISHER SAID IT, which is a source-backed report and not a
         // verification we performed. `reported` is the honest state.
@@ -492,6 +511,7 @@ export function buildEvidenceRegistry(i: RegistryInput): EvidenceRegistry {
       ].filter(Boolean).join(" · "),
       source_url: round.source_articles[0] ?? null,
       observed_at: round.announced_date,
+      occurred_at: round.announced_date,
       freshness: freshnessOf(round.announced_date, now),
       verification_state: "verified",
       metadata: { source_articles: [...round.source_articles] },
@@ -500,10 +520,18 @@ export function buildEvidenceRegistry(i: RegistryInput): EvidenceRegistry {
 
   // ── JOBS. The ONLY thing that may prove a current commercial signal.
   const jobs = i.jobs ?? [];
+  // Q2 — WHOSE POSTING IS IT. The registry is built for ONE company; a posting
+  // whose own strong employer identity (its LinkedIn company page) names a
+  // DIFFERENT company is not this company's evidence, however it arrived here
+  // (audit G03). It is kept for the record, marked invalid with its foreign
+  // owner — never relabelled as the candidate's hiring proof.
+  const ownSlug = linkedinCompanySlug(i.evidence.linkedin_company_url);
   for (const j of jobs) {
     const title = clean(j.title);
     if (!title) continue;
     const isYc = j.source?.includes("yc") || j.source?.includes("memo23");
+    const employerSlug = linkedinCompanySlug(j.company_linkedin_url);
+    const foreign = !!(ownSlug && employerSlug && ownSlug !== employerSlug);
     push(isYc ? "yc_job" : "job_posting", j.source ?? "job", `${title}|${j.job_url ?? ""}`, {
       structured_value: {
         title, url: j.job_url, location: j.location, posted_date: j.posted_date,
@@ -511,12 +539,14 @@ export function buildEvidenceRegistry(i: RegistryInput): EvidenceRegistry {
       source_text: title,
       source_url: j.job_url,
       observed_at: j.posted_date,
+      occurred_at: j.posted_date,
       // A POSTING WITH NO DATE IS `unknown`, NEVER `current`. "We think they are
       // hiring now" and "they were hiring at some point" are different claims,
       // and only one of them justifies contacting someone today.
       freshness: freshnessOf(j.posted_date, now),
-      verification_state: "verified",
-      metadata: { company_linkedin_url: j.company_linkedin_url },
+      verification_state: foreign ? "invalid" : "verified",
+      metadata: { company_linkedin_url: j.company_linkedin_url,
+        ...(foreign ? { ownership: "foreign_employer", employer_linkedin_slug: employerSlug } : {}) },
     });
   }
 
@@ -648,6 +678,7 @@ export function registryForPrompt(r: EvidenceRegistry): Array<Record<string, unk
     observed_at: x.observed_at,
     freshness: x.freshness,
     verification_state: x.verification_state,
+    ...(x.evidence_type === "company_description" ? { field_origin: x.metadata.field_origin ?? "unknown" } : {}),
     // ── WHICH PAGE THIS IS ──────────────────────────────────────────────
     //
     // Five `web_page` items were indistinguishable here: same type, same
@@ -666,4 +697,10 @@ export function registryForPrompt(r: EvidenceRegistry): Array<Record<string, unk
       ? { page_intent: x.metadata.page_intent, source_url: x.source_url }
       : {}),
   }));
+}
+
+/** Lower-case LinkedIn company slug, or null (`/company/<slug>`). */
+function linkedinCompanySlug(u: unknown): string | null {
+  const m = /linkedin\.com\/company\/([^/?#\s]+)/i.exec(String(u ?? ""));
+  return m ? decodeURIComponent(m[1]).toLowerCase().replace(/\/+$/, "") : null;
 }

@@ -1,3 +1,4 @@
+import { mockCriterionVerdicts } from "./lib/criterionFixture.ts";
 // The offline smoke rehearsal carried past the execution planner. Derived from
 // Codex's independent harness (PR #95, tests/db-contract/offlineSmokeMission
 // .contract.test.ts at 2f48cb0f): actual compiler, worker, handler, SQL
@@ -154,6 +155,7 @@ function evaluatorAnswer(input: unknown) {
   ];
   const missing = req.filter(([, x]) => !x).map(([r]) => r);
   return {
+    criterion_verdicts: mockCriterionVerdicts(input, c),
     mission_fit: missing.length === 0 ? "pass" : "review", icp_fit: "plausible",
     hiring_fit: c.hiring ? "verified" : "absent", confidence: 0.8, match_score: missing.length === 0 ? 80 : 0,
     matched_requirements: req.filter(([, x]) => x).map(([requirement, x]) => ({ requirement, ...x!, support: "verified" })),
@@ -340,6 +342,8 @@ async function rehearse(v: Variant, check: (r: Rehearsal) => void | Promise<void
       "offline-" + user + "@example.invalid"
     })`;
     await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${m.ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
+    // The requester is a member: run-agent re-checks the forwarded principal (legacyExecutionGuard).
+    await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${m.ws}, ${user}, 'owner')`;
     await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status) values (${plan}, ${m.ws}, ${user}, ${missionGoal}, 'running')`;
     const conversation = uuid();
     await sql`insert into public.conversations (id,user_id,workspace_id,title) values (${conversation},${user},${m.ws},'Offline A7 audit')`;

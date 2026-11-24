@@ -47,20 +47,33 @@ import type { EvidenceItem } from "../../../supabase/functions/_shared/candidate
 const FX = JSON.parse(Deno.readTextFileSync(new URL("../../fixtures/lead-v2/canary-1156c062/result.json", import.meta.url)));
 /** The moment the verifier phase ran — evidence is judged as of the canary, not today. */
 const AT = new Date("2026-09-24T15:10:30.000Z");
-const CRITERIA = deriveMissionCriteria(FX.lead_mission, PRODUCTION_READINESS);
+/**
+ * THE CANARY'S OWN CRITERIA. Since Q3 its unscoped "US" geography is a
+ * HEADQUARTERS requirement (A7 S02/S03b), and SuperAGI's and How to AI's company
+ * records list several locations with NO headquarters flag (`country`
+ * authority: presence, not HQ) — asserted by "STRICT HQ" below.
+ */
+const CANARY_CRITERIA = deriveMissionCriteria(FX.lead_mission, PRODUCTION_READINESS);
+/**
+ * The router / verifier / continuation MECHANICS are independent of
+ * headquarters, so the replays run on the canary's own, unmodified evidence with
+ * the geography scoped to PRESENCE — exactly what those records prove.
+ */
+const CRITERIA = CANARY_CRITERIA.map((c) => c.dimension === "geography" ? { ...c, geography_scope: "presence" as const } : c);
 const SUPERAGI = "https://www.linkedin.com/company/superagi";
 const HOWTOAI = "https://www.linkedin.com/company/how-to-ai-guide";
 const PVALYOU = "apify_funding_pvalyou";
 
 /** Each candidate, rebuilt from exactly what the canary bought (plus, by default, today's fallback). */
-function replay(o: { pvalyouAnswered?: boolean } = {}) {
+function replay(o: { pvalyouAnswered?: boolean; criteria?: typeof CRITERIA } = {}) {
+  const criteria = o.criteria ?? CRITERIA;
   return (FX.lead_resume_checkpoint.companies as Array<{
     company_key: string; company_name: string; completed_operations: string[];
     snapshot: { observations: Array<{ evidence: EvidenceItem[] }> };
   }>).map((c) => {
     const items = c.snapshot.observations.flatMap((o) => o.evidence).map((e) => ({ ...e, company_key: c.company_key }));
     const graph = buildCompanyEvidenceGraph(c.company_key, items, { now: AT });
-    const e = evaluateEligibility(CRITERIA, graph);
+    const e = evaluateEligibility(criteria, graph);
     const attempted = [...attemptedRoutes(c.completed_operations), ...(o.pvalyouAnswered === false ? [] : [PVALYOU])];
     const hard = e.checks.filter((x) => x.kind === "hard");
     const gaps = evidenceGapsFor(hard, graph, CLAIM_REGISTRY, new Set(attempted), PRODUCTION_READINESS);
@@ -214,4 +227,22 @@ Deno.test("TERMINAL: retry_budget_exhausted only for a failed or aborted last at
   // An evidence-exhausted mission is TERMINAL before attempts run out: its own status stands.
   assertEquals(terminalReasonFor({ status: "search_exhausted", terminal: true }, V2_MAX_ATTEMPTS), "search_exhausted");
   assertEquals(terminalReasonFor({ status: "search_exhausted", terminal: true }, 1), "search_exhausted");
+});
+
+Deno.test("STRICT HQ (Q3): under the canary's own criteria, presence without a flagged HQ is PENDING, blocked, and bought nothing", () => {
+  for (const c of CANARY_CRITERIA.filter((x) => x.dimension === "geography")) assertEquals(c.geography_scope, "headquarters");
+  const all = replay({ pvalyouAnswered: false, criteria: CANARY_CRITERIA });
+  const h = all.find((c) => c.company_key === HOWTOAI)!;
+  const geo = h.hard_checks.find((x) => x.dimension === "geography")!;
+  assertEquals([h.eligibility, geo.result], ["pending", "unknown"], "kept as a candidate, not rejected");
+  assert(/headquarters is not explicitly established/.test(geo.reason), geo.reason);
+  assert(geo.evidence_ids.length > 0, "the presence evidence stays attached");
+  // The company record was already read, so nothing can verify the HQ: blocked —
+  // and one blocked requirement means no purchase can make it qualify.
+  assertEquals(h.gaps.find((g) => g.dimension === "geography")?.next, "blocked");
+  assertEquals(verificationTargets({ route_actor: "apify_funding_atomus", route_actors: ["apify_funding_atomus", PVALYOU], max_targets: 6 },
+    all as never, (id) => CANARY_CRITERIA.find((c) => c.id === id)?.value, CLAIM_REGISTRY, PRODUCTION_READINESS), [],
+    "no funding fallback is bought for a company whose HQ cannot be verified");
+  // SuperAGI stays ineligible on its own funding, whatever its HQ.
+  assertEquals(all.find((c) => c.company_key === SUPERAGI)!.eligibility, "ineligible");
 });

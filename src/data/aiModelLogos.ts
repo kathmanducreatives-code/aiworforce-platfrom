@@ -35,6 +35,15 @@ export const AI_MODELS: Record<AgentModelKey, AiModel> = {
     pillClassName: 'bg-orange-500/10 text-orange-300 border-orange-500/30',
     chipBg: 'bg-orange-500/15',
   },
+  // The models the departments ACTUALLY run on (see the server's model router):
+  // Luna for chat understanding and the lead / monitoring engine.
+  'gpt-5.6-luna': {
+    key: 'gpt-5.6-luna',
+    label: 'GPT-5.6 Luna',
+    logo: openaiLogo,
+    pillClassName: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+    chipBg: 'bg-white',
+  },
   'gemini-pro': {
     key: 'gemini-pro',
     label: 'Gemini Pro',

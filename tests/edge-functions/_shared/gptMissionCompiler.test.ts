@@ -16,6 +16,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   GPT_MISSION_SCHEMA,
+  GPT_MISSION_SCHEMA_V2, GPT_MISSION_SCHEMA_V3,
   MISSION_PROPOSAL_FIELDS,
 } from "../../../supabase/functions/_shared/gptMissionSchema.ts";
 import {
@@ -56,7 +57,19 @@ Deno.test("1. every field the parser reads is present in the GPT schema", () => 
   // emitted under `strict: true` — so the parser's handling of it becomes dead
   // code and the constraint vanishes from every mission, silently. That is how
   // "AI" would go missing again one refactor from now.
-  const missing = parserFields().filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f));
+  //
+  // A field only interpretation contract v2 sends (AGENTORY_MISSION_CONTRACT=v2)
+  // must then be in the v2 schema instead — the same guard, per contract.
+  const v2Only = new Set(Object.keys(
+    (GPT_MISSION_SCHEMA_V2.schema as { properties: Record<string, unknown> }).properties,
+  ).filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f)));
+  assertEquals([...v2Only], ["signal_windows"], "v2 adds exactly one field");
+  // Contract v3 (S4) adds exactly `understanding` on top of v2 — the same guard, per contract.
+  const v3Only = new Set(Object.keys(
+    (GPT_MISSION_SCHEMA_V3.schema as { properties: Record<string, unknown> }).properties,
+  ).filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f) && !v2Only.has(f)));
+  assertEquals([...v3Only], ["understanding"], "v3 adds exactly one field");
+  const missing = parserFields().filter((f) => !MISSION_PROPOSAL_FIELDS.includes(f) && !v2Only.has(f) && !v3Only.has(f));
   assertEquals(
     missing, [],
     "these fields are read by parseMissionProposal but absent from " +
@@ -180,7 +193,7 @@ Deno.test("6. it calls OpenAI on LUNA, with the mission schema and the GPT-5 bod
       return Promise.resolve({
         ok: true, status: 200,
         text: () => Promise.resolve(JSON.stringify({
-          choices: [{ message: { content: '{"requested_opportunity_count":10}' } }],
+          choices: [{ finish_reason: "stop", message: { content: '{"requested_opportunity_count":10}' } }],
         })),
       });
     },

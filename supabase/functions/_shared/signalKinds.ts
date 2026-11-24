@@ -221,8 +221,11 @@ const ALIAS_RULES: readonly AliasRule[] = Object.freeze([
   { kind: "leadership_change", name: "leadership_change", re:
     /\b(?:leadership|executive|c-suite)\s+(?:change|changes|transition|turnover|shake-?up|hires?|appointments?)\b/i },
   // HEADCOUNT — before expansion, so "expanding headcount" is not a market move.
+  // One modifier word may name the team ("expanding its SALES team", Q3 H04):
+  // a generic slot, not a department list. A preposition never fills it, so
+  // "expanding into Germany" stays an expansion.
   { kind: "headcount_growth", name: "headcount_growth", re:
-    /\b(?:rapidly|fast|quickly|aggressively)?\s*(?:growing|expanding|scaling|increasing)\s+(?:their\s+|its\s+|the\s+)?(?:headcount|team|teams|workforce|employee count)\b|\bheadcount (?:growth|increase|expansion)\b|\bhiring spree\b/i },
+    /\b(?:rapidly|fast|quickly|aggressively)?\s*(?:growing|expanding|scaling|increasing)\s+(?:their\s+|its\s+|the\s+)?(?:(?!into\b|in\b|to\b|across\b)[a-z][\w-]*\s+)?(?:headcount|team|teams|workforce|employee count)\b|\bheadcount (?:growth|increase|expansion)\b|\bhiring spree\b/i },
   // EXPANSION — a new physical presence.
   { kind: "expansion", subkind: "geographic_expansion", name: "new_office", re:
     /\b(?:opened|opening|opens|launched|launching|set up|setting up|established|establishing)\s+(?:a\s+|an\s+|their\s+|its\s+|the\s+)?(?:new\s+|second\s+|first\s+)?(?:[a-z]+\s+)?(?:office|offices|location|locations|hq|headquarters|hub|branch)\b|\bnew\s+(?:[a-z]+\s+)?(?:office|offices|hq|headquarters|hub|branch)\b/i },

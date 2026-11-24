@@ -27,6 +27,8 @@ import type { ReadinessPolicy } from "./routeReadiness.ts";
 import { canStillQualify, evidenceGapsFor, summarizeGaps, type EvidenceGap, type GapSummary } from "./evidenceGapRouter.ts";
 import type { CompanyEvidenceGraph } from "./evidenceGraph.ts";
 import type { MissionCriterion } from "./missionCriteria.ts";
+import type { CriterionVerdict } from "./missionEvaluation.ts";
+import type { QualificationHold } from "./qualificationHold.ts";
 import type { ResearchWaveSummary } from "./researchFeedback.ts";
 import type { SpendLedger } from "./budgetPolicy.ts";
 import {
@@ -45,6 +47,9 @@ export type Bucket =
   | "screened_out" | "identity_unresolved" | "investigating" | "ineligible" | "pending" | Label;
 
 export interface MissionCandidate {
+  criterion_verdicts?: readonly CriterionVerdict[];
+  /** Q1 — what other authorities already decided against qualifying (`qualificationHold.ts`). */
+  holds?: readonly QualificationHold[];
   company_key: string;
   name: string | null;
   domain: string | null;
@@ -236,6 +241,7 @@ function caveatsFor(graph: CompanyEvidenceGraph, r: ReasonedLabel, e: Eligibilit
   }
   if (r.dropped_a_level) out.push("the reasoner's explanation cited no real evidence, so the label was lowered");
   if (r.capped_from) out.push(`the reasoner proposed ${r.capped_from.replace(/_/g, " ")}; the evidence supports no more than this`);
+  for (const h of e.held) out.push(`held: ${h.reason}`);
   if (e.eligibility === "pending") out.push("a required fact is still unproven — this is not a match yet");
   return [...new Set(out)].slice(0, 6);
 }
@@ -260,6 +266,8 @@ export interface CandidateDecision {
   /** Set only for surfaced leads (a label bucket). */
   label: Label | null;
   hard_checks: Record<string, CheckResult>;
+  /** Q1 — why an otherwise eligible candidate is held (empty when none). */
+  held: string[];
 }
 
 export const LABEL_BUCKETS: ReadonlySet<Bucket> = new Set<Bucket>([
@@ -269,13 +277,14 @@ export const LABEL_BUCKETS: ReadonlySet<Bucket> = new Set<Bucket>([
 export function candidateDecision(i: {
   criteria: readonly MissionCriterion[]; candidate: MissionCandidate; anchor: string | null;
 }): CandidateDecision {
-  const eligibility = evaluateEligibility(i.criteria, i.candidate.graph);
+  const eligibility = evaluateEligibility(i.criteria, i.candidate.graph, i.candidate.criterion_verdicts, i.candidate.holds);
   const ceiling = computeCeiling({ criteria: i.criteria, graph: i.candidate.graph, eligibility, anchor: i.anchor });
   const bucket = bucketOf(i.candidate, eligibility, ceiling.ceiling);
   return {
     company_key: i.candidate.company_key, bucket,
     label: LABEL_BUCKETS.has(bucket) ? bucket as Label : null,
     hard_checks: eligibility.hard_checks,
+    held: eligibility.held.map((h) => h.code),
   };
 }
 
@@ -325,7 +334,7 @@ export function buildWorkbenchMissionView(i: ViewInput): WorkbenchMissionView {
   const blockedKeys = new Set(i.candidates.filter((c) => c.paid_verification_blocked).map((c) => c.company_key));
 
   for (const c of i.candidates) {
-    const eligibility = evaluateEligibility(i.criteria, c.graph);
+    const eligibility = evaluateEligibility(i.criteria, c.graph, c.criterion_verdicts, c.holds);
     const ceiling = computeCeiling({ criteria: i.criteria, graph: c.graph, eligibility, anchor: i.mission.anchor });
     const proposal = i.reasoning?.[c.company_key];
     const reasoned = applyReasoning(ceiling, proposal ?? null);

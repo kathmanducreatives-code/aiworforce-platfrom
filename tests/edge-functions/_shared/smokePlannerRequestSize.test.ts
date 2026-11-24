@@ -51,7 +51,7 @@ async function sentBytes(gate: Record<symbol, unknown> | null): Promise<{ bytes:
       fetch: (_url, init) => {
         sent = String(init.body);
         return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify({
-          choices: [{ message: { content: JSON.stringify({ reasoning: "r", steps: [] }) } }],
+          choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ reasoning: "r", steps: [] }) } }],
           usage: { prompt_tokens: 1, completion_tokens: 1 },
         })) } as never);
       },

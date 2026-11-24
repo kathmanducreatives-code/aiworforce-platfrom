@@ -169,7 +169,20 @@ Deno.test("12. the fallback is spec-compiled, reserved at its estimate, executed
 // ════════════════════ 7–9, 13–14: through the phase, on the canary's own evidence ══
 
 const FX = JSON.parse(Deno.readTextFileSync(new URL("../../fixtures/lead-v2/canary-5bfa76db/result.json", import.meta.url)));
-const CRITERIA = deriveMissionCriteria(FX.lead_mission, PRODUCTION_READINESS);
+/**
+ * THE CANARY'S OWN CRITERIA. Since Q3 its unscoped "US" geography is a
+ * HEADQUARTERS requirement (A7 S02/S03b), and BigRio's and Design Milk's company
+ * records list their US location WITHOUT a headquarters flag (`country`
+ * authority: presence, not HQ). Under these criteria neither can qualify and
+ * nothing is bought for either — asserted by "STRICT HQ" below.
+ */
+const CANARY_CRITERIA = deriveMissionCriteria(FX.lead_mission, PRODUCTION_READINESS);
+/**
+ * THE FALLBACK MECHANICS are independent of headquarters, so they run on the
+ * canary's own, unmodified evidence with the geography scoped to PRESENCE —
+ * exactly what those records prove. No record or flag is changed.
+ */
+const CRITERIA = CANARY_CRITERIA.map((c) => c.dimension === "geography" ? { ...c, geography_scope: "presence" as const } : c);
 const HARD_PLAN = buildClaimPlan(CRITERIA, "general_company_discovery", PRODUCTION_READINESS);
 const BIGRIO = "https://www.linkedin.com/company/bigrio", DESIGNMILK = "https://www.linkedin.com/company/design-milk";
 
@@ -365,4 +378,18 @@ Deno.test("the hold is per company: one whose funding Atomus PASSED is still ver
   assertFalse(r.bought.jobs.flat().includes(BIGRIO), "BigRio waits for its run");
   assertFalse(r.bought.firecrawl.flat().includes(BIGRIO));
   assertEquals(r.report.held, [BIGRIO]);
+});
+
+Deno.test("STRICT HQ (Q3): under the canary's own criteria, US presence without a flagged HQ is PENDING — kept, explained, and nothing is bought", async () => {
+  for (const c of CANARY_CRITERIA.filter((x) => x.dimension === "geography")) assertEquals(c.geography_scope, "headquarters");
+  const r = await phase({ criteria: CANARY_CRITERIA, pvalyou: (d) => d.map((x) => pvalyouRow(x, ["2026-06-15"])) });
+  for (const k of [BIGRIO, DESIGNMILK]) {
+    assertEquals(r.final[k], "pending", `${k} is kept as a candidate, not rejected`);
+    const geo = r.candidates().find((c) => c.company_key === k)!.hard_checks.find((h) => h.dimension === "geography")!;
+    assertEquals(geo.result, "unknown");
+    assert(/headquarters is not explicitly established/.test(geo.reason), geo.reason);
+    assert(geo.evidence_ids.length > 0, "the presence evidence stays attached for a later verification");
+  }
+  assertEquals([r.bought.atomus.length, r.bought.pvalyou.length, r.bought.jobs.length, r.bought.firecrawl.length], [0, 0, 0, 0],
+    "no purchase for a company that cannot qualify until its headquarters is verified");
 });

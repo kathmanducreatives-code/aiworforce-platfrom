@@ -83,7 +83,15 @@ export interface ClaimDefinition {
 const LINKEDIN_DETAILS: ClaimRoute = {
   actor: "apify_linkedin_company_details", capability: "company_enrichment",
   purpose: "the company's LinkedIn record (locations, declared size band, description)",
-  evidence_actors: ["linkedin", "apify_linkedin_company_details"],
+  // ONLY THE COMPANY RECORD ITSELF. "linkedin" is the evidence registry's label
+  // for ANY LinkedIn-derived field, including the company object inside a job
+  // search row (`leadEvidenceRegistry`), so a job posting's company location
+  // used to mark this route "already answered" for a company whose details were
+  // never fetched. Canary session 2: Baseten and Oscilar were never enriched,
+  // their HQ gap was routed nowhere, and both were held as non-viable. A fetched
+  // record is still seen: its observations carry this actor, and an answered
+  // enrichment is added to the attempted routes (`attemptedRoutesOf`).
+  evidence_actors: ["apify_linkedin_company_details"],
   canonical_executor: true, executor_note: "in-slice enrichment of every investigated company",
   cost_hint_usd: 0.004,
 };
@@ -282,7 +290,7 @@ function judgeRoutes(
 
 /** The gaps on one candidate's unknown hard checks. */
 export function evidenceGapsFor(
-  checks: ReadonlyArray<{ criterion_id: string; dimension: string; result: string; reason: string }>,
+  checks: ReadonlyArray<{ criterion_id: string; dimension: string; result: string; reason: string; blocked?: string }>,
   graph: CompanyEvidenceGraph,
   registry: readonly ClaimDefinition[] = CLAIM_REGISTRY,
   /** Route actors a claim verifier has already answered through for this company. */
@@ -293,6 +301,15 @@ export function evidenceGapsFor(
   unaffordable: ReadonlySet<string> = new Set(),
 ): EvidenceGap[] {
   return checks.filter((c) => c.result === "unknown").map((c) => {
+    // Q1 — a check NO purchase can close (an unsupported mandatory requirement,
+    // or a hold another authority placed): blocked, never routed, whatever a
+    // claim definition for its dimension might otherwise offer.
+    if (c.blocked) {
+      return {
+        criterion_id: c.criterion_id, dimension: c.dimension, claim: null, missing: c.reason,
+        next: "blocked" as const, route: null, considered: [],
+      };
+    }
     const def = claimFor(c.dimension, registry);
     const considered = judgeRoutes(def, graph, attempted, policy, unaffordable);
     // CHEAPEST FIRST among the routes that can actually answer it.

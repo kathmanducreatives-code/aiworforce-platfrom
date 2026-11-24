@@ -43,6 +43,7 @@
 // PURE apart from the injected model call.
 
 import { gptStructured, type GptDeps, type GptResult } from "./gptProvider.ts";
+import { isTerminalCompletionFailure, TerminalModelCompletionError } from "./modelFailureContract.ts";
 import { routeModel, type ModelRoute } from "./gptModelRouter.ts";
 import { parsePlannedInput } from "./gptExecutionPlanner.ts";
 import {
@@ -331,9 +332,10 @@ export function makeGptDiscoveryPlanner(
       (deps.log ?? (() => {}))("gpt_discovery_planner_failed", {
         code: r.code, detail: r.detail, latency_ms: r.latency_ms,
       });
-      // Null, not a throw. The engine's resolver treats an unusable answer as a
-      // reason to run the deterministic strategy, which is a plan made of code
-      // rather than a different model.
+      if (isTerminalCompletionFailure(r.code)) {
+        throw new TerminalModelCompletionError(r.code, r.detail);
+      }
+      // Other unusable answers retain the existing bounded repair policy.
       return null;
     }
     return {

@@ -78,7 +78,7 @@ Deno.test("4. the real facade reaches the OpenAI transport and returns a proposa
     seen.push({ url: String(url), model: JSON.parse(String(init.body)).model });
     return Promise.resolve(
       new Response(
-        JSON.stringify({ choices: [{ message: { content: '{"proposed":true}' } }] }),
+        JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: '{"proposed":true}' } }] }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
     );

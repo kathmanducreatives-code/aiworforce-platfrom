@@ -69,6 +69,7 @@ const summary = [
   `| Fast checks (types, lint, UI, edge, infra, replay, build) | yes |`,
   `| Database contract | ${p.contract ? (p.contract_all ? "all files" : `${p.contract_files.length} file(s)`) : "no"} |`,
   `| Mutation proofs (all) | ${p.mutation ? "yes" : "no"} |`,
+  `| Real worker processes | ${p.realprocess ? "yes" : "no"} |`,
   "",
   `Changed paths: ${changed === null ? "unknown" : changed.length}`,
   `Contract files: ${contractSelected.length} in ${contractShards.filter((s) => s.length).length} non-empty shard(s)`,
@@ -80,6 +81,8 @@ if (process.env.GITHUB_OUTPUT) {
   appendFileSync(process.env.GITHUB_OUTPUT, [
     `level=${p.level}`, `contract=${p.contract}`, `contract_all=${p.contract_all}`,
     `contract_files=${p.contract_files.join(" ")}`, `mutation=${p.mutation}`,
+    // Real worker processes run whenever the database contract does.
+    `realprocess=${p.realprocess}`,
     `contract_count=${contractSelected.length}`,
     ...contractShards.map((s, k) => `contract_shard_${k + 1}=${s.join(" ")}`), "",
   ].join("\n"));

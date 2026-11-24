@@ -193,3 +193,103 @@ export function hiringExcludeTitles(fam: RoleFamily): string[] {
   if (fam === "assistant_founder_support") base.push("Engineer", "Software Engineer");
   return base;
 }
+
+// ── NAMED TITLES: EXACT, NOT BY FAMILY (ATLAS review Stage 2, D1) ───────────
+//
+// "Hiring Account Executives" was matched by FAMILY (gtm_sales) everywhere a
+// posting was judged, so an SDR, BDR or Sales Representative opening proved it
+// (offline benchmark A1: precision 0.40). Owner policy (2026-11-03):
+//   * a title the user NAMES is matched as that title: its own spellings, plus
+//     seniority / segment / level modifiers on the SAME role (Senior, Enterprise,
+//     Founding, Mid-Market, Commercial, II, ", Commercial") — never a neighbouring
+//     role (SDR, BDR, Sales Representative, Account Manager are not an AE);
+//   * a BROAD word ("salespeople", "sales roles") keeps the family;
+//   * every OR alternative is kept (any listed title satisfies).
+// A role word not registered here keeps the existing family behaviour unchanged.
+
+export const ROLE_TITLES_VERSION = "role-titles-v1" as const;
+
+/**
+ * The titles a request may name, each with its own spellings (singular, lower case).
+ * Only titles the owner's policy names as SPECIFIC roles are registered; a generic word
+ * ("sales representatives", "salespeople") keeps the family. Extended by reviewed change
+ * only — the corpus (tests/fixtures/atlas-eval) labels every addition.
+ */
+export const CANONICAL_TITLES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  account_executive: ["account executive", "account exec", "ae"],
+  sales_development_representative: ["sales development representative", "sales development rep", "sdr"],
+  business_development_representative: ["business development representative", "business development rep", "bdr"],
+});
+
+/** Words that qualify the SAME role (seniority, segment, territory, stage) — never change it. */
+const TITLE_MODIFIERS = [
+  "senior", "sr", "junior", "jr", "associate", "lead", "principal", "staff", "founding", "remote",
+  "enterprise", "mid market", "midmarket", "mid-market", "commercial", "smb", "small business", "strategic", "corporate",
+  "majors", "major", "named", "global", "regional", "territory", "field", "new business", "growth",
+];
+const LEVEL_RE = /^(?:i{1,3}|iv|v|[1-5])$/;
+
+const norm = (s: string) => s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ").trim();
+const singular = (w: string) => w.replace(/(?:ies)$/, "y").replace(/(?<![s])s$/, "");
+
+/** The registered title a request's role word names ("Account Executives" → account_executive), or null. */
+export function canonicalTitleOf(term: string | null | undefined): string | null {
+  const words = norm(String(term ?? "")).split(" ").filter(Boolean);
+  if (!words.length) return null;
+  const t = [...words.slice(0, -1), singular(words[words.length - 1])].join(" ");
+  for (const [key, names] of Object.entries(CANONICAL_TITLES)) if (names.includes(t)) return key;
+  return null;
+}
+
+/** Does a posting's title name the registered title — the role itself, with only same-role modifiers? */
+export function titleIsCanonical(title: string | null | undefined, key: string): boolean {
+  const names = CANONICAL_TITLES[key];
+  if (!names) return false;
+  const raw = String(title ?? "");
+  if (!raw.trim()) return false;
+  if (key === "account_executive" && NOT_A_SALES_HIRE_RE.test(raw)) return false;
+  // The role is the head of the title: what follows a separator qualifies it ("…, Commercial").
+  const head = norm(raw.split(/\s[-–—|/]\s|[,(|–—]/)[0] ?? "");
+  let rest = head;
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const m of TITLE_MODIFIERS) {
+      if (rest.startsWith(`${m} `)) { rest = rest.slice(m.length + 1); changed = true; }
+    }
+  }
+  const words = rest.split(" ").filter(Boolean);
+  while (words.length > 1 && LEVEL_RE.test(words[words.length - 1])) words.pop();
+  return names.includes(words.join(" "));
+}
+
+export interface RoleRequirement { roleTerms?: readonly string[]; roleFamilies?: readonly string[]; excludedRoleTerms?: readonly string[] }
+
+/** The requested role words that name a registered title. Empty: the request names a family or unregistered role. */
+export function namedTitles(r: RoleRequirement): string[] {
+  return [...new Set((r.roleTerms ?? []).map(canonicalTitleOf).filter((k): k is string => !!k))];
+}
+
+/**
+ * Does a posting's title satisfy the role requirement? Applies ONLY when the request
+ * names a registered title (`namedTitles` non-empty); callers keep their existing
+ * family rule otherwise. Any named title satisfies (OR); an unregistered word in the
+ * same request is judged by its own family; an excluded role never satisfies.
+ */
+export function titleSatisfiesNamedRole(title: string | null | undefined, r: RoleRequirement): boolean {
+  if (excludedByRole(title, r)) return false;
+  const keys = namedTitles(r);
+  if (keys.some((k) => titleIsCanonical(title, k))) return true;
+  const others = (r.roleTerms ?? []).filter((t) => !canonicalTitleOf(t));
+  return others.some((t) => { const f = classifyRoleFamily(t); return !!f && f !== "custom" && roleMatchesFamily(title, f); });
+}
+
+/** An excluded role ("not SDRs") names this posting: by its registered title, or by its words. */
+export function excludedByRole(title: string | null | undefined, r: RoleRequirement): boolean {
+  const t = ` ${norm(String(title ?? ""))} `;
+  return (r.excludedRoleTerms ?? []).some((x) => {
+    const k = canonicalTitleOf(x);
+    if (k) return titleIsCanonical(title, k);
+    const w = norm(x);
+    return !!w && (t.includes(` ${w} `) || t.includes(` ${singular(w)} `));
+  });
+}

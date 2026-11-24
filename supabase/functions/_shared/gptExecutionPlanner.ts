@@ -27,6 +27,7 @@
 import {
   gptStructured, isProviderFailure, type GptDeps, type GptFailureCode, type GptResult,
 } from "./gptProvider.ts";
+import { isTerminalCompletionFailure, TerminalModelCompletionError } from "./modelFailureContract.ts";
 import { routeModel, type ModelRoute } from "./gptModelRouter.ts";
 import {
   buildExecutionPlannerPayload, MAX_PLAN_STEPS,
@@ -392,6 +393,9 @@ export function makeGptExecutionPlanner(
         code: r.code, detail: r.detail, latency_ms: r.latency_ms,
         retryable: r.retryable, attempts: r.attempts,
       });
+      if (isTerminalCompletionFailure(r.code)) {
+        throw new TerminalModelCompletionError(r.code, r.detail);
+      }
       // ── WHICH KIND OF FAILURE IS THIS? ────────────────────────────────
       //
       // THE PROVIDER DID NOT ANSWER (no key, HTTP error, transport fault).
