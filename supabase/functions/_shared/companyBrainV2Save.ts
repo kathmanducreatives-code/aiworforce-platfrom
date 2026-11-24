@@ -11,7 +11,8 @@
 //
 // Pure (no DB, no network) → fully unit-testable.
 
-import { normalizeCompanyBrain, mergeLegacyIcpProjection, type CompanyBrainV2 } from "./normalizeCompanyBrain.ts";
+import { normalizeCompanyBrain, type CompanyBrainV2 } from "./normalizeCompanyBrain.ts";
+import { reconcileDerivedCopies, structuredAuthoritative } from "./companyBrainMirror.ts";
 import { computeCompanyBrainCompleteness, type CompletenessResult } from "./companyBrainCompleteness.ts";
 
 /** Fields a caller may write. Derived flags are never accepted from the client. */
@@ -79,9 +80,13 @@ export function applyBrainSave(
   opts: SaveOptions = {},
 ): SaveResult {
   const merged = mergeV2Patch(existing, patch);
+  const existingRaw: Record<string, unknown> = existing && typeof existing === "object" ? existing : {};
 
   // Recompute every derived flag from the merged truth — writers can't fake them.
-  const normalized = normalizeCompanyBrain(merged);
+  // Read through structuredAuthoritative: the normalizer falls back to the legacy
+  // `icp` copy when a structured list is empty, so a value cleared in onboarding
+  // review would otherwise still count — and still be mirrored — from that copy.
+  const normalized = normalizeCompanyBrain(structuredAuthoritative(merged));
   const completeness = computeCompanyBrainCompleteness(normalized);
 
   const wantsActivate = !!opts.activate;
@@ -98,10 +103,12 @@ export function applyBrainSave(
   // Once activated the Brain is no longer a draft.
   merged.is_draft = onboarding_completed ? false : (merged.is_draft === true);
 
-  // Compatibility bridge: legacy readers (run-agent's lead path) still read
-  // `profile.icp.*`. Project the v2 truth back so a v3 Brain is visible to them
-  // without editing those readers. v2 always wins; legacy extras are preserved.
-  merged.icp = mergeLegacyIcpProjection(merged.icp, normalized);
+  // Compatibility bridge: legacy readers (the lead compiler) still read
+  // `profile.icp.*`, and the radar reads `signal_preferences`. The same exact
+  // projection the Company Brain page's `update` writes (companyBrainMirror.ts):
+  // the legacy block mirrors v2 — empties included, so a clear clears — and the
+  // radar copy loses values the Brain no longer holds. Legacy extras are kept.
+  reconcileDerivedCopies(merged, normalizeCompanyBrain(existingRaw), existingRaw, normalized, false);
 
   // Radar reads `profile.signal_preferences` (inside the JSONB). It is NOT a
   // column on `company_brain` — writing it as one makes the upsert fail.

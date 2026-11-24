@@ -81,7 +81,8 @@ echo "postgrest $("$bin" --version 2>/dev/null | head -1) on :$port, postgres $(
 
 set +e
 DB_CONTRACT_REST_URL="http://127.0.0.1:$port" DB_CONTRACT_JWT_SECRET="$jwt_secret" DB_CONTRACT_PG_URL="$db_url" \
-  deno test --node-modules-dir=none --allow-read --allow-env --allow-net=127.0.0.1,localhost --no-prompt "${@:-$root/tests/db-contract/}"
+  deno test --node-modules-dir=none --allow-read --allow-env --allow-net=127.0.0.1,localhost --no-prompt \
+    ${DB_CONTRACT_EXTRA_DENO_FLAGS:-} "${@:-$root/tests/db-contract/}"
 status=$?
 set -e
 [ $status -ne 0 ] && { echo "--- postgrest log ---"; tail -20 "$log"; }

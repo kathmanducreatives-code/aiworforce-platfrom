@@ -9,7 +9,7 @@ import { toast } from "sonner";
 
 import { useLeadLibrary, loadLocalAug, saveLocalAug } from "@/hooks/leadLibrary/useLeadLibrary";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { useDepartmentAgentStatus } from "@/hooks/useDepartmentAgentStatus";
+import { useDepartmentAgentStatus, useDepartmentAgentBlockReason } from "@/hooks/useDepartmentAgentStatus";
 import { MetricStrip, type MetricKey } from "@/components/leads/library/MetricStrip";
 import { EMPTY_FILTERS, applyFilters, type Filters } from "@/components/leads/library/FilterBar";
 import { LeadTable } from "@/components/leads/library/LeadTable";
@@ -122,6 +122,7 @@ export default function LeadLibrary() {
 
   // Atlas's live state — the same source as his dashboard card.
   const atlasStatus = useDepartmentAgentStatus(workspaceId, "atlas");
+  const atlasBlockReason = useDepartmentAgentBlockReason(workspaceId, "atlas");
 
   return (
     <div className="relative h-[calc(100vh-190px)] min-h-[640px]">
@@ -136,7 +137,7 @@ export default function LeadLibrary() {
         />
 
         <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-3">
-          <AtlasStrip rows={rows} status={atlasStatus} />
+          <AtlasStrip rows={rows} status={atlasStatus} blockReason={atlasBlockReason} />
           <MetricStrip rows={rows} active={metric} onSelect={setMetric} />
         </div>
 

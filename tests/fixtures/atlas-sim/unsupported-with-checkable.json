@@ -1,0 +1,90 @@
+{
+ "name": "unsupported-with-checkable",
+ "description": "A checkable requirement (US HQ) beside an uncheckable REQUIRED one (HubSpot): never executable, nothing bought.",
+ "covers": [
+  "uncheckable required requirement beside a checkable one"
+ ],
+ "query": "Find 5 US companies using HubSpot.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [],
+   "role_match": "any",
+   "places": [
+    {
+     "span": "US",
+     "place": "united states",
+     "other_place": null,
+     "scope": "headquarters",
+     "necessity": "required"
+    }
+   ],
+   "industries": [],
+   "signals": [],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": [
+    {
+     "span": "using HubSpot",
+     "why": "technology adoption is not a mission dimension"
+    }
+   ]
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": 5,
+   "count_span": "5",
+   "person_roles": []
+  },
+  "company_size": null,
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "northwind",
+   "name": "Northwind Ledger",
+   "site": "northwind.example",
+   "page": "Accounting software built for finance teams at mid-market companies. Close your books faster with Northwind Ledger.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "harbor",
+   "name": "Harbor Kids",
+   "site": "harborkids.example",
+   "page": "Harbor Kids sells toys and games to consumers through our online store. Free shipping for families.",
+   "model": "consumer"
+  },
+  {
+   "slug": "quartz",
+   "name": "Quartz Data",
+   "site": "quartz.example",
+   "page": "Welcome. Learn more about us.",
+   "model": "unknown"
+  },
+  {
+   "slug": "maple",
+   "name": "Maple Goods",
+   "site": "maple.example",
+   "page": "Maple Goods sells kitchenware to consumers in our online shop and supplies restaurants and other businesses wholesale.",
+   "model": "b2b_service"
+  },
+  {
+   "slug": "cobalt",
+   "name": "Cobalt Freight",
+   "site": "cobalt.example",
+   "page": "Cobalt Freight provides logistics services to manufacturers and retailers across North America.",
+   "model": "b2b_service"
+  }
+ ],
+ "expect": {
+  "planStatus": 422,
+  "planState": "not_approvable",
+  "runStatuses": [],
+  "leadsSaved": 0,
+  "actorCalls": 0,
+  "qualified": [],
+  "needsVerification": []
+ }
+}

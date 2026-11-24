@@ -41,7 +41,7 @@
 // PURE. No network, provider, model or database access.
 
 import type { EngineCompany } from "./leadCapabilityEngine.ts";
-import type { CompoundJob, PendingDecisionMaker } from "./compoundSourcingPipeline.ts";
+import type { CompoundJob, PendingDecisionMaker, RequirementEvidence } from "./compoundSourcingPipeline.ts";
 import type { CompoundPersistencePlan } from "./runAgentCompoundPersistenceAdapter.ts";
 import {
   buildCompanyRowPersistencePlan, companyRowKey, type CompanyRowDeliverable,
@@ -174,6 +174,12 @@ export function projectMissionCompanyRows(
    * the engine counts and the Workbench shows. Absent on V1.
    */
   canonical?: ReadonlyMap<string, CandidateDecision>,
+  /**
+   * What each hard answer rests on (`canonicalHardEvidence`), carried onto the
+   * row's `canonical_decision.hard_evidence` for the Leads page. Optional and
+   * additive: absent, the row is exactly as before.
+   */
+  evidence?: ReadonlyMap<string, RequirementEvidence[]>,
 ): MissionPersistenceProjection {
   const rows: MissionCompanyRow[] = [];
   const skipped: MissionPersistenceProjection["skipped"] = [];
@@ -193,6 +199,7 @@ export function projectMissionCompanyRows(
         canonicalDecision: {
           qualified: !!decision.label, bucket: decision.bucket, label: decision.label,
           hard_checks: { ...decision.hard_checks },
+          ...(evidence?.get(c.key) ? { hard_evidence: evidence.get(c.key)! } : {}),
         },
       } : {}),
     };

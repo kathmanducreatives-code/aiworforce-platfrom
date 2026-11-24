@@ -49,3 +49,39 @@ Deno.test("4. the client and the build both use the guard, and no old key remain
       `${name} must not carry the old Lovable-Cloud key`);
   }
 });
+
+// ── No server key in a public (VITE_) variable ────────────────────────────────
+import { secretKeysInPublicEnv } from "../../src/integrations/supabase/productionTarget.ts";
+
+const jwt = (claims: Record<string, unknown>) =>
+  `${btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))}.${btoa(JSON.stringify(claims)).replace(/=+$/, "")}.sig`;
+
+Deno.test("secretKeysInPublicEnv: names (never values) the VITE_ variables holding a server key", () => {
+  const env = {
+    VITE_SUPABASE_PUBLISHABLE_KEY: "sb_secret_" + "x".repeat(20),
+    VITE_OTHER: jwt({ ref: "tlvnfrxzjhsjgdofwehb", role: "service_role" }),
+    VITE_SUPABASE_URL: "https://tlvnfrxzjhsjgdofwehb.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "sb_secret_" + "y".repeat(20), // not VITE_: not inlined, not this check's concern
+  };
+  const out = secretKeysInPublicEnv(env);
+  if (JSON.stringify(out) !== JSON.stringify(["VITE_OTHER", "VITE_SUPABASE_PUBLISHABLE_KEY"])) throw new Error(`got ${JSON.stringify(out)}`);
+  if (out.join("").includes("sb_secret_")) throw new Error("values must never be returned");
+});
+
+Deno.test("secretKeysInPublicEnv: publishable and anon keys are allowed", () => {
+  const out = secretKeysInPublicEnv({
+    VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_abc",
+    VITE_ANON: jwt({ ref: "tlvnfrxzjhsjgdofwehb", role: "anon" }),
+    VITE_EMPTY: "",
+  });
+  if (out.length) throw new Error(`got ${JSON.stringify(out)}`);
+});
+
+Deno.test("the MCP source never reads import.meta.env (the plugin would inline every VITE_ value into the deployed function)", async () => {
+  const src = await Deno.readTextFile(new URL("../../src/lib/mcp/index.ts", import.meta.url));
+  const fn = await Deno.readTextFile(new URL("../../supabase/functions/mcp/index.ts", import.meta.url));
+  const code = src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  if (code.includes("import.meta.env")) throw new Error("src/lib/mcp/index.ts reads import.meta.env");
+  if (fn.includes("define_import_meta_env")) throw new Error("the generated MCP function carries an inlined env object");
+  if (/sb_secret_[A-Za-z0-9]/.test(fn)) throw new Error("the generated MCP function contains a secret key");
+});

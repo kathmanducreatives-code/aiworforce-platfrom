@@ -224,6 +224,8 @@ export async function runScenario(s: Scenario): Promise<Run> {
   const m = await seedSmokeMission({ quotes, actorLimits: { [JOBS]: 1, [DETAILS]: 1 } });
   const user = uuid(), plan = uuid();
   await sql`insert into auth.users (id, email) values (${user}, ${"scenario-" + user + "@example.invalid"})`;
+  // The requester is a member: run-agent re-checks the forwarded principal (legacyExecutionGuard).
+  await sql`insert into public.workspace_members (workspace_id, user_id, role) values (${m.ws}, ${user}, 'owner')`;
   await sql`insert into public.agents (workspace_id, slug, name, role_prompt, department) values (${m.ws}, 'scout', 'Offline Scout', 'Find and verify the requested company using source evidence.', 'research')`;
   await sql`insert into public.task_plans (id, workspace_id, user_id, user_instruction, status) values (${plan}, ${m.ws}, ${user}, ${missionGoal}, 'running')`;
   await sql`insert into public.workspace_credit_balances (workspace_id, balance_credits) values (${m.ws}, 10)`;

@@ -12,7 +12,7 @@
 
 import { linkedInAssociatedMemberCount, linkedInDeclaredSizeBand, type CompanySizeBand } from "./companySize.ts";
 import { normalizeCompanyLinkedInUrl, normalizeWebsite, sanitizeUrl } from "./structuredCompanyEnrichment.ts";
-import { ROLE_FAMILY_ALIASES, roleMatchesFamily, type RoleFamily } from "./roleFamilies.ts";
+import { namedTitles, ROLE_FAMILY_ALIASES, roleMatchesFamily, titleSatisfiesNamedRole, type RoleFamily } from "./roleFamilies.ts";
 
 export type FieldTrust = "direct" | "alias" | "transformed" | "semantic" | "unsafe";
 
@@ -591,6 +591,13 @@ export interface RequestedHiring {
   role_families: readonly string[];
   /** Literal role terms only when the mission explicitly forbids role broadening. */
   exact_role_terms?: readonly string[];
+  /** Roles the user excluded in their own words ("not SDRs"); a posting for one never proves the hiring. */
+  excluded_role_terms?: readonly string[];
+  /**
+   * The request's own role words. When one names a registered TITLE ("Account
+   * Executives"), postings are judged by that title, not by its family (D1).
+   */
+  role_terms?: readonly string[];
   /** Days, when the mission stated one; null leaves the search's own freshness filter to govern. */
   window_days: number | null;
 }
@@ -598,7 +605,7 @@ export interface RequestedHiring {
 /** The requested hiring, read from the mission's hiring signals. Null when it asks for none. */
 export function requestedHiringFromSignals(
   hiringSignals: ReadonlyArray<{ role_families?: readonly string[] | null; timeframe_days?: number | null;
-    qualifier?: { role_terms?: readonly string[] } }>,
+    qualifier?: { role_terms?: readonly string[]; excluded_role_terms?: readonly string[] } }>,
   forbidRoleBroadening = false,
 ): RequestedHiring | null {
   if (hiringSignals.length === 0) return null;
@@ -606,8 +613,31 @@ export function requestedHiringFromSignals(
     .map((f) => String(f).trim()).filter((f) => f.length > 0))];
   const windows = hiringSignals.map((sig) => Number(sig.timeframe_days))
     .filter((d) => Number.isFinite(d) && d > 0);
+  const excluded = [...new Set(hiringSignals.flatMap((s) => s.qualifier?.excluded_role_terms ?? []))];
+  const terms = [...new Set(hiringSignals.flatMap((s) => s.qualifier?.role_terms ?? []))];
   return { role_families: families, window_days: windows.length ? Math.min(...windows) : null,
-    ...(forbidRoleBroadening ? { exact_role_terms: hiringSignals.flatMap((s) => s.qualifier?.role_terms ?? []) } : {}) };
+    ...(terms.length ? { role_terms: terms } : {}),
+    ...(forbidRoleBroadening ? { exact_role_terms: hiringSignals.flatMap((s) => s.qualifier?.role_terms ?? []) } : {}),
+    ...(excluded.length ? { excluded_role_terms: excluded } : {}) };
+}
+
+/**
+ * A role term and its singular, as whole words: the user writes "Account
+ * Executives" and the posting says "Account Executive" (independent review of
+ * PR #194). Only regular English plurals of the LAST word are reduced, and a
+ * word that merely ends in "s" ("sales", "operations" stays "operations" too)
+ * is left alone unless it matches a plural ending below.
+ */
+function roleTermForms(term: string): string[] {
+  const t = term.trim().toLowerCase();
+  const m = t.match(/^(.*?)([a-z]+)$/);
+  if (!m) return [t];
+  const [, head, last] = m;
+  const singular = /ives$/.test(last) ? last.slice(0, -1)
+    : /(?:er|or|ist|ant|ent|ian|ee)s$/.test(last) ? last.slice(0, -1)
+    : /^(?:sdr|bdr|ae|am|csm|se|ceo|cto|cfo|vp)s$/.test(last) ? last.slice(0, -1)
+    : null;
+  return singular ? [t, head + singular] : [t];
 }
 
 /**
@@ -624,6 +654,15 @@ export function requestedHiringFromSignals(
  * is the evidence. A posting that fails here is not a "no": its employer stays
  * a candidate, and hiring stays unknown for a company-scoped check to answer.
  */
+/**
+ * Does a posting's TITLE satisfy the requested role (window aside)? The one role test
+ * every hiring path uses: job discovery, the open-role verifier, and qualification.
+ */
+export function postingTitleSatisfies(title: string | null | undefined, requested: RequestedHiring | null): boolean {
+  if (!requested) return true;
+  return jobProvesRequestedHiring({ title: title ?? null, posted_date: null }, { ...requested, window_days: null });
+}
+
 export function jobProvesRequestedHiring(
   job: Pick<NormalizedHiringJob, "title" | "posted_date">,
   requested: RequestedHiring | null,
@@ -634,11 +673,23 @@ export function jobProvesRequestedHiring(
   // terms, not a title exception list. Broader/synonymous requests still go to
   // contextual model evaluation. Modifiers around a literal term are allowed.
   const words = (s: string) => ` ${s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+  const title = words(job.title ?? "");
+  const named = (term: string) => roleTermForms(term).some((f) => title.includes(words(f)));
+  // An excluded role is checked first and by itself: "not SDRs" refuses an SDR
+  // posting even when its family is the one requested.
+  if ((requested.excluded_role_terms ?? []).some((term) => term.trim() && named(term))) return false;
   const exact = (requested.exact_role_terms ?? []).filter((s) => s.trim());
-  if (exact.length && !exact.some((term) => words(job.title ?? "").includes(words(term)))) return false;
-  const families = requested.role_families.filter((f): f is Exclude<RoleFamily, null | "custom"> =>
-    Object.hasOwn(ROLE_FAMILY_ALIASES, f));
-  if (families.length > 0 && !families.some((f) => roleMatchesFamily(job.title, f))) return false;
+  if (exact.length && !exact.some(named)) return false;
+  // A TITLE the request names is matched as that title (ATLAS review D1): an SDR or a
+  // Sales Representative opening does not prove "hiring Account Executives".
+  const role = { roleTerms: requested.role_terms ?? [], roleFamilies: requested.role_families, excludedRoleTerms: requested.excluded_role_terms ?? [] };
+  if (namedTitles(role).length > 0) {
+    if (!titleSatisfiesNamedRole(job.title, role)) return false;
+  } else {
+    const families = requested.role_families.filter((f): f is Exclude<RoleFamily, null | "custom"> =>
+      Object.hasOwn(ROLE_FAMILY_ALIASES, f));
+    if (families.length > 0 && !families.some((f) => roleMatchesFamily(job.title, f))) return false;
+  }
   if (requested.window_days != null && requested.window_days > 0) {
     const posted = Date.parse(job.posted_date ?? "");
     if (!Number.isFinite(posted)) return false;

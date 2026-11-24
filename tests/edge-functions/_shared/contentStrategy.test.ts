@@ -302,8 +302,13 @@ Deno.test("run-agent gives Scribe content runs the strategist's brain, once, beh
   const s = await read("supabase/functions/run-agent/index.ts");
   assert(s.includes('import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";'));
   assert(s.includes('agent_slug === "scribe" && tool_input_body?.content_loop'));
-  assert(s.includes("brainBlock = renderContentBrain(brainOnboardingCompleted ? brain : null, {"));
-  assert(s.includes("useCompanyBrain: contentLoop.use_company_brain !== false"));
+  // The gate is `brainContextAllowed`: an activated Brain, or (BRAIN_READINESS_V2) a usable one.
+  // Company Brain V1: the effective profile (approved memory folded in), behind the same gate,
+  // and the memory block only when the Brain may be used at all.
+  assert(s.includes("brainBlock = renderContentBrain(brainContextAllowed ? contentProfile : null, {"));
+  assert(s.includes("const useBrain = contentLoop.use_company_brain !== false;"));
+  assert(s.includes("useCompanyBrain: useBrain,"));
+  assert(s.includes("(brainContextAllowed && useBrain && memoryBlock ?"));
   assert(s.includes(".neq(\"status\", \"archived\")"), "recent content excludes archived drafts");
 });
 

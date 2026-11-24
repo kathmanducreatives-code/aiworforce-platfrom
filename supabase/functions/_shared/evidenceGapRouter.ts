@@ -83,7 +83,15 @@ export interface ClaimDefinition {
 const LINKEDIN_DETAILS: ClaimRoute = {
   actor: "apify_linkedin_company_details", capability: "company_enrichment",
   purpose: "the company's LinkedIn record (locations, declared size band, description)",
-  evidence_actors: ["linkedin", "apify_linkedin_company_details"],
+  // ONLY THE COMPANY RECORD ITSELF. "linkedin" is the evidence registry's label
+  // for ANY LinkedIn-derived field, including the company object inside a job
+  // search row (`leadEvidenceRegistry`), so a job posting's company location
+  // used to mark this route "already answered" for a company whose details were
+  // never fetched. Canary session 2: Baseten and Oscilar were never enriched,
+  // their HQ gap was routed nowhere, and both were held as non-viable. A fetched
+  // record is still seen: its observations carry this actor, and an answered
+  // enrichment is added to the attempted routes (`attemptedRoutesOf`).
+  evidence_actors: ["apify_linkedin_company_details"],
   canonical_executor: true, executor_note: "in-slice enrichment of every investigated company",
   cost_hint_usd: 0.004,
 };

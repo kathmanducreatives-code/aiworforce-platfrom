@@ -11,6 +11,7 @@ import type {
   AccountStatus, ContactReadiness, OutreachStatus,
 } from "./types";
 import { fitTierFromScore } from "./types";
+import { readLeadAttribution } from "../providerDiscovery";
 import type {
   CanonicalLeadView, CanonicalAccount, CanonicalSelectedRecipient,
   CanonicalDiscoverySource, CanonicalAccountStatus, CanonicalOutreachStatus,
@@ -67,6 +68,7 @@ function toSelectedRecipient(r: CanonicalSelectedRecipient | null): SelectedReci
     email: r.email,
     phone: r.phone,
     verified: r.verified,
+    roleVerification: r.roleVerification ?? null,
   };
 }
 
@@ -74,7 +76,7 @@ function toSource(s: CanonicalDiscoverySource): LeadSource {
   return {
     discoveryMethod: s.discoveryMethod,
     sourceType: s.sourceType,
-    headline: null,
+    headline: s.headline ?? null,
     url: s.sourceUrl,
     author: null,
     publishedAt: null,
@@ -141,6 +143,7 @@ export function canonicalToLeadRow(
     fitScore: view.qualification.fitScore,
     fitTier: fitTierFromScore(view.qualification.fitScore),
     whySelected: view.qualification.verdict ?? account.description ?? null,
+    unverifiedRequirements: view.qualification.unverifiedRequirements,
 
     sources,
     strongestSource: sources[0] ?? null,
@@ -163,5 +166,6 @@ export function canonicalToLeadRow(
     possibleDuplicateOf: null,
 
     canonical: view,
+    providerDiscovery: readLeadAttribution(account.raw),
   };
 }

@@ -3,6 +3,9 @@
 // content, screening, brief) with tool + approval metadata, then deterministic
 // expansion to guarantee depth. Tool availability is annotated, never faked.
 
+import { criteriaOf } from "../_shared/missionCriteriaReader.ts";
+import { type GuardDb, legacyExecutionGuard, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
+import { bindEffectPrincipal, type EffectPrincipalDb, installEffectFence, withEffectScope } from "../_shared/effectFence.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -14,6 +17,7 @@ import {
   planQualifiedLeadBeforePersistence, buildOrchestrateResponsePlan,
 } from "../_shared/intelligence/leads/leadPlanOrchestration.ts";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
+import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
@@ -26,12 +30,12 @@ import {
   isLeadMissionV1, parseLeadMissionDeterministic,
   effectiveRequestedCount, DEFAULT_REQUESTED_COUNT,
 } from "../_shared/leadMission.ts";
+import { contractMissionIntegrity } from "../_shared/missionContract/chatMission.ts";
 import { buildCapabilityGraph, type CapabilityPlan } from "../_shared/leadCapabilityGraph.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
 import { resolveLeadExecutionEngine } from "../_shared/leadExecutionEngine.ts";
 import { executabilityGateFor } from "../_shared/capabilityExecutability.ts";
 import { readinessPolicyFor } from "../_shared/routeReadiness.ts";
-import { deriveMissionCriteria } from "../_shared/missionCriteria.ts";
 import {
   defaultScreenRunBudget, kickoffRunBudget, screenDownstreamVerifiersUsd, type DefaultScreenBudget,
 } from "../_shared/fundingScreenDefaults.ts";
@@ -590,7 +594,13 @@ function stripFences(s: string): string {
 
 // ---------- Main handler ----------
 
+// Every new model/provider operation re-checks the principal (effectFence.ts, EXEC-EFFECT).
+installEffectFence();
+
 async function handleOrchestrate(req: Request): Promise<Response> {
+  // One effect scope per request (effectFence.ts); the guard below binds its principal.
+  const scoped = withEffectScope(req, () => handleOrchestrate(req));
+  if (scoped) return scoped;
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
@@ -704,6 +714,17 @@ async function handleOrchestrate(req: Request): Promise<Response> {
 
     let lead_mission: unknown;
     if (isLeadMissionV1(suppliedMission)) {
+      // A v4 mission must still be exactly the contract it was approved under (ADR-001
+      // I1/I3) before anything is planned; a v1 mission is not affected.
+      const integrity = await contractMissionIntegrity(suppliedMission);
+      if (integrity.status === "invalid") {
+        console.error("[orchestrate][mission-contract-invalid]", { workspace_id, detail: integrity.detail });
+        return json({
+          error: "mission_contract_invalid",
+          details: "the mission no longer matches its approved contract; nothing was planned and nothing was spent",
+          problems: integrity.detail,
+        }, 409);
+      }
       lead_mission = suppliedMission;
     } else if (isPureContentRequest) {
       // No mission, and no substitute invented for one. Nothing downstream may
@@ -754,6 +775,22 @@ async function handleOrchestrate(req: Request): Promise<Response> {
       .maybeSingle();
     if (!member) {
       return json({ error: "workspace_not_found", details: "User is not a member", workspace_id }, 404);
+    }
+
+    // THE LEGACY PRE-EFFECT GUARD (legacyExecutionGuard.ts), before the
+    // idempotency read, any plan, message, Brain read, model call or dispatch:
+    // pilot and client-scoped requests are refused while those are disabled.
+    {
+      const guard = await legacyExecutionGuard({
+        db: admin as unknown as GuardDb, workspaceId: workspace_id, principalUserId: userId,
+        principalMembershipVerified: true, body: b, taskIds: referencedTaskIds(b),
+      });
+      if (!guard.ok) {
+        console.error("[orchestrate][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });
+        return json({ error: guard.code, details: guard.detail }, guard.status);
+      }
+      // Every later model call or dispatch re-checks this principal (EXEC-EFFECT).
+      bindEffectPrincipal({ db: admin as unknown as EffectPrincipalDb, workspaceId: workspace_id, userId });
     }
 
     // ── THE SAME START, AGAIN ────────────────────────────────────────────
@@ -1428,6 +1465,8 @@ Return ONLY valid JSON, no prose, no markdown:
       workspaceId: workspace_id,
       onModelCall: modelCalls.sink,
       budget: modelCalls,
+      workforceTask: "multi_agent_planning",
+      terraLimiter: createTerraRunLimiter(),
     });
 
     // ── AND INTO THE LEDGER ────────────────────────────────────────────────
@@ -1553,7 +1592,7 @@ Return ONLY valid JSON, no prose, no markdown:
     const qlPlan = plannerSource === "capability_graph" ? null : await planQualifiedLeadBeforePersistence({
       // The Supabase client's generic type is deeper than the brain loader's
       // structural contract; the loader only ever reads one table.
-      admin: admin as never, workspaceId: workspace_id, userInstruction: user_instruction ?? "",
+      admin: admin as never, workspaceId: workspace_id, userId, userInstruction: user_instruction ?? "",
       toolInput: (tool_input as Record<string, unknown> | null) ?? null,
       fallbackSteps: parsed!.steps as unknown as Array<Record<string, unknown>>,
       fallbackSummary: parsed!.plan_summary,
@@ -1739,7 +1778,7 @@ Return ONLY valid JSON, no prose, no markdown:
         const read = (k: string) => Deno.env.get(k);
         const readiness = readinessPolicyFor(workspace_id, read);
         const executability = executabilityGateFor(workspace_id, read);
-        const criteria = deriveMissionCriteria(missionForRouting, readiness);
+        const criteria = criteriaOf(missionForRouting, { readiness: readiness, legacy: "rederive" });
         return defaultScreenRunBudget({
           leadV2: executability === "enforce",
           entryCapability: buildCapabilityGraph(missionForRouting, { executability, readiness }).entry_capability,
