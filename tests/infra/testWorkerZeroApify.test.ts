@@ -29,12 +29,30 @@ Deno.test("zero-Apify: `providers` is a required choice that defaults to openai-
 
 const PROBE = new URL("tests/infra/fixtures/zero-apify-probe.ts", ROOT).pathname;
 
+/**
+ * The step wraps the worker in GNU `timeout` (always present on the ubuntu runner). macOS has no
+ * `timeout`, so locally bash exited 127 before Deno ever ran. Only when it is missing, put a
+ * stand-in on PATH that drops timeout's options and duration and runs the command as is: the
+ * probe exits at once, and the permissions under test come from the unchanged `deno run` line.
+ */
+const TIMEOUT_SHIM = `if ! command -v timeout >/dev/null 2>&1; then
+  mkdir -p "$RUNNER_TEMP/bin"
+  cat > "$RUNNER_TEMP/bin/timeout" <<'SHIM'
+#!/usr/bin/env bash
+while [ $# -gt 0 ]; do case "$1" in -s|-k|--signal|--kill-after) shift 2 ;; -*) shift ;; *) break ;; esac; done
+shift
+exec "$@"
+SHIM
+  chmod +x "$RUNNER_TEMP/bin/timeout"
+  export PATH="$RUNNER_TEMP/bin:$PATH"
+fi`;
+
 /** The worker step's own shell, with the probe for the worker; bash owns the temp dir (the suite has no --allow-write). */
 async function runWorkerStep(providers: string) {
   const script = workerStep.run!.replace("worker/main.ts", PROBE);
   assert(script.includes(PROBE), "the probe stands in for the worker");
   const out = await new Deno.Command("bash", {
-    args: ["-c", `export RUNNER_TEMP="$(mktemp -d)"; trap 'rm -rf "$RUNNER_TEMP"' EXIT\n${script}\nrc=$?; cat "$RUNNER_TEMP/worker.log"; exit $rc`],
+    args: ["-c", `export RUNNER_TEMP="$(mktemp -d)"; trap 'rm -rf "$RUNNER_TEMP"' EXIT\n${TIMEOUT_SHIM}\n${script}\nrc=$?; cat "$RUNNER_TEMP/worker.log"; exit $rc`],
     cwd: new URL(".", ROOT).pathname,
     env: { PATH: Deno.env.get("PATH") ?? "", HOME: Deno.env.get("HOME") ?? "", DENO_DIR: Deno.env.get("DENO_DIR") ?? `${Deno.env.get("HOME")}/.cache/deno`,
       SESSION_MINUTES: "1", CONFIRM_REF: "zeroapifyref", PROVIDERS: providers, APIFY_API_TOKEN: "fake-apify-token-present",
