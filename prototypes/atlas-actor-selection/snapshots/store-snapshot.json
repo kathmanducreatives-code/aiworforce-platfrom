@@ -1,0 +1,263 @@
+{
+ "capturedAt": "2026-11-20T08:37:43.698Z",
+ "source": "GET https://api.apify.com/v2/store",
+ "queries": {
+  "company_discovery": "linkedin company search",
+  "hiring_signal": "linkedin jobs scraper",
+  "website_content": "website content crawler",
+  "people_at_company": "linkedin company employees",
+  "google_maps_business": "google maps business scraper"
+ },
+ "results": {
+  "company_discovery": [
+   {
+    "id": "harvestapi/linkedin-company-search",
+    "title": "LinkedIn Company Search Scraper (No Cookies)",
+    "totalUsers": 14437,
+    "monthlyUsers": 2075,
+    "rating": 4.437897697810624,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "silentflow/linkedin-profiles-companies-scraper",
+    "title": "LinkedIn Company Search Scraper | Profiles & Firmographics",
+    "totalUsers": 143,
+    "monthlyUsers": 10,
+    "rating": 5,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "b2bsearch/company-database-search",
+    "title": "LinkedIn Company Search Scraper — 115M Companies, Free Counts",
+    "totalUsers": 91,
+    "monthlyUsers": 62,
+    "rating": 4.999999999999999,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "neuralverge/neuralverge-linkedin-company-search",
+    "title": "LinkedIn Company Search — Query, Industry, Size ✅ No Cookies",
+    "totalUsers": 37,
+    "monthlyUsers": 6,
+    "rating": 0,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "powerai/linkedin-company-search-scraper",
+    "title": "LinkedIn Company Search Scraper",
+    "totalUsers": 455,
+    "monthlyUsers": 3,
+    "rating": 1.845976434860703,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   }
+  ],
+  "hiring_signal": [
+   {
+    "id": "curious_coder/linkedin-jobs-scraper",
+    "title": "Linkedin Jobs Scraper",
+    "totalUsers": 182920,
+    "monthlyUsers": 13706,
+    "rating": 4.506466267466936,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "bebity/linkedin-jobs-scraper",
+    "title": "🔥 LinkedIn Jobs Scraper",
+    "totalUsers": 49753,
+    "monthlyUsers": 4466,
+    "rating": 4.451957459319124,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "cheap_scraper/linkedin-job-scraper",
+    "title": "LinkedIn Jobs Scraper | Remove Duplicate Jobs | Pay Per Result",
+    "totalUsers": 57993,
+    "monthlyUsers": 4879,
+    "rating": 4.365011063452535,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "harvestapi/linkedin-job-search",
+    "title": "Advanced LinkedIn Job Scraper (No Cookies)",
+    "totalUsers": 8730,
+    "monthlyUsers": 840,
+    "rating": 3.927214043558698,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "valig/linkedin-jobs-scraper",
+    "title": "🏆 LinkedIn Jobs Scraper",
+    "totalUsers": 43107,
+    "monthlyUsers": 9416,
+    "rating": 4.733129166852501,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   }
+  ],
+  "website_content": [
+   {
+    "id": "apify/website-content-crawler",
+    "title": "Website Content Crawler",
+    "totalUsers": 179541,
+    "monthlyUsers": 12101,
+    "rating": 4.592320421584427,
+    "pricingModel": "FREE",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "6sigmag/fast-website-content-crawler",
+    "title": "Fast Website Content Crawler",
+    "totalUsers": 4773,
+    "monthlyUsers": 125,
+    "rating": 4.901418590329144,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "xtech/news-source-crawler",
+    "title": "Website Content Crawler | Markdown for RAG",
+    "totalUsers": 450,
+    "monthlyUsers": 11,
+    "rating": 4.763275668088772,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "mikolabs/website-content-crawler",
+    "title": "Website Content Crawler",
+    "totalUsers": 57,
+    "monthlyUsers": 3,
+    "rating": 5,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   }
+  ],
+  "people_at_company": [
+   {
+    "id": "harvestapi/linkedin-company-employees",
+    "title": "LinkedIn Company Employees Scraper (No Cookies)",
+    "totalUsers": 44016,
+    "monthlyUsers": 5633,
+    "rating": 4.131807676586241,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "b2bsearch/company-employees",
+    "title": "LinkedIn Company Employees Scraper — Emails, Phones, by Domain",
+    "totalUsers": 308,
+    "monthlyUsers": 206,
+    "rating": 5,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "memo23/linkedin-company-people-scraper",
+    "title": "LinkedIn Company Employees Scraper · Email Finder, No Login",
+    "totalUsers": 1441,
+    "monthlyUsers": 107,
+    "rating": 4.103165616062142,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "johnvc/linkedin-company-employees-api",
+    "title": "LinkedIn Company Employees API | No Login, No Cookies",
+    "totalUsers": 306,
+    "monthlyUsers": 163,
+    "rating": 0,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "thirdwatch/linkedin-company-employees-scraper",
+    "title": "LinkedIn Company Employees Scraper & New Hire Monitor",
+    "totalUsers": 1217,
+    "monthlyUsers": 79,
+    "rating": 5,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   }
+  ],
+  "google_maps_business": [
+   {
+    "id": "lurkapi/google-maps-business-leads-scraper",
+    "title": "Google Maps Business Leads Scraper (Email, Phone...)",
+    "totalUsers": 2138,
+    "monthlyUsers": 64,
+    "rating": 4.849464552556223,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "apivault_labs/google-maps-scraper-emails-contact-details-leads",
+    "title": "Google Maps Scraper — Business Emails & Phones API",
+    "totalUsers": 64,
+    "monthlyUsers": 17,
+    "rating": 5,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "buff_pineapple/google-maps-scraper",
+    "title": "Google Maps Scraper - Business Data, Reviews & Leads",
+    "totalUsers": 440,
+    "monthlyUsers": 20,
+    "rating": 0,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "delicious_zebu/google-maps-data-scraper",
+    "title": "Google Maps Scraper - Business Leads, Phones & Websites",
+    "totalUsers": 483,
+    "monthlyUsers": 9,
+    "rating": 4.786089622208396,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   },
+   {
+    "id": "lexis-solutions/google-maps-business-posts-scraper",
+    "title": "Google Maps Business Posts Scraper",
+    "totalUsers": 92,
+    "monthlyUsers": 24,
+    "rating": 5,
+    "pricingModel": "PAY_PER_EVENT",
+    "permission": null,
+    "modifiedAt": null
+   }
+  ]
+ }
+}

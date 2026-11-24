@@ -61,15 +61,26 @@ async function declaredColumns(): Promise<Set<string>> {
 async function writtenColumns(src: string): Promise<Set<string>> {
   const cols = new Set<string>(["workspace_id", "profile", "updated_at"]);
   for (const m of src.matchAll(/\brow\.([a-z_][a-z0-9_]*)\s*=/g)) cols.add(m[1].toLowerCase());
+  // Since AUTH-06 the write itself happens in public.company_brain_authorized_write:
+  // the columns its insert/update names are the columns activation writes.
+  const writer = await Deno.readTextFile(new URL("../../../supabase/migrations/20261024120000_company_brain_authorized_writer.sql", import.meta.url));
+  for (const m of writer.matchAll(/insert into public\.company_brain as b \(([^)]*)\)/g)) {
+    for (const c of m[1].split(",")) cols.add(c.trim().toLowerCase());
+  }
+  for (const m of writer.matchAll(/\b(onboarding_completed(?:_at)?)\s*=/g)) cols.add(m[1].toLowerCase());
   return cols;
 }
 
 Deno.test("activation writes onboarding_completed_at, and a migration declares it", async () => {
   const src = await fnSrc();
+  // The handler asks the authorized writer to activate; the writer sets
+  // onboarding_completed and onboarding_completed_at in the same statement.
   assert(
-    /row\.onboarding_completed_at\s*=/.test(src),
-    "activate path no longer sets onboarding_completed_at - update this test if that is intentional",
+    /activate: result\.onboarding_completed === true/.test(src),
+    "activate path no longer asks the writer to activate - update this test if that is intentional",
   );
+  const writer = await Deno.readTextFile(new URL("../../../supabase/migrations/20261024120000_company_brain_authorized_writer.sql", import.meta.url));
+  assert(/onboarding_completed_at = case when p_activate then/.test(writer), "the writer sets onboarding_completed_at on activation");
 
   const declared = await declaredColumns();
   assert(

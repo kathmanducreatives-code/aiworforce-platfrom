@@ -10,13 +10,15 @@ import {
 } from './agentRegistry';
 
 describe('agentRegistry — legacy alias resolution', () => {
+  // Workforce V2 identity map (2026-11-10): four departments. Legacy backend
+  // slugs alias to their department for display only.
   it.each([
-    ['scout', 'Lyra'],
+    ['scout', 'Atlas'],
     ['aria', 'Atlas'],
     ['hawk', 'Atlas'],
-    ['penn', 'Mira'],
-    ['scribe', 'Orion'],
-    ['pilot', 'Pilot'],
+    ['penn', 'Lyra'],
+    ['scribe', 'Lyra'],
+    ['pilot', 'Orion'],
   ])('legacy slug %s resolves publicly to %s', (slug, publicName) => {
     expect(lookupPublicAgent(slug)?.name).toBe(publicName);
   });
@@ -24,17 +26,18 @@ describe('agentRegistry — legacy alias resolution', () => {
   it.each([
     ['lyra', 'Lyra'],
     ['atlas', 'Atlas'],
-    ['mira', 'Mira'],
+    ['lisa', 'Lisa'],
     ['orion', 'Orion'],
-    ['pilot', 'Pilot'],
+    ['mira', 'Lyra'],   // retired public id → its department
+    ['pilot', 'Orion'], // retired public id → its department
   ])('canonical id %s resolves to %s', (id, publicName) => {
     expect(lookupPublicAgent(id)?.name).toBe(publicName);
   });
 
   it('is case-insensitive for slugs and names', () => {
-    expect(lookupPublicAgent('SCOUT')?.name).toBe('Lyra');
+    expect(lookupPublicAgent('SCOUT')?.name).toBe('Atlas');
     expect(lookupPublicAgent('Atlas')?.name).toBe('Atlas');
-    expect(lookupPublicAgent('  Mira  ')?.name).toBe('Mira');
+    expect(lookupPublicAgent('  Mira  ')?.name).toBe('Lyra');
   });
 });
 
@@ -44,7 +47,7 @@ describe('agentRegistry — historical attribution', () => {
     const row = { agent_slug: 'hawk' as const };
     const display = resolveAgentForDisplay(row.agent_slug);
     expect(display.name).toBe('Atlas');
-    expect(display.title).toBe('AI Account Analyst');
+    expect(display.title).toBe('Sales & Lead Intelligence');
   });
 });
 
@@ -62,9 +65,9 @@ describe('agentRegistry — unknown identity behavior', () => {
     expect(lookupPublicAgent('quasar')).toBeNull();
   });
 
-  it('only falls back to Pilot when explicitly requested', () => {
-    expect(resolveAgentForDisplay('quasar', { pilotFallback: true }).name).toBe('Pilot');
-    expect(resolveAgentForDisplay(null, { pilotFallback: true }).name).toBe('Pilot');
+  it('only falls back to the coordinator (Orion, formerly Pilot) when explicitly requested', () => {
+    expect(resolveAgentForDisplay('quasar', { pilotFallback: true }).name).toBe('Orion');
+    expect(resolveAgentForDisplay(null, { pilotFallback: true }).name).toBe('Orion');
   });
 });
 
@@ -78,20 +81,14 @@ describe('agentRegistry — Atlas capability metadata', () => {
 
   it('does not expose a single merged engine for Atlas', () => {
     const atlas = PUBLIC_AGENTS.atlas;
-    // Ensure both engines are still individually addressable
-    expect(new Set(Object.values(atlas.internalCapabilities ?? {})).size).toBe(2);
+    // Sourcing, qualification and research stay individually addressable
+    expect(new Set(Object.values(atlas.internalCapabilities ?? {})).size).toBe(3);
   });
 });
 
 describe('agentRegistry — public list composition', () => {
-  it('publishes exactly 5 unique public identities in canonical order', () => {
-    expect(PUBLIC_AGENT_LIST.map((a) => a.name)).toEqual([
-      'Pilot',
-      'Lyra',
-      'Atlas',
-      'Mira',
-      'Orion',
-    ]);
+  it('publishes exactly 4 department identities in canonical order', () => {
+    expect(PUBLIC_AGENT_LIST.map((a) => a.name)).toEqual(['Orion', 'Atlas', 'Lisa', 'Lyra']);
   });
 
   it('marks all 6 legacy slugs as internal / hidden', () => {

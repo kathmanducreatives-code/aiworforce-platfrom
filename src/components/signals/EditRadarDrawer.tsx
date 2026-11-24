@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { X } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { saveCompanyBrainPatch } from "@/lib/companyBrainSave";
 import { mergePreferences, type SignalPreferences } from "@/lib/signalPreferences";
 
 interface Props {
@@ -16,6 +16,8 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   workspaceId: string | null;
   brainProfile: Record<string, any> | null;
+  /** `company_brain.updated_at` of `brainProfile`; the save is built on it. */
+  brainUpdatedAt: string | null;
   onSaved?: (prefs: SignalPreferences) => void;
 }
 
@@ -57,7 +59,7 @@ function ChipInput({ label, value, onChange, placeholder }: {
   );
 }
 
-export default function EditRadarDrawer({ open, onOpenChange, workspaceId, brainProfile, onSaved }: Props) {
+export default function EditRadarDrawer({ open, onOpenChange, workspaceId, brainProfile, brainUpdatedAt, onSaved }: Props) {
   const [prefs, setPrefs] = useState<SignalPreferences>(() => mergePreferences(brainProfile as any, brainProfile?.signal_preferences ?? null));
   const [saving, setSaving] = useState(false);
 
@@ -69,11 +71,13 @@ export default function EditRadarDrawer({ open, onOpenChange, workspaceId, brain
     if (!workspaceId) return;
     setSaving(true);
     try {
-      const next = { ...(brainProfile ?? {}), signal_preferences: prefs };
-      const { error } = await (supabase as any)
-        .from("company_brain")
-        .upsert({ workspace_id: workspaceId, profile: next, updated_at: new Date().toISOString() }, { onConflict: "workspace_id" });
-      if (error) throw error;
+      // Only the radar's own key is sent, through the one Brain write path. The old
+      // write re-upserted the WHOLE cached profile, reverting any Brain edit made
+      // since this page loaded it.
+      const result = await saveCompanyBrainPatch({
+        workspaceId, patch: { signal_preferences: prefs }, expectedUpdatedAt: brainUpdatedAt,
+      });
+      if (!result.ok) throw new Error(result.message);
       toast.success("Radar settings saved");
       onSaved?.(prefs);
       onOpenChange(false);

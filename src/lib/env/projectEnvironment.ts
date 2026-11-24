@@ -12,29 +12,21 @@
 // Pure — no network. Reads only the already-public Vite env values.
 
 /**
- * SINGLE-PROJECT DEPLOYMENT. Both keys hold the SAME ref, deliberately.
+ * TWO PROJECTS AGAIN (2026-10-18): production `ohsdatpvfdjdemstoiuj` and the
+ * ISOLATED TEST project `tlvnfrxzjhsjgdofwehb` (agentory-discovery-test).
  *
- * Agentory previously ran two projects, and this map existed to stop one being
- * mistaken for the other — the audit that created it found the frontend talking
- * to production while the tooling talked to test. As of the migration to
- * `ohsdatpvfdjdemstoiuj` there is one project serving both roles, so that
- * particular confusion is no longer possible: there is nowhere else to send a
- * request.
+ * This map once held the production ref under both keys, from the period when
+ * one project served both roles. The CLI tooling moved on (scripts/
+ * verify-deploy-target.mjs names the isolated TEST ref) but this frontend copy
+ * did not, so the app classified the real TEST project as "unknown", badged it
+ * "NON-PRODUCTION — <ref>", and its setup screen told developers to point
+ * local TEST at the PRODUCTION URL (audit 2026-11-12). It now matches the CLI.
  *
- * The map is kept rather than collapsed because the guard it feeds is still
- * worth having, and its meaning has simply changed. It no longer answers "is
- * this test or production" — it answers "is this the project we are supposed to
- * be talking to at all", which is the question that matters while two abandoned
- * projects still exist and still accept credentials.
- *
- * Resolution order puts `production` first, so a ref matching both classifies as
- * production. That is correct: with one live project, everything IS production.
- * No behaviour is lost — every capability in `capabilityRegistry` is enabled for
- * all environments, so nothing was ever test-only.
+ * Resolution order still puts `production` first.
  */
 export const CANONICAL_PROJECT_REFS = {
   production: "ohsdatpvfdjdemstoiuj",
-  test: "ohsdatpvfdjdemstoiuj",
+  test: "tlvnfrxzjhsjgdofwehb",
 } as const;
 
 export type ProjectEnvironmentName = "production" | "test" | "unknown";

@@ -98,6 +98,9 @@ Deno.test("WORKFLOW: runs exactly the repo's own suites — the same commands as
   const install = b.findIndex((r) => r.includes("npm ci"));
   const infra = b.findIndex((r) => r.includes(PKG.scripts["test:deploy-safety"]));
   assert(install >= 0 && install < infra, "npm ci before the deploy-safety suite");
+  // The Lead V2 quality regressions are a CI gate (known-unfixed cases are skipped by name).
+  assert(b.some((r) => r.includes("npm run -s test:lead-v2-quality")), "backend runs the Lead V2 quality regressions");
+  assert(PKG.scripts["test:lead-v2-quality"]?.includes("tests/lead-v2-quality/"), "package.json defines test:lead-v2-quality");
   const frontend = runs("frontend");
   for (const script of ["test:ui", "test:ui:node", "build"]) {
     assert(frontend.includes(`npm run ${script}`), script);

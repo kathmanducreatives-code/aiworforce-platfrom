@@ -327,6 +327,11 @@ export interface ReadResult {
   items: Array<Record<string, unknown>>;
   /** True when the workspace genuinely holds nothing of this kind. */
   empty: boolean;
+  /**
+   * R1.1: the query FAILED. Not empty — unknown. Rendered as a retrieval
+   * error, never as "you don't have any…".
+   */
+  failed?: boolean;
 }
 
 /** The narrow client surface this module is allowed to use. */
@@ -373,7 +378,7 @@ export async function executeRead(
       let events: Array<Record<string, unknown>> = [];
       if (subj.subject_keys.length > 0) {
         let q = db.from("signal_events")
-          .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url")
+          .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url, verification_status, lifecycle_status, normalized_value")
           .eq("workspace_id", workspaceId)
           .in("subject_key", subj.subject_keys)
           .order("occurred_at", { ascending: false })
@@ -418,14 +423,18 @@ export async function executeRead(
     }
 
     if (plan.target === "signals") {
+      // R1.1: ordered by when Agentory OBSERVED the signal. `occurred_at` is
+      // null on most rows, and Postgres sorts nulls first in descending order,
+      // so "latest" used to mean "undated first".
       let q = db.from("signal_events")
-        .select("signal_type, subject_key, occurred_at, confidence, freshness, origin, source_url",
+        .select("signal_type, subject_key, occurred_at, observed_at, confidence, freshness, origin, source_url, verification_status, lifecycle_status, normalized_value",
           { count: "exact" })
         .eq("workspace_id", workspaceId)
-        .order("occurred_at", { ascending: false })
+        .order("observed_at", { ascending: false })
         .limit(plan.limit);
       if (sinceIso) q = q.gte("occurred_at", sinceIso);
-      const { data, count: signalCount } = await q;
+      const { data, error: signalError, count: signalCount } = await q;
+      if (signalError) return { target: "signals", counts: {}, items: [], empty: false, failed: true, gaps: [] };
       const items = (data ?? []) as Array<Record<string, unknown>>;
       const byType: Record<string, number> = {};
       for (const r of items) {
@@ -509,7 +518,8 @@ export async function executeRead(
         // page is widened before the in-memory filter narrows it.
         .limit(scoped ? 200 : plan.limit);
       if (sinceIso) lq = lq.gte("created_at", sinceIso);
-      const { data: leads, count: leadCount } = await lq;
+      const { data: leads, error: leadError, count: leadCount } = await lq;
+      if (leadError) return { target: "companies", counts: {}, items: [], empty: false, failed: true, gaps: [] };
       const { data: watched, count: watchedCount } = await db
         .from("monitoring_subjects")
         .select("label, identifier, signals, enabled, last_run_at", { count: "exact" })
@@ -761,6 +771,7 @@ export function readOutcome(
   if (!plan.target) {
     return unsupported(plan.unsupported ?? "no_read_surface");
   }
+  if (result?.failed) return failed("read_failed", "provider_failure");
   const gaps: DeclaredGap[] = [
     ...(result?.gaps ?? []),
     ...(unidentified.length > 0
@@ -835,6 +846,11 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
   if (!plan.target) {
     return "I understood that as a question about what I already know, but I don't have a way to look that up yet.";
   }
+  // R1.1: A FAILED READ IS NOT AN EMPTY ONE.
+  if (result?.failed) {
+    const what = plan.target === "signals" ? "your signals" : plan.target === "companies" ? "your leads" : "that";
+    return `I couldn't read ${what} just now — that's a retrieval error on my side, not an empty list. Nothing was changed; ask me again in a moment.`;
+  }
   const window = plan.since_days ? ` in the last ${plan.since_days} days` : "";
 
   // ── THE SCOPED ANSWER NAMES THE COMPANY IT IS ABOUT ─────────────────────
@@ -906,8 +922,10 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
       .sort((a, b) => b[1] - a[1])
       .map(([k, n]) => `${n} ${k.replace(/_/g, " ")}`).join(", ");
     const listed = result.items.slice(0, 5);
+    // EVERY LINE SAYS HOW WELL IT IS SUPPORTED, WHEN, AND WHERE FROM — never
+    // a bare claim (Workforce V2: "is this announcement verified?").
     const recent = listed
-      .map((r) => `• ${String(r.subject_key ?? "unknown")} — ${String(r.signal_type ?? "signal").replace(/_/g, " ")}`)
+      .map((r) => `• ${signalSubjectName(r)} — ${String(r.signal_type ?? "signal").replace(/_/g, " ")}${signalEvidenceSuffix(r)}`)
       .join("\n");
     // THE BREAKDOWN DESCRIBES THE PAGE, NOT THE TOTAL, and the list is a
     // sample. Saying "(6 market problem discussion, …)" beside a counted total
@@ -1009,4 +1027,37 @@ export function renderReadAnswer(plan: ReadPlan, result: ReadResult | null): str
     })
     .join("\n");
   return `${total} run${total === 1 ? "" : "s"}${window}.\n\n${rows}`;
+}
+
+// ── SIGNAL VERIFICATION, AS CHAT STATES IT ──────────────────────────────────
+// LISA V2 rows carry a COUNTED level (normalized_value.lisa.verification);
+// older rows only the column. A provider label is never called "verified".
+export function signalVerificationLabel(r: Record<string, unknown>): string {
+  const lisa = ((r.normalized_value as Record<string, unknown> | null)?.lisa ?? null) as Record<string, unknown> | null;
+  const v = (lisa?.verification ?? null) as { level?: string; independent_sources?: number } | null;
+  const life = String(r.lifecycle_status ?? "active");
+  if (life === "retracted") return "retracted — not current";
+  if (life === "contradicted") return "disputed — sources disagree";
+  if (life === "dismissed") return "dismissed by you";
+  if (life === "stale" || life === "expired") return "out of date";
+  switch (v?.level) {
+    case "corroborated": return `verified by ${v.independent_sources ?? 2} independent sources`;
+    case "self_reported": return "announced by the company itself";
+    case "single_source": return "single source — not yet confirmed";
+    case "contradicted": return "disputed — sources disagree";
+  }
+  return r.verification_status === "self_reported" ? "announced by the company itself" : "unverified";
+}
+function signalSubjectName(r: Record<string, unknown>): string {
+  const lisa = ((r.normalized_value as Record<string, unknown> | null)?.lisa ?? null) as Record<string, unknown> | null;
+  const name = (lisa?.company as { name?: string } | undefined)?.name ?? (r.normalized_value as { company_name?: string } | null)?.company_name;
+  return String(name ?? r.subject_key ?? "unknown");
+}
+function signalEvidenceSuffix(r: Record<string, unknown>): string {
+  // R1.1: the observed date when no event date was recorded — every stored
+  // signal has one. "date not stated" was shown for 35 of 37 dated signals.
+  const date = typeof r.occurred_at === "string" ? ` · ${r.occurred_at.slice(0, 10)}`
+    : typeof r.observed_at === "string" ? ` · observed ${r.observed_at.slice(0, 10)}` : " · date not recorded";
+  const src = typeof r.source_url === "string" && /^https?:\/\//.test(r.source_url) ? ` · ${r.source_url}` : " · no source link";
+  return ` · ${signalVerificationLabel(r)}${date}${src}`;
 }

@@ -1,0 +1,541 @@
+{
+  "manifest_version": "terra-bench-manifest-v1",
+  "stage": 1,
+  "generated_offline": true,
+  "cap_usd": 2,
+  "hard_maximum_usd": 1.4314,
+  "fits_cap": true,
+  "repeats": 3,
+  "calls": 357,
+  "retries": 0,
+  "approval_env": "AGENTORY_MODEL_BENCH_APPROVED",
+  "approval_value": "I approve paid model benchmark spend up to $2.00 for stage 1",
+  "command": "AGENTORY_MODEL_BENCH_APPROVED=\"I approve paid model benchmark spend up to $2.00 for stage 1\" deno run --allow-read --allow-env --allow-net=api.openai.com,api.anthropic.com scripts/model-bench/run.ts --live --stage 1 --budget-usd 2.00 > bench-stage1.jsonl",
+  "prices": {
+    "claude-haiku-4-5-20251001": {
+      "input_per_1m": 1,
+      "cached_input_per_1m": 0.1,
+      "output_per_1m": 5,
+      "cache_write_per_1m": 1.25,
+      "billed_by": "anthropic",
+      "price_source": "Anthropic published API pricing, platform.claude.com/docs/en/about-claude/pricing (Claude Haiku 4.5: $1/MTok base input, $0.10/MTok cache hits, $5/MTok output)",
+      "effective": "2026-09-10"
+    },
+    "gpt-5.6-luna": {
+      "input_per_1m": 0.2,
+      "cached_input_per_1m": 0.02,
+      "output_per_1m": 1.2,
+      "cache_write_per_1m": 0.25,
+      "billed_by": "openai",
+      "price_source": "OpenAI pricing page, developers.openai.com/api/docs/pricing",
+      "effective": "2026-11-11"
+    },
+    "gpt-6.1-terra": {
+      "input_per_1m": 1,
+      "cached_input_per_1m": 0.05,
+      "output_per_1m": 5,
+      "cache_write_per_1m": 1.25,
+      "billed_by": "openai",
+      "price_source": "OpenAI model page + pricing page",
+      "effective": "2026-11-11",
+      "long_context": {
+        "above_input_tokens": 272000,
+        "input_mult": 2,
+        "output_mult": 1.5
+      }
+    },
+    "gpt-6-luna": {
+      "input_per_1m": 0.1,
+      "cached_input_per_1m": 0.01,
+      "output_per_1m": 0.5,
+      "cache_write_per_1m": 0.125,
+      "billed_by": "openai",
+      "price_source": "published list price",
+      "effective": "2026-10-28"
+    },
+    "claude-haiku-5-5": {
+      "input_per_1m": 0.1,
+      "cached_input_per_1m": 0.01,
+      "output_per_1m": 0.5,
+      "cache_write_per_1m": 0.125,
+      "billed_by": "anthropic",
+      "price_source": "Anthropic published API pricing",
+      "effective": "2026-11-11",
+      "long_context": {
+        "above_input_tokens": 100000,
+        "input_mult": 5,
+        "output_mult": 5
+      }
+    }
+  },
+  "candidates": [
+    {
+      "id": "haiku-4.5",
+      "model": "claude-haiku-4-5-20251001",
+      "vendor": "anthropic",
+      "effort": null,
+      "role": "current: chat replies, planning, ORION wording, LYRA",
+      "hard_max_per_pass_usd": 0.10142
+    },
+    {
+      "id": "luna-5.6",
+      "model": "gpt-5.6-luna",
+      "vendor": "openai",
+      "effort": "none",
+      "role": "current: understanding, ATLAS, LISA",
+      "hard_max_per_pass_usd": 0.0136
+    },
+    {
+      "id": "terra-6.1-none",
+      "model": "gpt-6.1-terra",
+      "vendor": "openai",
+      "effort": "none",
+      "role": "candidate",
+      "hard_max_per_pass_usd": 0.05967
+    },
+    {
+      "id": "terra-6.1-low",
+      "model": "gpt-6.1-terra",
+      "vendor": "openai",
+      "effort": "low",
+      "role": "candidate",
+      "hard_max_per_pass_usd": 0.10142
+    },
+    {
+      "id": "terra-6.1-medium",
+      "model": "gpt-6.1-terra",
+      "vendor": "openai",
+      "effort": "medium",
+      "role": "candidate (OpenAI default effort)",
+      "hard_max_per_pass_usd": 0.18492
+    },
+    {
+      "id": "luna-6",
+      "model": "gpt-6-luna",
+      "vendor": "openai",
+      "effort": "none",
+      "role": "alternative cheap base",
+      "hard_max_per_pass_usd": 0.00597
+    },
+    {
+      "id": "haiku-5.5",
+      "model": "claude-haiku-5-5",
+      "vendor": "anthropic",
+      "effort": null,
+      "role": "alternative cheap prose (adaptive thinking, default effort)",
+      "hard_max_per_pass_usd": 0.01014
+    }
+  ],
+  "tasks": [
+    {
+      "id": "orion-priority-1",
+      "category": "executive",
+      "workforce_task": "orion_reasoning",
+      "max_output_tokens": 700,
+      "json_keys": [
+        "executive_answer",
+        "why_it_matters",
+        "evidence",
+        "recommended_actions",
+        "uncertainty"
+      ],
+      "must_mention": null,
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 213,
+      "user_chars": 639,
+      "sha256": "a32325472e07f175a0362055de0ba39baa26986a8411405cd8b48332ad73f8e7",
+      "system": "You are ORION. Answer only from the evidence. Cite evidence ids like [E1]. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nWhat should I prioritize this week? Reply as JSON {\"executive_answer\",\"why_it_matters\",\"evidence\":[ids],\"recommended_actions\":[],\"uncertainty\"}."
+    },
+    {
+      "id": "orion-plan-1",
+      "category": "planning",
+      "workforce_task": "executive_planning",
+      "max_output_tokens": 600,
+      "json_keys": [
+        "steps"
+      ],
+      "must_mention": null,
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 192,
+      "user_chars": 625,
+      "sha256": "6d08631b8f1bb36947ce9ca6b044e7c40d0abfa3eed21c52545287ece4d79546",
+      "system": "You are ORION planning work for ATLAS, LISA and LYRA. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nPlan the next steps to turn the expansion signals into qualified leads. JSON {\"steps\":[{\"department\",\"action\",\"needs_approval\"}]}."
+    },
+    {
+      "id": "orion-qa-1",
+      "category": "factual_reliability",
+      "workforce_task": "complex_company_qa",
+      "max_output_tokens": 400,
+      "json_keys": null,
+      "must_mention": null,
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 211,
+      "user_chars": 569,
+      "sha256": "0066b654a884e5e8fa6696893b65fb8160df880f345f84a595fd3a17f0e4e583",
+      "system": "You are ORION. Answer only from the evidence and say what is unverified. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nIs Pinecrest Tooling's CNC expansion verified, and should ATLAS pursue it?"
+    },
+    {
+      "id": "atlas-qual-1",
+      "category": "lead_research",
+      "workforce_task": "atlas_qualification",
+      "max_output_tokens": 700,
+      "json_keys": [
+        "verdicts"
+      ],
+      "must_mention": null,
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 190,
+      "user_chars": 581,
+      "sha256": "bcae70c03c4762983599a158ab19b7b94d2227e0264d76a026be856e0ebe97fe",
+      "system": "You are ATLAS qualifying companies against the ICP. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nQualify each company. JSON {\"verdicts\":[{\"company\",\"qualified\",\"reason\",\"evidence\"}]}."
+    },
+    {
+      "id": "lisa-interp-1",
+      "category": "market_signal",
+      "workforce_task": "lisa_interpretation",
+      "max_output_tokens": 600,
+      "json_keys": [
+        "signals"
+      ],
+      "must_mention": null,
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 188,
+      "user_chars": 570,
+      "sha256": "2de23e4b0fd38e9799c0798a8350316a44e2d3f52c645faa1c7bb08d407e004b",
+      "system": "You are LISA judging signal relevance to the ICP. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nFor each signal: JSON {\"signals\":[{\"id\",\"relevant\",\"verification\",\"why\"}]}."
+    },
+    {
+      "id": "lyra-post-1",
+      "category": "content",
+      "workforce_task": "lyra_content",
+      "max_output_tokens": 400,
+      "json_keys": null,
+      "must_mention": null,
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 226,
+      "user_chars": 612,
+      "sha256": "132931719da54fd66fc36408bef0a912318f8ec41c1d52e0a7cd505e4ad59fb7",
+      "system": "You are LYRA writing a LinkedIn post in a plain founder voice. Use only verified facts. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nWrite a short LinkedIn post about the Midwest manufacturing expansion signal in [E1]. Do not name excluded companies."
+    },
+    {
+      "id": "orion-icp-qa-1",
+      "category": "icp_qa",
+      "workforce_task": "complex_company_qa",
+      "max_output_tokens": 500,
+      "json_keys": null,
+      "must_mention": [
+        [
+          "Kestrel"
+        ],
+        [
+          "Midwest",
+          "Ohio"
+        ]
+      ],
+      "must_not_recommend": [
+        "Cloudnova Software"
+      ],
+      "max_words": null,
+      "system_chars": 295,
+      "user_chars": 575,
+      "sha256": "4082ca5034a0c15670c2a60fb130e0776c169e5de305fcf0bd7d16ca48a9bb2c",
+      "system": "You are ORION. Answer only from the evidence and the Company Brain. Cite evidence ids. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.\nGOALS (approved): win 3 Midwest manufacturing customers this quarter.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nWhich opportunities best match our ICP and current goals? Rank them and say why."
+    },
+    {
+      "id": "atlas-research-1",
+      "category": "lead_research",
+      "workforce_task": "atlas_qualification",
+      "max_output_tokens": 500,
+      "json_keys": [
+        "company",
+        "worth_contacting",
+        "reasons",
+        "evidence",
+        "missing_information"
+      ],
+      "must_mention": [
+        [
+          "400",
+          "size",
+          "employees"
+        ],
+        [
+          "outside",
+          "exceed",
+          "above",
+          "larger",
+          "not"
+        ]
+      ],
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 222,
+      "user_chars": 830,
+      "sha256": "42d6c0d7ef37355614a41d3dc633425de3eb539da2af4ba8631c4b1fef0c148e",
+      "system": "You are ATLAS. Decide whether a company is worth contacting. Use only the evidence. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E5] Ridgeway Castings (Indiana, 90 employees) \"is expanding into a new facility\" — trade-blog.example, 2026-11-03, single source.\n[E6] Ridgeway Castings press office: \"we have no expansion plans this year\" — ridgeway.example/press, 2026-11-05, company statement.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line — 2026-06-01, unverified, older than 60 days.\n[E7] Summit Robotics (Texas, 400 employees) is hiring 30 assemblers — jobs.example/summit, 2026-11-07, single source.\n\nEvaluate Summit Robotics and determine whether it is worth contacting. JSON {\"company\",\"worth_contacting\",\"reasons\":[],\"evidence\":[ids],\"missing_information\":[]}."
+    },
+    {
+      "id": "lisa-reliability-1",
+      "category": "factual_reliability",
+      "workforce_task": "lisa_interpretation",
+      "max_output_tokens": 500,
+      "json_keys": [
+        "signals"
+      ],
+      "must_mention": [
+        [
+          "contradict",
+          "denied",
+          "no expansion",
+          "conflict"
+        ],
+        [
+          "stale",
+          "old",
+          "unverified",
+          "outdated"
+        ]
+      ],
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 243,
+      "user_chars": 852,
+      "sha256": "08478242a9ad27cbc5901127047d3031a19f2c6fbf7830d6451e996e3cab2cf8",
+      "system": "You are LISA. Judge each signal's reliability. Never treat a single or contradicted source as confirmed. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E5] Ridgeway Castings (Indiana, 90 employees) \"is expanding into a new facility\" — trade-blog.example, 2026-11-03, single source.\n[E6] Ridgeway Castings press office: \"we have no expansion plans this year\" — ridgeway.example/press, 2026-11-05, company statement.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line — 2026-06-01, unverified, older than 60 days.\n[E7] Summit Robotics (Texas, 400 employees) is hiring 30 assemblers — jobs.example/summit, 2026-11-07, single source.\n\nDoes Ridgeway Castings' expansion announcement represent a meaningful buying signal? And what about Pinecrest Tooling? JSON {\"signals\":[{\"company\",\"meaningful\",\"verification\",\"why\"}]}."
+    },
+    {
+      "id": "orion-plan-5-1",
+      "category": "planning",
+      "workforce_task": "multi_agent_planning",
+      "max_output_tokens": 900,
+      "json_keys": [
+        "companies",
+        "steps"
+      ],
+      "must_mention": null,
+      "must_not_recommend": [
+        "Cloudnova Software",
+        "Summit Robotics"
+      ],
+      "max_words": null,
+      "system_chars": 283,
+      "user_chars": 1340,
+      "sha256": "3a8ca7f1d451117eb1af77f6cd72e0ee7025ccf450aad66c411a45bc57a6ea33",
+      "system": "You are ORION coordinating ATLAS (research/qualification), LISA (signals) and LYRA (content). Paid sourcing and any external send need approval. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E5] Ridgeway Castings (Indiana, 90 employees) \"is expanding into a new facility\" — trade-blog.example, 2026-11-03, single source.\n[E6] Ridgeway Castings press office: \"we have no expansion plans this year\" — ridgeway.example/press, 2026-11-05, company statement.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line — 2026-06-01, unverified, older than 60 days.\n[E7] Summit Robotics (Texas, 400 employees) is hiring 30 assemblers — jobs.example/summit, 2026-11-07, single source.\nEVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nCoordinate research, qualification and content creation for the five most promising companies. JSON {\"companies\":[],\"steps\":[{\"department\",\"company\",\"action\",\"needs_approval\"}]}."
+    },
+    {
+      "id": "lyra-message-1",
+      "category": "content",
+      "workforce_task": "lyra_content",
+      "max_output_tokens": 250,
+      "json_keys": null,
+      "must_mention": [
+        [
+          "Dayton",
+          "second plant",
+          "new plant"
+        ]
+      ],
+      "must_not_recommend": null,
+      "max_words": 90,
+      "system_chars": 293,
+      "user_chars": 622,
+      "sha256": "aa6a2d9dd819c308349ab4a3d2e3a20fc950f9ecb76141c23425d753986e8a22",
+      "system": "You are LYRA. Write in a plain, warm founder voice: short sentences, no hype words (\"revolutionary\", \"game-changing\"), no emojis. Use only verified facts. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nWrite a personalized LinkedIn message (under 90 words) to Kestrel Fabrication's operations lead using the verified signal [E1]."
+    },
+    {
+      "id": "brain-memory-1",
+      "category": "memory",
+      "workforce_task": "complex_company_qa",
+      "max_output_tokens": 300,
+      "json_keys": null,
+      "must_mention": [
+        [
+          "Kestrel"
+        ],
+        [
+          "exclu"
+        ]
+      ],
+      "must_not_recommend": [
+        "Cloudnova Software"
+      ],
+      "max_words": null,
+      "system_chars": 271,
+      "user_chars": 575,
+      "sha256": "5e21d50c2a281345998bcd72224c0de024c010ae20abfbd7d06d5e4db0b4b24e",
+      "system": "You are ORION. Apply ONLY approved Company Brain facts. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.\nPENDING PROPOSAL (NOT approved — ignore): \"Exclude manufacturing companies.\"",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nShould ATLAS pursue Kestrel Fabrication and Cloudnova Software? Answer for each."
+    },
+    {
+      "id": "orion-brief-1",
+      "category": "executive_brief",
+      "workforce_task": "orion_reasoning",
+      "max_output_tokens": 600,
+      "json_keys": [
+        "headline",
+        "top_actions",
+        "risks",
+        "evidence"
+      ],
+      "must_mention": [
+        [
+          "approval"
+        ],
+        [
+          "Kestrel"
+        ],
+        [
+          "contradict",
+          "conflict",
+          "denied",
+          "Ridgeway"
+        ]
+      ],
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 230,
+      "user_chars": 994,
+      "sha256": "6de7589c2cc72e61501dd758ac3563c18dedc874daa8714c444eafbf9544114e",
+      "system": "You are ORION writing the daily executive brief. Use ONLY the facts. Never invent activity. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "FACTS:\n- 2 approvals waiting (send outreach to Kestrel Fabrication; publish LinkedIn draft).\n- LISA: 1 verified signal [E1], 1 contradicted [E5/E6].\n- ATLAS: mission \"Midwest manufacturers\" finished, 3 qualified, 1 failed (provider timeout).\nEVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E5] Ridgeway Castings (Indiana, 90 employees) \"is expanding into a new facility\" — trade-blog.example, 2026-11-03, single source.\n[E6] Ridgeway Castings press office: \"we have no expansion plans this year\" — ridgeway.example/press, 2026-11-05, company statement.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line — 2026-06-01, unverified, older than 60 days.\n[E7] Summit Robotics (Texas, 400 employees) is hiring 30 assemblers — jobs.example/summit, 2026-11-07, single source.\n\nWrite today's brief. JSON {\"headline\",\"top_actions\":[],\"risks\":[],\"evidence\":[ids]}."
+    },
+    {
+      "id": "structured-1",
+      "category": "structured_output",
+      "workforce_task": "routine_extraction",
+      "max_output_tokens": 200,
+      "json_keys": [
+        "company",
+        "employees",
+        "state",
+        "event",
+        "date",
+        "verified"
+      ],
+      "must_mention": [
+        [
+          "140"
+        ],
+        [
+          "2026-10-30"
+        ],
+        [
+          "true"
+        ]
+      ],
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 204,
+      "user_chars": 721,
+      "sha256": "f55d883e1080fd6480228de4771b7897f7798948046d845963951575890ff49c",
+      "system": "Extract structured data exactly. Output JSON only, with exactly these keys and types: {\"company\": string, \"employees\": number, \"state\": string, \"event\": string, \"date\": \"YYYY-MM-DD\", \"verified\": boolean}.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E5] Ridgeway Castings (Indiana, 90 employees) \"is expanding into a new facility\" — trade-blog.example, 2026-11-03, single source.\n[E6] Ridgeway Castings press office: \"we have no expansion plans this year\" — ridgeway.example/press, 2026-11-05, company statement.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line — 2026-06-01, unverified, older than 60 days.\n[E7] Summit Robotics (Texas, 400 employees) is hiring 30 assemblers — jobs.example/summit, 2026-11-07, single source.\n\nExtract the record for Kestrel Fabrication from [E1]."
+    },
+    {
+      "id": "orion-rejection-1",
+      "category": "rejection_explanation",
+      "workforce_task": "complex_company_qa",
+      "max_output_tokens": 300,
+      "json_keys": null,
+      "must_mention": [
+        [
+          "R1",
+          "R2"
+        ],
+        [
+          "software",
+          "exclu"
+        ]
+      ],
+      "must_not_recommend": [
+        "Cloudnova Software"
+      ],
+      "max_words": null,
+      "system_chars": 210,
+      "user_chars": 753,
+      "sha256": "ab0c0446dd76bb0b3bbdabfc677f10ce91faf0ff64c61c7aa84fd5cfb65007a5",
+      "system": "You are ORION. Explain recorded decisions using only the records given. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "RECORDS:\n[R1] lead_candidates: Cloudnova Software — status rejected, fit 20, reason \"software company, outside manufacturing ICP\", 2026-11-01.\n[R2] Company Brain exclusion (approved): industry Software.\nEVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nWhy did we reject Cloudnova Software? Cite the records."
+    },
+    {
+      "id": "orion-multiturn-1",
+      "category": "multi_turn",
+      "workforce_task": "complex_company_qa",
+      "max_output_tokens": 300,
+      "json_keys": null,
+      "must_mention": [
+        [
+          "Harbor Valve"
+        ],
+        [
+          "single source",
+          "single-source",
+          "not verified",
+          "unverified",
+          "one source"
+        ]
+      ],
+      "must_not_recommend": null,
+      "max_words": null,
+      "system_chars": 219,
+      "user_chars": 792,
+      "sha256": "2fa89b27e11d9e6f25025735d7a7de397d08f13f0ae64506b12018a185be8b33",
+      "system": "You are ORION. Resolve references using the conversation. Use only the evidence. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "CONVERSATION SO FAR:\nUser: Which manufacturers are expanding?\nORION: Two stand out: Kestrel Fabrication [E1] (verified second plant) and Harbor Valve Works [E2] (hiring 12 machinists, single source).\nUser: Is the second one verified, and should ATLAS research it?\n\nEVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nAnswer the user's last question."
+    },
+    {
+      "id": "lyra-strategy-1",
+      "category": "marketing_strategy",
+      "workforce_task": "lyra_strategy",
+      "max_output_tokens": 600,
+      "json_keys": [
+        "theme",
+        "posts",
+        "exclusions_respected"
+      ],
+      "must_mention": null,
+      "must_not_recommend": [
+        "Cloudnova Software"
+      ],
+      "max_words": null,
+      "system_chars": 233,
+      "user_chars": 648,
+      "sha256": "348894a128556b63875e3449c7d12041275018b2612765bec005fbd6a3b7035d",
+      "system": "You are LYRA planning content in a plain founder voice. Only verified facts may be referenced. COMPANY BRAIN (approved): ICP = US manufacturing companies, 20–200 employees.\nEXCLUDED (approved): software companies; Cloudnova Software.",
+      "user": "EVIDENCE:\n[E1] Kestrel Fabrication (Ohio, 140 employees) announced a second plant in Dayton — kestrel-fab.example/news, 2026-10-30, verified (2 sources).\n[E2] Harbor Valve Works (Texas, 85 employees) is hiring 12 machinists — jobs.example/harbor, 2026-11-02, single source.\n[E3] Cloudnova Software raised a Series B — news.example/cloudnova, 2026-10-28, verified.\n[E4] Pinecrest Tooling (Michigan, 60 employees) — a forum post claims a new CNC line; no company source — 2026-09-01, unverified.\n\nPlan a two-week LinkedIn content strategy for reaching Midwest manufacturers. JSON {\"theme\",\"posts\":[{\"day\",\"angle\",\"evidence\"}],\"exclusions_respected\"}."
+    }
+  ],
+  "scoring": [
+    "structured_valid",
+    "icp_violations",
+    "suspected_hallucinations",
+    "citations.accuracy",
+    "required_points",
+    "forbidden_recommendations",
+    "within_word_limit",
+    "success",
+    "latency_ms",
+    "input/output/reasoning tokens",
+    "cost_usd",
+    "cost_per_success (via --summarize)",
+    "blind human grade for correctness and reasoning quality"
+  ]
+}

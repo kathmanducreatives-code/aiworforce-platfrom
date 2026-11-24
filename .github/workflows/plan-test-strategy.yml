@@ -1,0 +1,94 @@
+# PLAN ONLY — one signed-in `strategy_plan` on TEST, for an owner-requested plan.
+#
+# Manual dispatch only. Signs in as the TEST smoke account (a plain MEMBER of the TEST
+# workspace: the function refuses a member any paid run), sends exactly one
+# `strategy_plan` to `lead-pipeline` on project tlvnfrxzjhsjgdofwehb, and checks the
+# answer: the hard requirements are exactly the expected ones, the requested strategy is
+# planned with no disabled capability, the worst case fits the requested ceiling, and a
+# plan hash is bound. The spend / lead / outreach tables are counted before and after
+# and must not move.
+#
+# Planning calls NO provider. It makes one GPT interpretation (≤ 3 model calls, the
+# function's own ceiling). Nothing here can run a paid discovery: the only action this
+# workflow can send is `strategy_plan` (scripts/deploy/test-functions-smoke.ts, `plan`).
+# The plan hash it prints is what the owner approves, separately, for a paid run.
+#
+# Secrets come from the `supabase-test` Environment. THIS REPOSITORY IS PUBLIC: the
+# summary and artifact hold the plan only, never a token, password or email.
+name: Plan TEST discovery (strategy_plan only)
+run-name: "Plan only: ${{ inputs.strategy }} ≤ $${{ inputs.max_apify_usd }} — ${{ inputs.query }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "The discovery request, as a user would type it"
+        required: true
+        type: string
+      count:
+        description: "Requested number of companies (1-25)"
+        required: true
+        default: "3"
+        type: string
+      strategy:
+        description: "Strategy to plan"
+        required: true
+        default: apify_only
+        type: choice
+        options: [apify_only, apify_plus_leadocean, leadocean_only, leadocean_plus_apify]
+      max_apify_usd:
+        description: "Apify ceiling for the plan (at most 0.25)"
+        required: true
+        default: "0.04"
+        type: string
+      expect_hard:
+        description: "Hard requirement keys the plan must have, exactly (comma-separated)"
+        required: true
+        default: "geography_hq,signal"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plan-test-strategy
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: strategy_plan on TEST
+    if: github.ref == 'refs/heads/launch/hardening'
+    runs-on: ubuntu-latest
+    environment: supabase-test
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.8.2
+
+      - name: Plan (no provider call, no write)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SMOKE_USER_EMAIL: ${{ secrets.SMOKE_USER_EMAIL }}
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD }}
+          PLAN_QUERY: ${{ inputs.query }}
+          PLAN_COUNT: ${{ inputs.count }}
+          PLAN_STRATEGY: ${{ inputs.strategy }}
+          PLAN_MAX_APIFY_USD: ${{ inputs.max_apify_usd }}
+          PLAN_EXPECT_HARD: ${{ inputs.expect_hard }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/plan"
+          deno run --allow-net --allow-env --allow-read --allow-write --allow-run scripts/deploy/test-functions-smoke.ts plan "$RUNNER_TEMP/plan"
+
+      - name: Upload the plan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-${{ github.run_id }}
+          path: ${{ runner.temp }}/plan/
+          retention-days: 90
+          if-no-files-found: warn

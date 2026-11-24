@@ -27,6 +27,8 @@ export interface ModelReply {
   when: (utterance: string, systemPrompt: string) => boolean;
   /** The JSON body the model returns, as an object. */
   content: unknown;
+  /** Answer with this HTTP error status instead (a provider failure). */
+  status?: number;
 }
 
 export interface FakeNet {
@@ -34,7 +36,7 @@ export interface FakeNet {
   /** Every edge function this handler invoked, with the body it sent. */
   functionCalls: Array<{ fn: string; body: unknown }>;
   /** Every model call made, in order, with the prompt it was given. */
-  modelCalls: Array<{ system: string; user: string; reply: unknown }>;
+  modelCalls: Array<{ system: string; user: string; reply: unknown; host: string; model: string | null }>;
   /** Every PostgREST path requested, in order. */
   requests: string[];
   restore: () => void;
@@ -161,7 +163,12 @@ export function installFakeNetwork(opts: {
         throw new Error(
           `fakeNetwork: no model reply matched.\n--- USER ---\n${user.slice(0, 900)}`);
       }
-      state.modelCalls.push({ system, user, reply: reply.content });
+      state.modelCalls.push({ system, user, reply: reply.content,
+        host: new URL(href).host, model: typeof payload.model === "string" ? payload.model : null });
+      if (reply.status && reply.status >= 400) {
+        return new Response(JSON.stringify({ error: { message: "fake provider failure" } }),
+          { status: reply.status, headers: { "content-type": "application/json" } });
+      }
       const content = typeof reply.content === "string"
         ? reply.content : JSON.stringify(reply.content);
       // EACH VENDOR'S OWN SHAPE. This used to answer every host with OpenAI's

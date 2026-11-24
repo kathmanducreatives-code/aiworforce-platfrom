@@ -4,6 +4,7 @@
 // Pure / Deno-testable. Never invents data.
 
 import type { CompanyBrainContext } from "./companyBrainCompiler.ts";
+import { effectiveIndustryExclusions } from "./brainIndustryExclusions.ts";
 
 export type SignalType =
   | "hiring" | "funding" | "competitor" | "workflow_trend"
@@ -115,7 +116,7 @@ export function scoreAgainstCompanyBrain(candidate: SignalCandidate, brain: Comp
   const icpTerms = uniq([...brain.icp.industries, ...brain.icp.categories]);
   const icpHits = hits(companyText, icpTerms);
   const disqHits = uniq([
-    ...hits(companyText, brain.disqualifiers.industries),
+    ...hits(companyText, effectiveIndustryExclusions(brain).industries),
     ...hits(companyText, brain.disqualifiers.keywords),
     ...hits(lc(candidate.company_domain), brain.disqualifiers.domains),
   ]);

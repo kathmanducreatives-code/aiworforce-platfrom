@@ -145,7 +145,7 @@ const time = (iso: string | null | undefined): number => {
 };
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-const NAME: Record<VisualAgentKey, string> = { pilot: "Pilot", lyra: "Lyra", atlas: "Atlas", mira: "Mira", orion: "Orion" };
+const NAME: Record<VisualAgentKey, string> = { pilot: "Orion", lyra: "Lyra", atlas: "Atlas", mira: "Lyra", orion: "Orion", lisa: "Lisa" };
 export const agentName = (k: VisualAgentKey) => NAME[k];
 
 /** The client-side workspace gate (RLS and the query filter come first). */
@@ -158,17 +158,18 @@ function agentOfActivity(row: ActivityRow, e: Enrichment): VisualAgentKey | null
   const key = visualAgentKey(slug);
   if (key) return key;
   // The one documented exception (rule 3).
-  if ((row.title ?? "").startsWith("Signals Monitor")) return "lyra";
+  if ((row.title ?? "").startsWith("Signals Monitor")) return "lisa";
   return null;
 }
 
 /** What each agent's finished work is called, by the job the registry gives it. */
 const COMPLETED_VERB: Record<VisualAgentKey, string> = {
-  lyra: "completed a search",
-  atlas: "completed account research",
+  atlas: "completed a search",
+  lyra: "finished a draft",
   mira: "prepared outreach",
-  orion: "finished a draft",
+  orion: "finished a brief",
   pilot: "completed a workflow",
+  lisa: "finished a monitoring pass",
 };
 
 const TERMINAL_LABEL: Record<string, string> = {

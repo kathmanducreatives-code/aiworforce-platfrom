@@ -10,6 +10,17 @@ deno run  --allow-read --allow-env scripts/model-routing-eval/run.ts
 
 Offline. No network, no model, no database.
 
+Interpretation, routing and cost report (contract v1 vs v2, model-family routing,
+re-priced real runs — `docs/ai/AI_ARCHITECTURE_AUDIT.md`):
+
+```bash
+deno run --allow-read --allow-env scripts/model-routing-eval/interpretationEval.ts
+```
+
+`interpretationCorpus.ts` holds the cases. Each has a SYNTHETIC reference proposal
+(what a correct interpreter returns) and seeded model errors, so a failure is
+attributed to the compiler or to the model, never guessed.
+
 ---
 
 ## Why it does not measure lead counts

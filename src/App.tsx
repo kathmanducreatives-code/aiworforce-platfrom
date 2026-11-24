@@ -1,3 +1,5 @@
+import { LeadDiscoveryPreview } from '@/components/dev/LeadDiscoveryPreview';
+import { strategyDiscoveryMockMode } from '@/lib/strategyDiscoveryMock';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,6 +18,7 @@ import AppErrorBoundary from "./components/AppErrorBoundary";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+import { BrainCapabilityNotice } from '@/components/company-brain/BrainCapabilityNotice';
 import MainLayout from "./components/MainLayout";
 import AuthenticatedBackground from "./components/AuthenticatedBackground";
 
@@ -33,6 +36,11 @@ const Landing = lazy(() => import("./pages/Landing"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Signals = lazy(() => import("./pages/Signals"));
 const AwaitingYou = lazy(() => import("./pages/AwaitingYou"));
+// DEV ONLY: the fictional multi-agent collaboration journey (npm run dev:collab). Never routed in production.
+const CollaborationPreview = import.meta.env.DEV ? lazy(() => import("./pages/dev/CollaborationPreview")) : null;
+// Workforce V2 live dashboard — routed only when VITE_WORKFORCE_DASHBOARD_ENABLED=true.
+const WORKFORCE_DASHBOARD_ENABLED = import.meta.env.VITE_WORKFORCE_DASHBOARD_ENABLED === "true";
+const WorkforceDashboard = WORKFORCE_DASHBOARD_ENABLED ? lazy(() => import("./pages/WorkforceDashboard")) : null;
 const Features = lazy(() => import("./pages/Features"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -94,9 +102,14 @@ const App = () => (
                   <div className="relative min-h-screen w-full">
                     <AuthenticatedBackground />
                     {import.meta.env.DEV && <PreviewDiagnostics />}
+                    {import.meta.env.DEV && strategyDiscoveryMockMode() !== 'off' && <LeadDiscoveryPreview />}
                   <RouteErrorBoundary>
                   <Suspense fallback={<div className="min-h-screen bg-background" />}>
                   <Routes>
+
+                    {import.meta.env.DEV && CollaborationPreview && (
+                      <Route path="/dev/collaboration" element={<CollaborationPreview />} />
+                    )}
 
                     {/* Public Routes */}
                     <Route path="/" element={<Landing />} />
@@ -108,6 +121,15 @@ const App = () => (
                     <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
 
                     {/* Protected Routes with MainLayout */}
+                    {WorkforceDashboard && (
+                      <Route path="/workforce" element={
+                        <ProtectedRoute>
+                          <MainLayout>
+                            <WorkforceDashboard />
+                          </MainLayout>
+                        </ProtectedRoute>
+                      } />
+                    )}
                     <Route path="/dashboard" element={
                       <ProtectedRoute>
                         <MainLayout>
@@ -141,6 +163,7 @@ const App = () => (
                     <Route path="/signals" element={
                       <ProtectedRoute>
                         <MainLayout>
+                          <BrainCapabilityNotice capability="signals" />
                           <Signals />
                         </MainLayout>
                       </ProtectedRoute>
@@ -148,14 +171,14 @@ const App = () => (
 
                     {/* Agentory restructure — new top-level pages */}
                     <Route path="/leads" element={
-                      <ProtectedRoute><MainLayout><Leads /></MainLayout></ProtectedRoute>
+                      <ProtectedRoute><MainLayout><BrainCapabilityNotice capability="lead_search" /><Leads /></MainLayout></ProtectedRoute>
                     } />
                     <Route path="/leads/find" element={<Navigate to="/leads" replace />} />
                     <Route path="/leads/icp" element={<Navigate to="/leads" replace />} />
                     <Route path="/leads/research" element={<Navigate to="/leads" replace />} />
                     <Route path="/competitors" element={<Navigate to="/signals" replace />} />
                     <Route path="/content" element={
-                      <ProtectedRoute><MainLayout><Content /></MainLayout></ProtectedRoute>
+                      <ProtectedRoute><MainLayout><BrainCapabilityNotice capability="content" /><Content /></MainLayout></ProtectedRoute>
                     } />
                     <Route path="/agents" element={
                       <ProtectedRoute><MainLayout><Agents /></MainLayout></ProtectedRoute>

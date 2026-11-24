@@ -67,7 +67,9 @@
 // PURE. No network, model or database access.
 
 import type { GptTier } from "./gptProvider.ts";
-import type { ReasoningEffort } from "./modelRequestBody.ts";
+import { minimumReasoningEffort, type ReasoningEffort } from "./modelRequestBody.ts";
+import type { EnvReader, WorkforceTask } from "./terraPolicy.ts";
+import { resolveTaskRoute, type TaskRoute } from "./modelRoutePolicy.ts";
 
 export const GPT_MODEL_ROUTER_VERSION = "gpt-model-router-v2" as const;
 
@@ -87,6 +89,55 @@ export const TERRA = "gpt-5.6-terra" as const;
  * test assert that no stage resolves to it, which an omitted constant could not.
  */
 export const SOL = "gpt-5.6-sol" as const;
+
+/**
+ * WHICH GENERATION THE LADDER RUNS ON — a deployment setting, never a model's.
+ *
+ *   gpt-5.6 (default)  Luna → Terra       the ladder above, unchanged
+ *   gpt-6              gpt-6-luna → gpt-6.1-sol
+ *
+ * The POLICY below does not change with the family: the same stages escalate,
+ * on the same validator rejections, at most once. Only the two model ids move.
+ * In gpt-6 the escalation rung is Sol because OpenAI offers no GPT-6 Terra, and
+ * gpt-6.1-sol ($2 / $10 per 1M) is cheaper than gpt-5.6-terra ($2 / $12) — so the
+ * rung costs less, not more. Sol rejects `reasoning_effort: "none"`; a route to
+ * it is raised to its floor and the raise is stated in the route's reason.
+ *
+ * Read from AGENTORY_GPT_MODEL_FAMILY. Unset or unrecognised resolves to the
+ * default: a typo must never reach a model nobody priced or chose.
+ */
+export const MODEL_FAMILY_ENV = "AGENTORY_GPT_MODEL_FAMILY";
+export const MODEL_FAMILIES = Object.freeze({
+  "gpt-5.6": Object.freeze({ primary: LUNA as string, escalation: TERRA as string }),
+  "gpt-6": Object.freeze({ primary: "gpt-6-luna", escalation: "gpt-6.1-sol" }),
+});
+export type ModelFamilyId = keyof typeof MODEL_FAMILIES;
+export const DEFAULT_MODEL_FAMILY: ModelFamilyId = "gpt-5.6";
+
+/** The configured family. The router's one read of its environment. */
+export function activeModelFamily(
+  read: (k: string) => string | undefined = (k) => {
+    try { return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get(k); }
+    catch { return undefined; }
+  },
+): ModelFamilyId {
+  const v = String(read(MODEL_FAMILY_ENV) ?? "").trim();
+  return Object.hasOwn(MODEL_FAMILIES, v) ? v as ModelFamilyId : DEFAULT_MODEL_FAMILY;
+}
+
+/** A policy model id, read in a family: Luna and Terra are roles, not ids. */
+function inFamily(model: string, family: ModelFamilyId): string {
+  const f = MODEL_FAMILIES[family];
+  return model === LUNA ? f.primary : model === TERRA ? f.escalation : model;
+}
+
+/** Raise an effort a model cannot accept to the lowest one it can. */
+function effortFor(model: string, effort: ReasoningEffort | null): {
+  effort: ReasoningEffort | null; raised: boolean;
+} {
+  const floor = minimumReasoningEffort(model);
+  return floor && (effort === null || effort === "none") ? { effort: floor, raised: true } : { effort, raised: false };
+}
 
 /**
  * Every GPT decision point in the lead pipeline.
@@ -211,6 +262,54 @@ export interface ModelRoute {
    */
   tier: GptTier;
   signals: RoutingSignals;
+  /** Present only when a non-default family is configured (AGENTORY_GPT_MODEL_FAMILY). */
+  model_family?: ModelFamilyId;
+  /** Present only when GPT-6.1 Terra took this stage (terraPolicy, all flags on). */
+  terra?: { task: WorkforceTask; replaced: string };
+  /** Present only when a hybrid / Terra route replaced the stage's policy model. */
+  routing?: { task: WorkforceTask; source: "hybrid" | "terra_legacy"; replaced: string };
+}
+
+/**
+ * GPT-6.1 TERRA OPT-IN, ADDITIVE. The stages the Workforce V2 plan names for a
+ * benchmark-first Terra trial. Nothing changes unless `terraRouteFor` allows
+ * the task — every flag on, the model verified and priced, the task opted in.
+ * Priced from configuration, so the dollar ceiling counts every call.
+ */
+export const STAGE_TASKS: Readonly<Partial<Record<string, WorkforceTask>>> = Object.freeze({
+  mission_compilation: "atlas_planning",
+  discovery_actor_selection: "atlas_planning",
+  execution_plan: "atlas_planning",
+  execution_plan_amendment: "atlas_planning",
+  research_route_control: "atlas_planning",
+  opportunity_reasoning: "atlas_planning",
+  mission_triage: "lead_classification",
+  semantic_classification: "lead_classification",
+  mission_evaluation: "atlas_qualification",
+  company_qualification: "atlas_qualification",
+  pool_evaluation: "atlas_qualification",
+  grounded_evidence_evaluation: "evidence_interpretation",
+  summary_generation: "content_transformation",
+  signal_relevance: "lisa_interpretation",
+  request_understanding: "intent_classification",
+  evidence_planning: "routine_extraction",
+  evidence_extraction: "routine_extraction",
+  // Stages that ARE repairs take the repair rung's route too.
+  discovery_actor_selection_repair: "validation_repair",
+  execution_plan_repair: "validation_repair",
+  signal_relevance_repair: "validation_repair",
+  request_understanding_repair: "validation_repair",
+});
+/** Legacy name (b434e4ce). */
+export const TERRA_STAGE_TASKS = STAGE_TASKS;
+
+/** A route for this stage's task that the OpenAI-only GPT client can serve, or null. */
+function stageRoute(task: WorkforceTask | undefined, read?: EnvReader): (TaskRoute & { use: true }) | null {
+  if (!task) return null;
+  const r = read ? resolveTaskRoute(task, read) : resolveTaskRoute(task);
+  // gptProvider speaks OpenAI only: an Anthropic route for a pipeline stage is
+  // ignored here (never a silent cross-vendor switch inside the lead engine).
+  return r.use && r.vendor === "openai" ? r : null;
 }
 
 interface StagePolicy {
@@ -439,20 +538,44 @@ export function isDeterministicStage(stage: GptStage): boolean {
  * compiler refuses it, which is the point.
  */
 export function routeModel(
-  stage: GptStage, signals: RoutingSignals = {},
+  stage: GptStage, signals: RoutingSignals = {}, family: ModelFamilyId = activeModelFamily(),
+  read?: EnvReader,
 ): ModelRoute {
   const policy = POLICY[stage];
   if (policy.primary === null) throw new DeterministicStageError(stage, policy.reason);
+  const familyModel = inFamily(policy.primary, family);
+  const task = STAGE_TASKS[stage];
+  const routed = stageRoute(task, read);
+  if (task && routed) {
+    // The STAGE's own effort unless the route names one — Terra accepts `none`,
+    // so a `none` stage (qualification, triage) buys no reasoning it never asked
+    // for. Raised only to the model's floor (GPT-6.1 Sol).
+    const e = effortFor(routed.model, routed.effort ?? policy.effort);
+    return {
+      version: GPT_MODEL_ROUTER_VERSION, stage, model: routed.model,
+      reasoning_effort: e.effort, slot: "primary",
+      reason: `${policy.reason} — routed to ${routed.model} (${routed.source}, task ${task})` +
+        (e.raised ? ` — effort raised to "${e.effort}", the lowest ${routed.model} accepts` : ""),
+      escalation_reason: null, tier: e.effort === "none" ? "fast" : "reasoning", signals,
+      routing: { task, source: routed.source, replaced: familyModel },
+      ...(/terra/.test(routed.model) ? { terra: { task, replaced: familyModel } } : {}),
+      ...(family !== DEFAULT_MODEL_FAMILY ? { model_family: family } : {}),
+    };
+  }
+  const model = familyModel;
+  const e = effortFor(model, policy.effort);
   return {
     version: GPT_MODEL_ROUTER_VERSION,
     stage,
-    model: policy.primary,
-    reasoning_effort: policy.effort,
+    model,
+    reasoning_effort: e.effort,
     slot: "primary",
-    reason: policy.reason,
+    reason: policy.reason + (e.raised ? ` — effort raised to "${e.effort}", the lowest ${model} accepts` : ""),
     escalation_reason: null,
     tier: policy.effort === "none" ? "fast" : "reasoning",
     signals,
+    // Recorded only off the default, so a default route is unchanged byte for byte.
+    ...(family !== DEFAULT_MODEL_FAMILY ? { model_family: family } : {}),
   };
 }
 
@@ -464,26 +587,36 @@ export function routeModel(
  * second attempt.
  */
 export function escalationRoute(
-  stage: GptStage, reason: string, signals: RoutingSignals = {},
+  stage: GptStage, reason: string, signals: RoutingSignals = {}, family: ModelFamilyId = activeModelFamily(),
+  read?: EnvReader,
 ): ModelRoute | null {
   const policy = POLICY[stage];
   if (!policy.escalation) return null;
+  // THE REPAIR RUNG IS CONFIGURABLE ON ITS OWN (AGENTORY_ROUTE_VALIDATION_REPAIR),
+  // independently of the family switch and of the stage's primary model — so it
+  // can be GPT-6.1 Terra ($1/$5) instead of gpt-5.6-terra ($2/$12) or gpt-6.1-sol ($2/$10).
+  const repair = stageRoute("validation_repair", read);
+  const model = repair?.model ?? inFamily(policy.escalation, family);
+  const e = effortFor(model, repair?.effort ?? policy.effort);
   return {
     version: GPT_MODEL_ROUTER_VERSION,
     stage,
-    model: policy.escalation,
-    reasoning_effort: policy.effort,
+    model,
+    reasoning_effort: e.effort,
     slot: "escalation",
-    reason: `${policy.reason} — ESCALATED after validation rejected the primary result`,
+    reason: `${policy.reason} — ESCALATED after validation rejected the primary result` +
+      (e.raised ? ` — effort raised to "${e.effort}", the lowest ${model} accepts` : ""),
     escalation_reason: reason,
     tier: "reasoning",
     signals,
+    ...(repair ? { routing: { task: "validation_repair" as WorkforceTask, source: repair.source, replaced: inFamily(policy.escalation, family) } } : {}),
+    ...(family !== DEFAULT_MODEL_FAMILY ? { model_family: family } : {}),
   };
 }
 
 /** Every stage's default route, for a preflight card or a cost estimate. */
-export function routingTable(): ModelRoute[] {
-  return GPT_STAGES.filter((s) => !isDeterministicStage(s)).map((s) => routeModel(s));
+export function routingTable(family: ModelFamilyId = activeModelFamily()): ModelRoute[] {
+  return GPT_STAGES.filter((s) => !isDeterministicStage(s)).map((s) => routeModel(s, {}, family));
 }
 
 /**

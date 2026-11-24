@@ -525,7 +525,7 @@ Deno.test("run-agent runs the verifiers on canonical gaps, before the view, boun
     // The verifier path is the spine: spec, guard, readiness-aware criteria, settlement.
     "const verifierSpecFor = async (vState: CapabilityExecutionState) => verifierSpecCompiler({",
     "invoke: guardedInvoker(null, (call) => capabilityInvoke(call),",
-    "const vCriteria = deriveMissionCriteria(vMission, leadReadiness);",
+    'const vCriteria = criteriaOf(vMission, { readiness: leadReadiness, legacy: "rederive" });',
     `console.log("[run-agent][p2-spine][claim-verifier]"`,
     "return company ? applyVerifierFinding(company, f, verifier) : false;",
     "engineRun.resume_records = engineRun.companies.map(toResumeRecord)",
