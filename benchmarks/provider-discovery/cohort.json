@@ -1,0 +1,164 @@
+{
+  "version": "provider-benchmark-cohort-v1",
+  "selected_at": "2026-10-30",
+  "selection": {
+    "project": "tlvnfrxzjhsjgdofwehb (agentory-discovery-test)",
+    "access": "read-only transactions (BEGIN READ ONLY) through the Supabase connector; no writes",
+    "what_the_project_holds": {
+      "accounts": 1,
+      "lead_candidates": 1,
+      "contacts": 0,
+      "outreach_leads": 0,
+      "company_headcount_snapshots": 3,
+      "real_companies_seen_in_canary_runs": [
+        "langchain",
+        "baseten",
+        "oscilar-inc"
+      ],
+      "synthetic_fixtures_excluded": [
+        "qualified.example",
+        "canada.example"
+      ]
+    },
+    "suppression_check": "TEST holds no outreach_leads, contacts or CRM rows, so no hold applies there. Before any live run the production holds (outreach history, CRM relationship, existing Lead IDs) must be checked for every selected slot; each slot carries a suppression block and the benchmark never sends a suppressed slot to a provider."
+  },
+  "known_companies": [
+    {
+      "slot": "A01",
+      "status": "selected",
+      "name": "LangChain",
+      "domain": "langchain.com",
+      "linkedin_url": "https://www.linkedin.com/company/langchain",
+      "truth_hq_country": null,
+      "truth_source": "apify_linkedin_company_details read 2026-10-30: 469 employees; offices San Francisco, New York City, Cambridge MA, Amsterdam, London with no single flagged HQ \u2014 so no HQ truth",
+      "suppression": {
+        "existing_lead_id": null,
+        "outreach_hold": false,
+        "crm_relationship": null
+      }
+    },
+    {
+      "slot": "A02",
+      "status": "selected",
+      "name": "Baseten",
+      "domain": "baseten.co",
+      "linkedin_url": "https://www.linkedin.com/company/baseten",
+      "truth_hq_country": null,
+      "truth_source": "apify_linkedin_job_search canary row (discovery only)",
+      "suppression": {
+        "existing_lead_id": null,
+        "outreach_hold": false,
+        "crm_relationship": null
+      },
+      "domain_source": "Agentory evidence in TEST task 25906701 (canary 2026-10-30): identity item, status proven, source apify_linkedin_job_search"
+    },
+    {
+      "slot": "A03",
+      "status": "selected",
+      "name": "Oscilar",
+      "domain": "oscilar.com",
+      "linkedin_url": "https://www.linkedin.com/company/oscilar-inc",
+      "truth_hq_country": null,
+      "truth_source": "apify_linkedin_job_search canary row (discovery only)",
+      "suppression": {
+        "existing_lead_id": null,
+        "outreach_hold": false,
+        "crm_relationship": null
+      },
+      "domain_source": "Agentory evidence in TEST task 25906701 (canary 2026-10-30): identity item, status proven, source apify_linkedin_job_search"
+    },
+    {
+      "slot": "A04",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A05",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A06",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A07",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A08",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A09",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    },
+    {
+      "slot": "A10",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no further real companies"
+    }
+  ],
+  "known_decision_makers": [
+    {
+      "slot": "B01",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B02",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B03",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B04",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B05",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B06",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B07",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B08",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B09",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    },
+    {
+      "slot": "B10",
+      "status": "unfilled",
+      "unfilled_reason": "the TEST project holds no contact or decision-maker records"
+    }
+  ],
+  "discovery": {
+    "mission_query": "Find 10 US-headquartered companies with 51-200 employees, with their VP of Sales where available. Do not broaden.",
+    "requested_count": 10,
+    "proposal_file": "benchmarks/provider-discovery/mission-c-proposal.json",
+    "why_this_mission": "Every hard criterion is one both providers filter EXACTLY (LeadOcean hqCountry=US, min/maxEmployees; Apollo organization_locations, organization_num_employees_ranges) and the shared engine can decide from canonical evidence (HQ flag and declared size band on the company record). An industry was left out on purpose: Agentory's controlled business-model vocabulary ('B2B SaaS') has no exact LeadOcean label, and LeadOcean's labels ('Software Development') are outside that vocabulary, so no industry wording is decidable by both \u2014 it would refuse one provider or leave every company pending."
+  }
+}

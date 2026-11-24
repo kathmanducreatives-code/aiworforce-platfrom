@@ -78,12 +78,26 @@ export interface AcceptanceCase {
   jobs?: JobSpec[];
   /** What the company-details Actor returns. */
   details?: "same" | "empty" | "foreign" | "hq_conflict";
+  /**
+   * Fields the company-details record states DIFFERENTLY from the discovery
+   * row (a true two-source disagreement, e.g. another size band).
+   */
+  detailsCompany?: Json;
+  /** The business model the website grounder answers for this company (default b2b_software). */
+  businessModel?: "b2b_saas" | "ai_saas" | "b2b_software" | "b2b_service" | "consumer" | "unknown";
   /** Funding rounds the funding pair reports; undefined = no record at all. */
   rounds?: RoundSpec[];
   /** Actors that are not available to this run. */
   unavailable?: string[];
   /** The model's aggregate verdict (the parser and canonical rules still decide). */
-  evaluator?: "pass" | "fail" | "timeout";
+  /**
+   * `http_error`: the call failed (an HTTP error or the spend gate's refusal)
+   * and run-agent's wrapper hands the engine the strict parser's reading of a
+   * `null` response — canary session 2's fifth call, exactly.
+   */
+  evaluator?: "pass" | "fail" | "timeout" | "http_error" | "http_error_once";
+  /** Extra environment the engine reads (`opts.readEnv`). */
+  env?: Record<string, string>;
   /**
    * The first slice's execution deadline closes right after discovery, as a
    * slice running out of wall clock does; the next slice resumes from the
@@ -159,7 +173,7 @@ function details(c: AcceptanceCase, company: Json): Json[] {
     case "empty": return [];
     case "foreign": return [foreign];
     case "hq_conflict": return [{ ...company, locations: [{ country: "Canada", city: "Toronto", isHeadquarter: true }] }];
-    default: return [company];
+    default: return [{ ...company, ...(c.detailsCompany ?? {}) }];
   }
 }
 
@@ -219,6 +233,10 @@ export interface AcceptanceFlags {
   notice: { qualified: number; text: string };
   terminal: Json;
   resume: { keys: string[]; providerCallsAdded: number; evaluatorCallsAdded: number } | null;
+  /** Each company's `evaluation_path` after the final slice. */
+  evaluation_paths: Record<string, string>;
+  /** Each company's stored mission evaluation after the final slice (what a resume restores). */
+  mission_evaluations: Record<string, Json | null>;
   /** The engine's own account of the first slice and the resumed one. */
   execution: { terminal_reason: unknown; completed: unknown; slices: number; resumed_terminal_reason: unknown };
 }
@@ -233,7 +251,7 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
   const feasibility = assessRequestFeasibility(mission as never, graph as never, { executability: "enforce", readiness: policy }) as Json;
   const flags: AcceptanceFlags = {
     id: c.id, criteria, feasibility, refused: null, entry: graph.entry_capability ?? null, providerCalls: [], evaluator: [],
-    eligibility: [], canonical: [], qualifiedKeys: [], workbench: { qualified: 0, counts: {} }, persisted: [],
+    eligibility: [], canonical: [], qualifiedKeys: [], workbench: { qualified: 0, counts: {} }, persisted: [], evaluation_paths: {}, mission_evaluations: {},
     notice: { qualified: 0, text: "" }, terminal: {}, resume: null,
     execution: { terminal_reason: null, completed: null, slices: 0, resumed_terminal_reason: null },
   };
@@ -272,7 +290,7 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
       outcomes: batch.map((m: Json) => {
         const desc = m.registry.items.find((e: Json) => e.evidence_type === "company_description");
         const raw = {
-          business_model: { value: "b2b_software", confidence: 0.95 }, decision: "pass", confidence: 0.95,
+          business_model: { value: c.businessModel ?? "b2b_software", confidence: 0.95 }, decision: "pass", confidence: 0.95,
           supporting_claims: desc ? [{ claim: "sells software to business teams", claim_type: "business_model",
             evidence_ids: [desc.evidence_id], evidence_excerpts: [{ evidence_id: desc.evidence_id, excerpt: desc.source_text }] }] : [],
         };
@@ -283,6 +301,9 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
     evaluateMission: async (i: Json) => {
       evaluatorCalls++;
       if (c.evaluator === "timeout") return null;
+      if (c.evaluator === "http_error" || (c.evaluator === "http_error_once" && evaluatorCalls === 1)) {
+        return parseMissionEvaluationStrict(null, i.registry, criteria as never) as Json;
+      }
       const parsed = parseMissionEvaluationStrict(evaluatorRaw(i.input, i.registry, c), i.registry, criteria as never) as Json;
       flags.evaluator.push({ company_key: i.company_key, decision: parsed.evaluation?.decision ?? null,
         verdicts: parsed.evaluation?.criterion_verdicts ?? [] });
@@ -291,7 +312,7 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
     log: () => {},
   };
   const opts: Json = {
-    mission, plan: graph, maxCandidates: 1, readEnv: (k: string) => k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : undefined,
+    mission, plan: graph, maxCandidates: 1, readEnv: (k: string) => k === "LEAD_INVESTIGATION_MAX_PASSES" ? "1" : c.env?.[k],
     readiness: policy, specMode: "enforce", specScope: { workspace_id: "q4-acceptance", lineage_id: c.id },
     identity: { task_id: c.id, workspace_id: "q4-acceptance" }, log: deps.log,
   };
@@ -333,7 +354,7 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
               const page = registry.items.find((e: Json) => e.evidence_type === "web_page");
               if (!page) return null;
               return verifyGroundedResult({ registry, result: parseGroundedResult({
-                business_model: { value: "b2b_software", confidence: 0.95 }, company_fit: "pass", decision: "pass", confidence: 0.95,
+                business_model: { value: c.businessModel ?? "b2b_software", confidence: 0.95 }, company_fit: "pass", decision: "pass", confidence: 0.95,
                 supporting_claims: [{ claim: "sells software to business customers", claim_type: "business_model",
                   evidence_ids: [page.evidence_id], evidence_excerpts: [{ evidence_id: page.evidence_id, excerpt: page.source_text }] }],
               }) } as never);
@@ -431,6 +452,8 @@ export async function runAcceptanceCase(c: AcceptanceCase): Promise<AcceptanceFl
     canonical: r.decisions, qualifiedKeys: r.keys, workbench: { qualified: r.summary.qualified, counts: r.view.counts },
     persisted: r.persisted, notice: { qualified: r.outcome.qualification.qualified, text: renderRunOutcome(r.outcome) },
     terminal: r.terminal,
+    evaluation_paths: Object.fromEntries(run.companies.map((co: Json) => [co.key, co.evaluation_path])),
+    mission_evaluations: Object.fromEntries(run.companies.map((co: Json) => [co.key, co.mission_evaluation ?? null])),
     eligibility: r.cands.map((x: Json) => {
       const e = evaluateEligibility(criteria as never, x.graph) as Json;
       return { company_key: x.company_key, eligibility: e.eligibility, checks: e.checks, gaps: e.gaps };

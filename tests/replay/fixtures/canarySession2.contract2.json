@@ -1,0 +1,2150 @@
+{
+ "fixture": "canarySession2.contract2",
+ "schema": "lead-v2-replay-fixture-v1",
+ "provenance": {
+  "environment": "test",
+  "task_id": "25906701-391b-474a-820b-f4af4174cf5e",
+  "queue_id": "763fc2b9-63fb-40be-a3d0-0cd3dded59b1",
+  "plan_id": "d6b22bc2-b674-402c-be3d-fdf502483d22",
+  "workspace_id": "<workspace>",
+  "extracted_at": "2026-10-30",
+  "sources": [
+   "GitHub Actions run 41051862651 public artifact canary-session: kickoff/kickoff.json compiled_mission (planner_runtime removed)",
+   "tasks.result.capability_execution_state.spend_ledger (isolated TEST project tlvnfrxzjhsjgdofwehb), each reservation timed by its lead_execution_calls started_at",
+   "tasks.result.lead_resume_checkpoint (checkpoint_reason all_work_complete, 12:01:43Z), snapshot dictionary expanded"
+  ],
+  "sanitization": [
+   "workspace id replaced",
+   "company description/tagline/about free text nulled; public company names, domains, LinkedIn and job URLs kept (needed for identity)"
+  ]
+ },
+ "mission": {
+  "version": "lead-mission-v1",
+  "original_user_query": "Find one US company hiring Account Executives that raised funding within the last six months.",
+  "mission_type": "company_research",
+  "target_entity": "company",
+  "requested_output": "qualified_companies",
+  "requested_count": 1,
+  "company_profile": {
+   "business_models": [],
+   "verticals": [],
+   "stages": [],
+   "locations": [
+    "United States"
+   ]
+  },
+  "required_signals": [
+   {
+    "type": "hiring",
+    "role_families": [
+     "gtm_sales"
+    ],
+    "timeframe_days": 30,
+    "event": "hiring",
+    "subject": "company",
+    "qualifier": {
+     "role_terms": [
+      "account executives"
+     ],
+     "role_families": [
+      "gtm_sales"
+     ]
+    },
+    "phrase": "hiring Account Executives"
+   },
+   {
+    "type": "funding",
+    "timeframe_days": 180,
+    "event": "funding",
+    "subject": "company",
+    "qualifier": {},
+    "phrase": "funding round"
+   }
+  ],
+  "decision_makers": {
+   "roles": [],
+   "current_employment_required": false
+  },
+  "hard_constraints": {
+   "geography": {
+    "operator": "is_in",
+    "value": [
+     "US"
+    ],
+    "reason": "The company must be in the US."
+   },
+   "hiring": {
+    "operator": "currently_hiring",
+    "value": "Account Executives",
+    "reason": "The company must be hiring Account Executives."
+   },
+   "funding_event": {
+    "operator": "announced_within_last_days",
+    "value": 180,
+    "reason": "The company must have raised funding within the last six months."
+   },
+   "company_profile.locations": {
+    "operator": "in",
+    "value": [
+     "United States"
+    ],
+    "reason": "stated explicitly in the user's query"
+   }
+  },
+  "soft_preferences": {},
+  "required_capabilities": [
+   "funding_signal_discovery",
+   "company_enrichment",
+   "company_brain_qualification",
+   "persistence"
+  ],
+  "prohibited_capabilities": [
+   "founder_discovery",
+   "employer_verification",
+   "contact_enrichment"
+  ],
+  "field_provenance": {
+   "company_profile.locations": "explicit_user_request",
+   "required_signals": "explicit_user_request",
+   "target_entity": "explicit_user_request",
+   "requested_output": "explicit_user_request",
+   "requested_count": "explicit_user_request",
+   "company_profile.verticals": "gpt_inference",
+   "company_profile.stages": "gpt_inference",
+   "company_profile.business_models": "gpt_inference",
+   "decision_makers.roles": "gpt_inference"
+  },
+  "confidence": 0.98,
+  "strategies": [
+   "funding",
+   "hiring",
+   "multi_signal"
+  ],
+  "required_signal_terms": [
+   "Account Executives"
+  ],
+  "geography_is_hard": true,
+  "proposed_output_intent": "qualified_companies",
+  "directives": {
+   "preferred_signals": [
+    "hiring",
+    "funding round"
+   ],
+   "adjacent_signals": [],
+   "excluded_signals": [],
+   "required_evidence": [
+    "A dated funding round announced within the last 180 days",
+    "Evidence that the company is currently hiring Account Executives",
+    "Evidence establishing the company's US location",
+    "Resolved company identity"
+   ],
+   "allowed_broadening": {
+    "role_families": [],
+    "company_types": [],
+    "geographies": [],
+    "employee_range": {
+     "min": null,
+     "max": null
+    }
+   },
+   "disallowed_broadening": [
+    "geography",
+    "recency",
+    "role"
+   ],
+   "evaluation_instructions": "Qualify only companies with a resolved identity that are located in the US, have a funding round announced within the last 180 days, and carry current hiring evidence specifically for Account Executives. Reject companies lacking any hard-constraint evidence. Rank qualifying companies by strength and recency of the funding and hiring evidence, then return one company.",
+   "source_strategy": [
+    "job_signal_first",
+    "evidence_reuse_first"
+   ],
+   "requested_contact_ready_count": null,
+   "founder_unlock_recommended": false,
+   "execution_preference": "balanced"
+  },
+  "mission_semantics": {
+   "version": "mission-semantics-v1",
+   "goal": "Find one US company hiring Account Executives that raised funding within the last six months.",
+   "requested_count": 1,
+   "canonical_signals": [
+    {
+     "kind": "hiring",
+     "legacy_event": "hiring",
+     "subject": "company",
+     "phrase": "Find one US company hiring Account Executives that raised funding within the last six months.",
+     "alias": "reader",
+     "source": "user_explicit"
+    },
+    {
+     "kind": "funding",
+     "legacy_event": "funding",
+     "subject": "company",
+     "phrase": "Find one US company hiring Account Executives that raised funding within the last six months.",
+     "alias": "reader",
+     "source": "user_explicit"
+    }
+   ],
+   "hypotheses": [],
+   "unmapped_signal_language": [],
+   "stage": null,
+   "window_sources": {
+    "hiring": {
+     "source": "system_default",
+     "rule": "currently / actively hiring"
+    },
+    "funding": {
+     "source": "user_explicit"
+    }
+   },
+   "corrections": [
+    "window_belongs_to_another_signal:hiring:30d"
+   ]
+  },
+  "criteria": [
+   {
+    "kind": "hard",
+    "dimension": "geography",
+    "value": "United States",
+    "label": "Headquarters: United States",
+    "source": "user_explicit",
+    "user_phrase": "",
+    "rationale": "stated in the request",
+    "id": "geography:united_states",
+    "status": "ok",
+    "geography_scope": "headquarters"
+   },
+   {
+    "kind": "hard",
+    "dimension": "constraint",
+    "value": {
+     "field": "hiring",
+     "value": "Account Executives"
+    },
+    "label": "hiring: Account Executives",
+    "source": "user_explicit",
+    "elevated_by": null,
+    "user_phrase": "Account Executives",
+    "rationale": "stated in the request",
+    "id": "constraint:_field_hiring_value_account_executives_",
+    "status": "ok"
+   },
+   {
+    "kind": "target",
+    "dimension": "constraint",
+    "value": {
+     "field": "funding_event",
+     "value": 180
+    },
+    "label": "funding event: 180",
+    "source": "user_inferred",
+    "elevated_by": null,
+    "user_phrase": "",
+    "rationale": "proposed by the model without the request's words; never a hard requirement",
+    "id": "constraint:_field_funding_event_value_180_",
+    "status": "ok",
+    "confidence": 0.98
+   },
+   {
+    "kind": "hard",
+    "dimension": "hiring",
+    "value": {
+     "event": "hiring",
+     "subject": "company",
+     "qualifier": {
+      "role_terms": [
+       "account executives"
+      ],
+      "role_families": [
+       "gtm_sales"
+      ]
+     }
+    },
+    "label": "Hiring: account executives",
+    "source": "user_explicit",
+    "time_window": {
+     "days": 30,
+     "basis": "posted",
+     "source": "system_default",
+     "rule": "currently / actively hiring",
+     "enforced": false
+    },
+    "user_phrase": "Find one US company hiring Account Executives that raised funding within the last six months.",
+    "rationale": "a signal the request states as a present fact the company must have",
+    "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+    "status": "ok"
+   },
+   {
+    "kind": "hard",
+    "dimension": "funding",
+    "value": {
+     "event": "funding",
+     "subject": "company",
+     "qualifier": {}
+    },
+    "label": "Funding",
+    "source": "user_explicit",
+    "time_window": {
+     "days": 180,
+     "basis": "announced",
+     "source": "user_explicit",
+     "rule": "recently funded / raised",
+     "enforced": false
+    },
+    "user_phrase": "Find one US company hiring Account Executives that raised funding within the last six months.",
+    "rationale": "a funding window the request states, which the funding pair can verify",
+    "id": "funding:_event_funding_subject_company_qualifier_",
+    "status": "ok"
+   }
+  ],
+  "lead_intelligence_contract_version": "v1",
+  "mission_parser_source": "gpt_validated"
+ },
+ "ceilings": {
+  "per_call_usd": {
+   "people": 0.1,
+   "identity": 0.03,
+   "enrichment": 0.05,
+   "web_evidence": 0.01,
+   "news_evidence": 0.05,
+   "hiring_evidence": 0.05,
+   "funding_evidence": 0.05,
+   "team_composition": 0.03,
+   "technology_evidence": 0.05
+  },
+  "per_route_usd": {
+   "hiring": 0.2,
+   "funding": 0.2,
+   "company_profile": 0.2
+  },
+  "mission_credits": 5,
+  "mission_model_usd": 0.4,
+  "adaptive_reserve_usd": 0.3,
+  "mission_provider_usd": 0.2,
+  "per_candidate_evidence_usd": 0.06
+ },
+ "ledger_reservations": [
+  {
+   "at": "2026-10-30T12:00:13.357Z",
+   "r": {
+    "status": "executed",
+    "purpose": "discovery",
+    "route_id": "job_discovery:apify_linkedin_job_search",
+    "settled_usd": null,
+    "estimate_usd": 0.004,
+    "variance_usd": null,
+    "candidate_keys": [],
+    "idempotency_key": "a987fdd78fbb9c3e646c32ce5b9d505779ae09fd66668a00e1a9f435c23f6044",
+    "provider_run_id": "8PmW7c0f6oJDQdxJQ",
+    "provisional_usd": 0.004,
+    "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b",
+    "settlement_source": "derived_floor"
+   }
+  },
+  {
+   "at": "2026-10-30T12:00:47.356Z",
+   "r": {
+    "status": "executed",
+    "purpose": "enrichment",
+    "route_id": null,
+    "settled_usd": null,
+    "estimate_usd": 0.0041,
+    "variance_usd": null,
+    "candidate_keys": [],
+    "idempotency_key": "f4aedc956755b8abe3d62ed25c909fb5dda94c7043012cc5b559f7339c755ebc",
+    "provider_run_id": "UAx1AUEtj7uswX6bd",
+    "provisional_usd": 0.0041,
+    "provider_call_id": "pc_f4aedc956755b8abe3d62ed25c",
+    "settlement_source": "derived_floor"
+   }
+  }
+ ],
+ "checkpoints": {
+  "end_of_slice": {
+   "at": "2026-10-30T12:01:43.340Z",
+   "note": "The only slice's final checkpoint (deadline 12:02:23.811Z, 40,471 ms remaining). LangChain enriched (company details UAx1AUEtj7uswX6bd); Baseten and Oscilar enrichment not_started; Oscilar's mission evaluation is the failed fifth call (unparsed verdicts).",
+   "verifier_pending_runs": [],
+   "companies": [
+    {
+     "brain": "review",
+     "hiring": "verified_externally",
+     "founder": "not_eligible",
+     "identity": "resolved",
+     "snapshot": {
+      "brain": {
+       "policy": {
+        "geography": null,
+        "precedence": [
+         "user_query",
+         "lead_mission",
+         "workspace_brain",
+         "defaults"
+        ],
+        "mission_verticals": [],
+        "workspace_context_applied": [],
+        "workspace_categories_ignored": []
+       },
+       "reason": "Mandatory criteria not established: geography:united_states: unknown (US presence is evidenced, but the supplied evidence does not establish that the headquarters is in the United States.); funding:_event_funding_subject_company_qualifier_: unknown (No funding announcement or funding date was supplied.)",
+       "outcome": "REVIEW",
+       "version": "company-brain-semantic-fit-v1",
+       "confidence": 0.88,
+       "business_model": "unknown",
+       "unknown_fields": [
+        "Whether LangChain's headquarters is in the United States",
+        "Whether LangChain announced a funding round within the last 180 days",
+        "geography:united_states",
+        "funding:_event_funding_subject_company_qualifier_"
+       ],
+       "agentory_use_case": "plausible",
+       "failed_hard_gates": [],
+       "supporting_evidence": [
+        "Evidence that the company is currently hiring Account Executives: Enterprise Account Executive (Colorado)",
+        "Evidence establishing the company's US location: San Francisco, CA, United States"
+       ],
+       "conflicting_evidence": []
+      },
+      "triage": null,
+      "company": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_job_search",
+        "source_id": "4449308608"
+       },
+       "website": "http://langchain.com",
+       "geography": "San Francisco, CA, United States",
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_size_band": "direct",
+        "provider_industry": "direct",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "LangChain",
+       "company_type": null,
+       "industry_ids": [
+        {
+         "id": "",
+         "name": "Software Development",
+         "hierarchy": null
+        }
+       ],
+       "hiring_status": true,
+       "missing_fields": [],
+       "canonical_domain": "langchain.com",
+       "startup_evidence": null,
+       "company_size_band": {
+        "max": 500,
+        "min": 201,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Software Development",
+       "source_provenance": "harvestapi/linkedin-job-search",
+       "external_source_id": "li_company:91342320",
+       "linkedin_company_url": "https://www.linkedin.com/company/langchain",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 469
+      },
+      "enriched": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_company_details",
+        "source_id": "91342320"
+       },
+       "website": "langchain.com",
+       "geography": "San Francisco, CA, United States; New York City, NY, United States; Cambridge, MA, United States; Amsterdam, Netherlands; London, United Kingdom",
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_type": "semantic",
+        "industry_ids": "direct",
+        "company_size_band": "direct",
+        "provider_industry": "direct",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "LangChain",
+       "company_type": "Privately Held",
+       "industry_ids": [
+        {
+         "id": "6",
+         "name": "Technology, Information and Internet",
+         "hierarchy": "Technology, Information and Media > Technology, Information and Internet"
+        }
+       ],
+       "hiring_status": null,
+       "missing_fields": [
+        "founded_year:frequently_null_from_actor"
+       ],
+       "canonical_domain": "langchain.com",
+       "location_entries": [
+        {
+         "text": "San Francisco, CA, United States",
+         "country": "United States of America",
+         "is_headquarters": true
+        },
+        {
+         "text": "New York City, NY, United States",
+         "country": "United States of America",
+         "is_headquarters": false
+        },
+        {
+         "text": "Cambridge, MA, United States",
+         "country": "United States of America",
+         "is_headquarters": false
+        },
+        {
+         "text": "Amsterdam, Netherlands",
+         "country": "Netherlands",
+         "is_headquarters": false
+        },
+        {
+         "text": "London, United Kingdom",
+         "country": "United Kingdom",
+         "is_headquarters": false
+        }
+       ],
+       "startup_evidence": null,
+       "company_size_band": {
+        "max": 500,
+        "min": 201,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Technology, Information and Internet",
+       "source_provenance": "harvestapi/linkedin-company",
+       "external_source_id": "li_company:91342320",
+       "linkedin_company_url": "https://www.linkedin.com/company/langchain",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 469
+      },
+      "found_by": [
+       {
+        "method": "first_seen",
+        "route_id": "job_discovery:apify_linkedin_job_search",
+        "actor_key": "apify_linkedin_job_search",
+        "capability": "job_discovery",
+        "observed_at": "2026-10-30T12:00:36.755Z",
+        "plan_version": 1,
+        "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+       }
+      ],
+      "identity": {
+       "status": "verified_match",
+       "evidence": [
+        "source_supplied_canonical_linkedin_url"
+       ],
+       "company_key": "https://www.linkedin.com/company/langchain",
+       "ambiguous_candidates": [],
+       "linkedin_company_url": "https://www.linkedin.com/company/langchain"
+      },
+      "hiring_jobs": [
+       {
+        "title": "Enterprise Account Executive (Colorado)",
+        "job_id": "li_job:4449308608",
+        "source": "harvestapi/linkedin-job-search",
+        "job_url": "https://www.linkedin.com/jobs/view/4449308608",
+        "location": "United States",
+        "description": null,
+        "posted_date": "2026-10-30T11:53:42.000Z",
+        "company_name": "LangChain",
+        "retrieved_at": null,
+        "missing_fields": [],
+        "workplace_mode": "remote",
+        "company_source_id": "li_company:91342320",
+        "company_linkedin_url": "https://www.linkedin.com/company/langchain"
+       }
+      ],
+      "prequal_key": null,
+      "shortlisted": true,
+      "observations": [
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "LangChain",
+           "domain": "langchain.com",
+           "linkedin_company_url": "https://www.linkedin.com/company/langchain"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/langchain",
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_4eb1d0b814ee935e2bd737de",
+          "observed_at": "2026-10-30T12:00:36.755Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": "San Francisco, CA, United States",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "country",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search location_entries can suggest country but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "geography",
+          "confidence": "medium",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_b673311b1366816fa2bdc13f",
+          "observed_at": "2026-10-30T12:00:36.755Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 500,
+           "min": 201,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "company_size",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search declared_size_band can suggest company_size but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "medium",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_0ba366da876d72d6ffbdfe56",
+          "observed_at": "2026-10-30T12:00:36.755Z",
+          "valid_until": "2027-01-28T12:00:36.755Z",
+          "derived_from": []
+         },
+         {
+          "value": 469,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "associated_members",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search associated_member_count can suggest associated_members but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "medium",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_206077896cc056af7c1177b5",
+          "observed_at": "2026-10-30T12:00:36.755Z",
+          "valid_until": "2027-01-28T12:00:36.755Z",
+          "derived_from": []
+         },
+         {
+          "value": "Software Development",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_a21443fef5a27c3ce29be5a6",
+          "observed_at": "2026-10-30T12:00:36.755Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "title": "Enterprise Account Executive (Colorado)",
+           "location": "United States",
+           "posted_date": "2026-10-30T11:53:42.000Z"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/jobs/view/4449308608",
+           "actor": "apify_linkedin_job_search",
+           "excerpt": "Enterprise Account Executive (Colorado)",
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "proven",
+          "dimension": "job",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_c3e56a06f0e82aec588a158b",
+          "observed_at": "2026-10-30T12:00:36.755Z",
+          "valid_until": "2026-11-29T12:00:36.755Z",
+          "derived_from": []
+         },
+         {
+          "value": true,
+          "method": "deterministic_derivation",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "proven",
+          "dimension": "hiring",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_d80336b204c1d6f0f22602a6",
+          "observed_at": "2026-10-30T12:00:36.755Z",
+          "valid_until": "2026-11-29T12:00:36.755Z",
+          "derived_from": [
+           "https://www.linkedin.com/jobs/view/4449308608"
+          ]
+         }
+        ],
+        "provider": "apify",
+        "route_id": "job_discovery:apify_linkedin_job_search",
+        "actor_key": "apify_linkedin_job_search",
+        "capability": "job_discovery",
+        "source_url": "https://www.linkedin.com/company/langchain",
+        "entity_hint": {
+         "name": "LangChain",
+         "domain": "langchain.com",
+         "country": "US",
+         "website": "http://langchain.com",
+         "external_ids": [
+          "li_company:91342320"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/langchain"
+        },
+        "observed_at": "2026-10-30T12:00:36.755Z",
+        "plan_version": 1,
+        "observation_id": "obs_13d16549286c26f0a1818cb7",
+        "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b",
+        "source_record_id": "4449308608"
+       },
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "LangChain",
+           "domain": "langchain.com",
+           "linkedin_company_url": "https://www.linkedin.com/company/langchain"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/langchain",
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_f4aedc956755b8abe3d62ed25c"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_b0f531d43dd98fc0c583b5b6",
+          "observed_at": "2026-10-30T12:01:07.121Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": "San Francisco, CA, United States",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_f4aedc956755b8abe3d62ed25c"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_flagged_headquarters",
+           "claim": "headquarters",
+           "level": "proven",
+           "reason": "exactly one location flagged headquarters by the provider",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "geography",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_53fa9d7c3c6b4bff2f16028b",
+          "observed_at": "2026-10-30T12:01:07.121Z",
+          "valid_until": null,
+          "derived_from": [],
+          "geography_presence": {
+           "value": "San Francisco, CA, United States; New York City, NY, United States; Cambridge, MA, United States; Amsterdam, Netherlands; London, United Kingdom",
+           "status": "proven",
+           "authority": {
+            "rule": "li_record_structured_country",
+            "claim": "country",
+            "level": "proven",
+            "reason": "structured company locations, each with its country \u2014 presence in a market, not headquarters",
+            "version": "evidence-authority-v1"
+           }
+          }
+         },
+         {
+          "value": {
+           "max": 500,
+           "min": 201,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_f4aedc956755b8abe3d62ed25c"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_declared_size_band",
+           "claim": "company_size",
+           "level": "proven",
+           "reason": "the company's own declared size band on its LinkedIn record (About tab) \u2014 a band, not a staff count",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_62eaa3f89968985f44f6ae25",
+          "observed_at": "2026-10-30T12:01:07.121Z",
+          "valid_until": "2027-01-28T12:01:07.121Z",
+          "derived_from": []
+         },
+         {
+          "value": 469,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_f4aedc956755b8abe3d62ed25c"
+          },
+          "status": "proven",
+          "authority": {
+           "rule": "li_record_associated_members",
+           "claim": "associated_members",
+           "level": "proven",
+           "reason": "LinkedIn's count of members who list the company as a current position \u2014 not staff, and no size claim",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_7ee8f3a80c324d3c0569f1fe",
+          "observed_at": "2026-10-30T12:01:07.121Z",
+          "valid_until": "2027-01-28T12:01:07.121Z",
+          "derived_from": []
+         },
+         {
+          "value": "Technology, Information and Internet",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_company_details",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_f4aedc956755b8abe3d62ed25c"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_company_details industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/langchain",
+          "evidence_id": "ev_d0f5437764824f90ba521f55",
+          "observed_at": "2026-10-30T12:01:07.121Z",
+          "valid_until": null,
+          "derived_from": []
+         }
+        ],
+        "provider": "apify",
+        "route_id": null,
+        "actor_key": "apify_linkedin_company_details",
+        "capability": "company_enrichment",
+        "source_url": "https://www.linkedin.com/company/langchain",
+        "entity_hint": {
+         "name": "LangChain",
+         "domain": "langchain.com",
+         "country": "united kingdom",
+         "website": null,
+         "external_ids": [
+          "li_company:91342320"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/langchain"
+        },
+        "observed_at": "2026-10-30T12:01:07.121Z",
+        "plan_version": 1,
+        "observation_id": "obs_cc267eda2581fd3913e3c9bc",
+        "provider_call_id": "pc_f4aedc956755b8abe3d62ed25c",
+        "source_record_id": "91342320"
+       }
+      ],
+      "prequalified": {
+       "jobs": [],
+       "name": "LangChain",
+       "batch": null,
+       "score": 45,
+       "yc_id": null,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_url": null,
+       "reasons": [
+        "size unsettled: no employee range was requested",
+        "already carries a LinkedIn identity \u2014 no resolution to pay for",
+        "carries a description \u2014 the field the ICP gate reasons from"
+       ],
+       "eligible": true,
+       "size_fit": false,
+       "best_tier": null,
+       "exclusion": null,
+       "locations": "San Francisco, CA, United States",
+       "one_liner": null,
+       "team_size": null,
+       "technical": 0,
+       "company_key": "langchain.com",
+       "size_status": "size_unverified",
+       "has_open_roles": true,
+       "canonical_domain": "langchain.com",
+       "strongest_signal": null,
+       "identity_confidence": "domain_exact",
+       "size_exclusion_basis": null,
+       "linkedin_identity_status": "unresolved"
+      },
+      "yc_open_jobs": [
+       {
+        "title": "Enterprise Account Executive (Colorado)",
+        "job_id": "li_job:4449308608",
+        "source": "harvestapi/linkedin-job-search",
+        "job_url": "https://www.linkedin.com/jobs/view/4449308608",
+        "location": "United States",
+        "description": null,
+        "posted_date": "2026-10-30T11:53:42.000Z",
+        "company_name": "LangChain",
+        "retrieved_at": null,
+        "missing_fields": [],
+        "workplace_mode": "remote",
+        "company_source_id": "li_company:91342320",
+        "company_linkedin_url": "https://www.linkedin.com/company/langchain"
+       }
+      ],
+      "hiring_assessment": {
+       "tier": "A",
+       "reason": "Tier A commercial role \"Enterprise Account Executive (Colorado)\" is sufficient evidence on its own.",
+       "verdict": "hiring_verified",
+       "strongest": {
+        "url": "https://www.linkedin.com/jobs/view/4449308608",
+        "tier": "A",
+        "round": null,
+        "title": "Enterprise Account Executive (Colorado)",
+        "location": "United States"
+       },
+       "commercial_jobs": [
+        {
+         "url": "https://www.linkedin.com/jobs/view/4449308608",
+         "tier": "A",
+         "round": null,
+         "title": "Enterprise Account Executive (Colorado)",
+         "location": "United States"
+        }
+       ],
+       "evidence_source": "external_job_search",
+       "supporting_signals": [],
+       "needs_external_verification": false
+      },
+      "enrichment_outcome": "success",
+      "identity_conflicts": [],
+      "investigation_rank": 1,
+      "mission_evaluation": {
+       "icp_fit": "plausible",
+       "version": "mission-evaluation-v1",
+       "decision": "insufficient_evidence",
+       "reasoning": "Mandatory criteria not established: geography:united_states: unknown (US presence is evidenced, but the supplied evidence does not establish that the headquarters is in the United States.); funding:_event_funding_subject_company_qualifier_: unknown (No funding announcement or funding date was supplied.)",
+       "confidence": 0.88,
+       "hiring_fit": "verified",
+       "match_score": 70,
+       "mission_fit": "review",
+       "next_action": "Verify LangChain's headquarters and obtain a dated funding announcement within the last 180 days.",
+       "unknown_fields": [
+        "Whether LangChain's headquarters is in the United States",
+        "Whether LangChain announced a funding round within the last 180 days",
+        "geography:united_states",
+        "funding:_event_funding_subject_company_qualifier_"
+       ],
+       "evidence_quality": "moderate",
+       "rejection_reasons": [],
+       "criterion_verdicts": [
+        {
+         "origin": "abstained",
+         "reason": "US presence is evidenced, but the supplied evidence does not establish that the headquarters is in the United States.",
+         "result": "unknown",
+         "evidence": [
+          {
+           "excerpt": "San Francisco, CA, United States; New York City, NY, United States; Cambridge, MA, United States; Amsterdam, Netherlands; London, United Kingdom",
+           "evidence_id": "company_location:linkedin:617be7a3"
+          }
+         ],
+         "criterion_id": "geography:united_states",
+         "model_result": "unknown",
+         "geography_scope": "headquarters"
+        },
+        {
+         "origin": "answered",
+         "reason": "The company has a current job posting for an Enterprise Account Executive, which is an Account Executive role.",
+         "result": "pass",
+         "evidence": [
+          {
+           "excerpt": "Enterprise Account Executive (Colorado)",
+           "evidence_id": "job_posting:job_source:5d2ba452"
+          }
+         ],
+         "criterion_id": "constraint:_field_hiring_value_account_executives_",
+         "model_result": "pass"
+        },
+        {
+         "origin": "abstained",
+         "reason": "No dated funding event evidence was supplied.",
+         "result": "unknown",
+         "evidence": [],
+         "criterion_id": "constraint:_field_funding_event_value_180_",
+         "model_result": "unknown"
+        },
+        {
+         "origin": "answered",
+         "reason": "A current company job posting specifically names an Enterprise Account Executive role.",
+         "result": "pass",
+         "evidence": [
+          {
+           "excerpt": "Enterprise Account Executive (Colorado)",
+           "evidence_id": "job_posting:job_source:5d2ba452"
+          }
+         ],
+         "criterion_id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+         "model_result": "pass"
+        },
+        {
+         "origin": "abstained",
+         "reason": "No funding announcement or funding date was supplied.",
+         "result": "unknown",
+         "evidence": [],
+         "criterion_id": "funding:_event_funding_subject_company_qualifier_",
+         "model_result": "unknown"
+        }
+       ],
+       "failed_requirements": [],
+       "matched_requirements": [
+        {
+         "excerpt": "Enterprise Account Executive (Colorado)",
+         "support": "verified",
+         "evidence_id": "job_posting:job_source:5d2ba452",
+         "requirement": "Evidence that the company is currently hiring Account Executives"
+        },
+        {
+         "excerpt": "San Francisco, CA, United States",
+         "support": "verified",
+         "evidence_id": "company_location:linkedin:617be7a3",
+         "requirement": "Evidence establishing the company's US location"
+        }
+       ]
+      },
+      "investigation_state": "investigated",
+      "qualification_holds": [],
+      "shortlist_exclusion": null
+     },
+     "enrichment": "completed",
+     "updated_at": "2026-10-30T12:01:40.754Z",
+     "company_key": "https://www.linkedin.com/company/langchain",
+     "company_name": "LangChain",
+     "completed_operations": [],
+     "linkedin_company_url": "https://www.linkedin.com/company/langchain"
+    },
+    {
+     "brain": "review",
+     "hiring": "verified_externally",
+     "founder": "not_eligible",
+     "identity": "resolved",
+     "snapshot": {
+      "brain": {
+       "policy": {
+        "geography": null,
+        "precedence": [
+         "user_query",
+         "lead_mission",
+         "workspace_brain",
+         "defaults"
+        ],
+        "mission_verticals": [],
+        "workspace_context_applied": [],
+        "workspace_categories_ignored": []
+       },
+       "reason": "Mandatory criteria not established: funding:_event_funding_subject_company_qualifier_: unknown (The supplied evidence contains no funding announcement or dated funding event.)",
+       "outcome": "REVIEW",
+       "version": "company-brain-semantic-fit-v1",
+       "confidence": 0.86,
+       "business_model": "unknown",
+       "unknown_fields": [
+        "A dated funding round announced within the last 180 days",
+        "Funding event within the last six months",
+        "Funding amount/event value 180",
+        "funding:_event_funding_subject_company_qualifier_",
+        "enrichment_incomplete"
+       ],
+       "agentory_use_case": "plausible",
+       "failed_hard_gates": [],
+       "supporting_evidence": [
+        "The company must be in the US.: San Francisco, CA, United States",
+        "The company must be hiring Account Executives.: Account Executive - Enterprise"
+       ],
+       "conflicting_evidence": []
+      },
+      "triage": null,
+      "company": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_job_search",
+        "source_id": "4388308716"
+       },
+       "website": "https://www.baseten.co",
+       "geography": "San Francisco, CA, United States",
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_size_band": "direct",
+        "provider_industry": "direct",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "Baseten",
+       "company_type": null,
+       "industry_ids": [
+        {
+         "id": "",
+         "name": "Software Development",
+         "hierarchy": null
+        }
+       ],
+       "hiring_status": true,
+       "missing_fields": [],
+       "canonical_domain": "baseten.co",
+       "startup_evidence": null,
+       "company_size_band": {
+        "max": 500,
+        "min": 201,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Software Development",
+       "source_provenance": "harvestapi/linkedin-job-search",
+       "external_source_id": "li_company:73802019",
+       "linkedin_company_url": "https://www.linkedin.com/company/baseten",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 487
+      },
+      "enriched": null,
+      "found_by": [
+       {
+        "method": "first_seen",
+        "route_id": "job_discovery:apify_linkedin_job_search",
+        "actor_key": "apify_linkedin_job_search",
+        "capability": "job_discovery",
+        "observed_at": "2026-10-30T12:00:36.762Z",
+        "plan_version": 1,
+        "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+       }
+      ],
+      "identity": {
+       "status": "verified_match",
+       "evidence": [
+        "source_supplied_canonical_linkedin_url"
+       ],
+       "company_key": "https://www.linkedin.com/company/baseten",
+       "ambiguous_candidates": [],
+       "linkedin_company_url": "https://www.linkedin.com/company/baseten"
+      },
+      "hiring_jobs": [
+       {
+        "title": "Account Executive - Enterprise",
+        "job_id": "li_job:4388308716",
+        "source": "harvestapi/linkedin-job-search",
+        "job_url": "https://www.linkedin.com/jobs/view/4388308716",
+        "location": "New York, NY",
+        "description": null,
+        "posted_date": "2026-10-30T11:55:21.000Z",
+        "company_name": "Baseten",
+        "retrieved_at": null,
+        "missing_fields": [],
+        "workplace_mode": "hybrid",
+        "company_source_id": "li_company:73802019",
+        "company_linkedin_url": "https://www.linkedin.com/company/baseten"
+       }
+      ],
+      "prequal_key": null,
+      "shortlisted": true,
+      "observations": [
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "Baseten",
+           "domain": "baseten.co",
+           "linkedin_company_url": "https://www.linkedin.com/company/baseten"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/baseten",
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/baseten",
+          "evidence_id": "ev_73b6af453add7d00c7e586cd",
+          "observed_at": "2026-10-30T12:00:36.762Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": "San Francisco, CA, United States",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "country",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search location_entries can suggest country but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "geography",
+          "confidence": "medium",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/baseten",
+          "evidence_id": "ev_4bc9c450b84c26420053192d",
+          "observed_at": "2026-10-30T12:00:36.762Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 500,
+           "min": 201,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "company_size",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search declared_size_band can suggest company_size but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "medium",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/baseten",
+          "evidence_id": "ev_6c06991fbc56a07ca94df6ab",
+          "observed_at": "2026-10-30T12:00:36.762Z",
+          "valid_until": "2027-01-28T12:00:36.762Z",
+          "derived_from": []
+         },
+         {
+          "value": 487,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "associated_members",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search associated_member_count can suggest associated_members but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "medium",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/baseten",
+          "evidence_id": "ev_95da4ead5dfd576b0dd6bf1c",
+          "observed_at": "2026-10-30T12:00:36.762Z",
+          "valid_until": "2027-01-28T12:00:36.762Z",
+          "derived_from": []
+         },
+         {
+          "value": "Software Development",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/baseten",
+          "evidence_id": "ev_a2d731829caff676685dc689",
+          "observed_at": "2026-10-30T12:00:36.762Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "title": "Account Executive - Enterprise",
+           "location": "New York, NY",
+           "posted_date": "2026-10-30T11:55:21.000Z"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/jobs/view/4388308716",
+           "actor": "apify_linkedin_job_search",
+           "excerpt": "Account Executive - Enterprise",
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "proven",
+          "dimension": "job",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/baseten",
+          "evidence_id": "ev_5443454984f96f06996ab37e",
+          "observed_at": "2026-10-30T12:00:36.762Z",
+          "valid_until": "2026-11-29T12:00:36.762Z",
+          "derived_from": []
+         },
+         {
+          "value": true,
+          "method": "deterministic_derivation",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "proven",
+          "dimension": "hiring",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/baseten",
+          "evidence_id": "ev_53416671579eab8c087521f9",
+          "observed_at": "2026-10-30T12:00:36.762Z",
+          "valid_until": "2026-11-29T12:00:36.762Z",
+          "derived_from": [
+           "https://www.linkedin.com/jobs/view/4388308716"
+          ]
+         }
+        ],
+        "provider": "apify",
+        "route_id": "job_discovery:apify_linkedin_job_search",
+        "actor_key": "apify_linkedin_job_search",
+        "capability": "job_discovery",
+        "source_url": "https://www.linkedin.com/company/baseten",
+        "entity_hint": {
+         "name": "Baseten",
+         "domain": "baseten.co",
+         "country": "US",
+         "website": "https://www.baseten.co",
+         "external_ids": [
+          "li_company:73802019"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/baseten"
+        },
+        "observed_at": "2026-10-30T12:00:36.762Z",
+        "plan_version": 1,
+        "observation_id": "obs_9f9194b076b5533562171b72",
+        "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b",
+        "source_record_id": "4388308716"
+       }
+      ],
+      "prequalified": {
+       "jobs": [],
+       "name": "Baseten",
+       "batch": null,
+       "score": 45,
+       "yc_id": null,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_url": null,
+       "reasons": [
+        "size unsettled: no employee range was requested",
+        "already carries a LinkedIn identity \u2014 no resolution to pay for",
+        "carries a description \u2014 the field the ICP gate reasons from"
+       ],
+       "eligible": true,
+       "size_fit": false,
+       "best_tier": null,
+       "exclusion": null,
+       "locations": "San Francisco, CA, United States",
+       "one_liner": null,
+       "team_size": null,
+       "technical": 0,
+       "company_key": "baseten.co",
+       "size_status": "size_unverified",
+       "has_open_roles": true,
+       "canonical_domain": "baseten.co",
+       "strongest_signal": null,
+       "identity_confidence": "domain_exact",
+       "size_exclusion_basis": null,
+       "linkedin_identity_status": "unresolved"
+      },
+      "yc_open_jobs": [
+       {
+        "title": "Account Executive - Enterprise",
+        "job_id": "li_job:4388308716",
+        "source": "harvestapi/linkedin-job-search",
+        "job_url": "https://www.linkedin.com/jobs/view/4388308716",
+        "location": "New York, NY",
+        "description": null,
+        "posted_date": "2026-10-30T11:55:21.000Z",
+        "company_name": "Baseten",
+        "retrieved_at": null,
+        "missing_fields": [],
+        "workplace_mode": "hybrid",
+        "company_source_id": "li_company:73802019",
+        "company_linkedin_url": "https://www.linkedin.com/company/baseten"
+       }
+      ],
+      "hiring_assessment": {
+       "tier": "A",
+       "reason": "Tier A commercial role \"Account Executive - Enterprise\" is sufficient evidence on its own.",
+       "verdict": "hiring_verified",
+       "strongest": {
+        "url": "https://www.linkedin.com/jobs/view/4388308716",
+        "tier": "A",
+        "round": null,
+        "title": "Account Executive - Enterprise",
+        "location": "New York, NY"
+       },
+       "commercial_jobs": [
+        {
+         "url": "https://www.linkedin.com/jobs/view/4388308716",
+         "tier": "A",
+         "round": null,
+         "title": "Account Executive - Enterprise",
+         "location": "New York, NY"
+        }
+       ],
+       "evidence_source": "external_job_search",
+       "supporting_signals": [],
+       "needs_external_verification": false
+      },
+      "enrichment_outcome": "not_attempted",
+      "identity_conflicts": [],
+      "investigation_rank": 0,
+      "mission_evaluation": {
+       "icp_fit": "plausible",
+       "version": "mission-evaluation-v1",
+       "decision": "insufficient_evidence",
+       "reasoning": "Mandatory criteria not established: funding:_event_funding_subject_company_qualifier_: unknown (The supplied evidence contains no funding announcement or dated funding event.)",
+       "confidence": 0.86,
+       "hiring_fit": "verified",
+       "match_score": 75,
+       "mission_fit": "review",
+       "next_action": "Verify a funding announcement dated within the last 180 days.",
+       "unknown_fields": [
+        "A dated funding round announced within the last 180 days",
+        "Funding event within the last six months",
+        "Funding amount/event value 180",
+        "funding:_event_funding_subject_company_qualifier_"
+       ],
+       "evidence_quality": "moderate",
+       "rejection_reasons": [],
+       "criterion_verdicts": [
+        {
+         "origin": "answered",
+         "reason": "The company location is stated as San Francisco, California, United States, establishing a US headquarters/location for the compiled headquarters criterion.",
+         "result": "pass",
+         "evidence": [
+          {
+           "excerpt": "San Francisco, CA, United States",
+           "evidence_id": "company_location:linkedin:62b926a5"
+          }
+         ],
+         "criterion_id": "geography:united_states",
+         "model_result": "pass",
+         "geography_scope": "headquarters"
+        },
+        {
+         "origin": "answered",
+         "reason": "The company has a current posted role titled Account Executive - Enterprise.",
+         "result": "pass",
+         "evidence": [
+          {
+           "excerpt": "Account Executive - Enterprise",
+           "evidence_id": "job_posting:job_source:b58c847a"
+          }
+         ],
+         "criterion_id": "constraint:_field_hiring_value_account_executives_",
+         "model_result": "pass"
+        },
+        {
+         "origin": "abstained",
+         "reason": "No dated funding event or funding amount is provided in the evidence.",
+         "result": "unknown",
+         "evidence": [],
+         "criterion_id": "constraint:_field_funding_event_value_180_",
+         "model_result": "unknown"
+        },
+        {
+         "origin": "answered",
+         "reason": "A current job posting specifically matches the Account Executive role requirement and was posted on 2026-10-30.",
+         "result": "pass",
+         "evidence": [
+          {
+           "excerpt": "Account Executive - Enterprise",
+           "evidence_id": "job_posting:job_source:b58c847a"
+          }
+         ],
+         "criterion_id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+         "model_result": "pass"
+        },
+        {
+         "origin": "abstained",
+         "reason": "The supplied evidence contains no funding announcement or dated funding event.",
+         "result": "unknown",
+         "evidence": [],
+         "criterion_id": "funding:_event_funding_subject_company_qualifier_",
+         "model_result": "unknown"
+        }
+       ],
+       "failed_requirements": [],
+       "matched_requirements": [
+        {
+         "excerpt": "San Francisco, CA, United States",
+         "support": "verified",
+         "evidence_id": "company_location:linkedin:62b926a5",
+         "requirement": "The company must be in the US."
+        },
+        {
+         "excerpt": "Account Executive - Enterprise",
+         "support": "verified",
+         "evidence_id": "job_posting:job_source:b58c847a",
+         "requirement": "The company must be hiring Account Executives."
+        }
+       ]
+      },
+      "investigation_state": "investigated",
+      "qualification_holds": [],
+      "shortlist_exclusion": null
+     },
+     "enrichment": "not_started",
+     "updated_at": "2026-10-30T12:01:40.754Z",
+     "company_key": "https://www.linkedin.com/company/baseten",
+     "company_name": "Baseten",
+     "completed_operations": [],
+     "linkedin_company_url": "https://www.linkedin.com/company/baseten"
+    },
+    {
+     "brain": "review",
+     "hiring": "verified_externally",
+     "founder": "not_eligible",
+     "identity": "resolved",
+     "snapshot": {
+      "brain": {
+       "policy": {
+        "geography": null,
+        "precedence": [
+         "user_query",
+         "lead_mission",
+         "workspace_brain",
+         "defaults"
+        ],
+        "mission_verticals": [],
+        "workspace_context_applied": [],
+        "workspace_categories_ignored": []
+       },
+       "reason": "the evaluator response could not be validated \u2014 held, not rejected",
+       "outcome": "REVIEW",
+       "version": "company-brain-semantic-fit-v1",
+       "confidence": 0,
+       "business_model": "unknown",
+       "unknown_fields": [
+        "evaluator_response_unusable",
+        "enrichment_incomplete"
+       ],
+       "agentory_use_case": "weak",
+       "failed_hard_gates": [],
+       "supporting_evidence": [],
+       "conflicting_evidence": []
+      },
+      "triage": null,
+      "company": {
+       "raw_ref": {
+        "actor_key": "apify_linkedin_job_search",
+        "source_id": "4477426117"
+       },
+       "website": "https://oscilar.com",
+       "geography": "Palo Alto, CA, United States",
+       "description": null,
+       "field_trust": {
+        "website": "direct",
+        "geography": "transformed",
+        "description": null,
+        "company_name": "direct",
+        "company_size_band": "direct",
+        "provider_industry": "direct",
+        "linkedin_company_url": "direct",
+        "linkedin_associated_member_count": "direct"
+       },
+       "company_name": "Oscilar",
+       "company_type": null,
+       "industry_ids": [
+        {
+         "id": "",
+         "name": "Software Development",
+         "hierarchy": null
+        }
+       ],
+       "hiring_status": true,
+       "missing_fields": [],
+       "canonical_domain": "oscilar.com",
+       "startup_evidence": null,
+       "company_size_band": {
+        "max": 500,
+        "min": 201,
+        "source": "linkedin_declared"
+       },
+       "provider_industry": "Software Development",
+       "source_provenance": "harvestapi/linkedin-job-search",
+       "external_source_id": "li_company:74527141",
+       "linkedin_company_url": "https://www.linkedin.com/company/oscilar-inc",
+       "employee_range_advisory": null,
+       "linkedin_associated_member_count": 223
+      },
+      "enriched": null,
+      "found_by": [
+       {
+        "method": "first_seen",
+        "route_id": "job_discovery:apify_linkedin_job_search",
+        "actor_key": "apify_linkedin_job_search",
+        "capability": "job_discovery",
+        "observed_at": "2026-10-30T12:00:36.764Z",
+        "plan_version": 1,
+        "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+       }
+      ],
+      "identity": {
+       "status": "verified_match",
+       "evidence": [
+        "source_supplied_canonical_linkedin_url"
+       ],
+       "company_key": "https://www.linkedin.com/company/oscilar-inc",
+       "ambiguous_candidates": [],
+       "linkedin_company_url": "https://www.linkedin.com/company/oscilar-inc"
+      },
+      "hiring_jobs": [
+       {
+        "title": "Enterprise Account Executive (Southeast + Mexico)",
+        "job_id": "li_job:4477426117",
+        "source": "harvestapi/linkedin-job-search",
+        "job_url": "https://www.linkedin.com/jobs/view/4477426117",
+        "location": "United States",
+        "description": null,
+        "posted_date": "2026-10-30T11:57:34.000Z",
+        "company_name": "Oscilar",
+        "retrieved_at": null,
+        "missing_fields": [],
+        "workplace_mode": "remote",
+        "company_source_id": "li_company:74527141",
+        "company_linkedin_url": "https://www.linkedin.com/company/oscilar-inc"
+       }
+      ],
+      "prequal_key": null,
+      "shortlisted": true,
+      "observations": [
+       {
+        "version": "candidate-observation-v1",
+        "evidence": [
+         {
+          "value": {
+           "name": "Oscilar",
+           "domain": "oscilar.com",
+           "linkedin_company_url": "https://www.linkedin.com/company/oscilar-inc"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/company/oscilar-inc",
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "proven",
+          "dimension": "identity",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/oscilar-inc",
+          "evidence_id": "ev_a529c8328ec9e2e468d47b2c",
+          "observed_at": "2026-10-30T12:00:36.764Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": "Palo Alto, CA, United States",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "country",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search location_entries can suggest country but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "geography",
+          "confidence": "medium",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/oscilar-inc",
+          "evidence_id": "ev_30197f41964e18b9baae54d5",
+          "observed_at": "2026-10-30T12:00:36.764Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "max": 500,
+           "min": 201,
+           "source": "linkedin_declared"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "company_size",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search declared_size_band can suggest company_size but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "company_size_band",
+          "confidence": "medium",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/oscilar-inc",
+          "evidence_id": "ev_be249684bbf1c426f350ccca",
+          "observed_at": "2026-10-30T12:00:36.764Z",
+          "valid_until": "2027-01-28T12:00:36.764Z",
+          "derived_from": []
+         },
+         {
+          "value": 223,
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "associated_members",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search associated_member_count can suggest associated_members but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "linkedin_member_count",
+          "confidence": "medium",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/oscilar-inc",
+          "evidence_id": "ev_a37841f176a5ee9f321c2207",
+          "observed_at": "2026-10-30T12:00:36.764Z",
+          "valid_until": "2027-01-28T12:00:36.764Z",
+          "derived_from": []
+         },
+         {
+          "value": "Software Development",
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "plausible",
+          "authority": {
+           "rule": "no_proving_rule",
+           "claim": "industry",
+           "level": "plausible",
+           "reason": "apify_linkedin_job_search industry_taxonomy can suggest industry but no rule lets it prove it",
+           "version": "evidence-authority-v1"
+          },
+          "dimension": "industry",
+          "confidence": "low",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/oscilar-inc",
+          "evidence_id": "ev_be23302ccadd9d717bf65bc6",
+          "observed_at": "2026-10-30T12:00:36.764Z",
+          "valid_until": null,
+          "derived_from": []
+         },
+         {
+          "value": {
+           "title": "Enterprise Account Executive (Southeast + Mexico)",
+           "location": "United States",
+           "posted_date": "2026-10-30T11:57:34.000Z"
+          },
+          "method": "provider_field",
+          "origin": "lead_mission",
+          "source": {
+           "url": "https://www.linkedin.com/jobs/view/4477426117",
+           "actor": "apify_linkedin_job_search",
+           "excerpt": "Enterprise Account Executive (Southeast + Mexico)",
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "proven",
+          "dimension": "job",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/oscilar-inc",
+          "evidence_id": "ev_8d38ceeebd7349d5ac1b9675",
+          "observed_at": "2026-10-30T12:00:36.764Z",
+          "valid_until": "2026-11-29T12:00:36.764Z",
+          "derived_from": []
+         },
+         {
+          "value": true,
+          "method": "deterministic_derivation",
+          "origin": "lead_mission",
+          "source": {
+           "url": null,
+           "actor": "apify_linkedin_job_search",
+           "excerpt": null,
+           "provider": "apify",
+           "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b"
+          },
+          "status": "proven",
+          "dimension": "hiring",
+          "confidence": "high",
+          "mission_id": "25906701-391b-474a-820b-f4af4174cf5e",
+          "company_key": "https://www.linkedin.com/company/oscilar-inc",
+          "evidence_id": "ev_9c53550b4c7a609764b41ca9",
+          "observed_at": "2026-10-30T12:00:36.764Z",
+          "valid_until": "2026-11-29T12:00:36.764Z",
+          "derived_from": [
+           "https://www.linkedin.com/jobs/view/4477426117"
+          ]
+         }
+        ],
+        "provider": "apify",
+        "route_id": "job_discovery:apify_linkedin_job_search",
+        "actor_key": "apify_linkedin_job_search",
+        "capability": "job_discovery",
+        "source_url": "https://www.linkedin.com/company/oscilar-inc",
+        "entity_hint": {
+         "name": "Oscilar",
+         "domain": "oscilar.com",
+         "country": "US",
+         "website": "https://oscilar.com",
+         "external_ids": [
+          "li_company:74527141"
+         ],
+         "linkedin_company_url": "https://www.linkedin.com/company/oscilar-inc"
+        },
+        "observed_at": "2026-10-30T12:00:36.764Z",
+        "plan_version": 1,
+        "observation_id": "obs_7752873a1aa7fa92668e9dbe",
+        "provider_call_id": "pc_a987fdd78fbb9c3e646c32ce5b",
+        "source_record_id": "4477426117"
+       }
+      ],
+      "prequalified": {
+       "jobs": [],
+       "name": "Oscilar",
+       "batch": null,
+       "score": 45,
+       "yc_id": null,
+       "tier_a": 0,
+       "tier_b": 0,
+       "tier_c": 0,
+       "yc_url": null,
+       "reasons": [
+        "size unsettled: no employee range was requested",
+        "already carries a LinkedIn identity \u2014 no resolution to pay for",
+        "carries a description \u2014 the field the ICP gate reasons from"
+       ],
+       "eligible": true,
+       "size_fit": false,
+       "best_tier": null,
+       "exclusion": null,
+       "locations": "Palo Alto, CA, United States",
+       "one_liner": null,
+       "team_size": null,
+       "technical": 0,
+       "company_key": "oscilar.com",
+       "size_status": "size_unverified",
+       "has_open_roles": true,
+       "canonical_domain": "oscilar.com",
+       "strongest_signal": null,
+       "identity_confidence": "domain_exact",
+       "size_exclusion_basis": null,
+       "linkedin_identity_status": "unresolved"
+      },
+      "yc_open_jobs": [
+       {
+        "title": "Enterprise Account Executive (Southeast + Mexico)",
+        "job_id": "li_job:4477426117",
+        "source": "harvestapi/linkedin-job-search",
+        "job_url": "https://www.linkedin.com/jobs/view/4477426117",
+        "location": "United States",
+        "description": null,
+        "posted_date": "2026-10-30T11:57:34.000Z",
+        "company_name": "Oscilar",
+        "retrieved_at": null,
+        "missing_fields": [],
+        "workplace_mode": "remote",
+        "company_source_id": "li_company:74527141",
+        "company_linkedin_url": "https://www.linkedin.com/company/oscilar-inc"
+       }
+      ],
+      "hiring_assessment": {
+       "tier": "A",
+       "reason": "Tier A commercial role \"Enterprise Account Executive (Southeast + Mexico)\" is sufficient evidence on its own.",
+       "verdict": "hiring_verified",
+       "strongest": {
+        "url": "https://www.linkedin.com/jobs/view/4477426117",
+        "tier": "A",
+        "round": null,
+        "title": "Enterprise Account Executive (Southeast + Mexico)",
+        "location": "United States"
+       },
+       "commercial_jobs": [
+        {
+         "url": "https://www.linkedin.com/jobs/view/4477426117",
+         "tier": "A",
+         "round": null,
+         "title": "Enterprise Account Executive (Southeast + Mexico)",
+         "location": "United States"
+        }
+       ],
+       "evidence_source": "external_job_search",
+       "supporting_signals": [],
+       "needs_external_verification": false
+      },
+      "enrichment_outcome": "not_attempted",
+      "identity_conflicts": [],
+      "investigation_rank": 2,
+      "mission_evaluation": {
+       "icp_fit": "weak",
+       "version": "mission-evaluation-v1",
+       "decision": "insufficient_evidence",
+       "reasoning": "the evaluator response could not be validated \u2014 held, not rejected",
+       "confidence": 0,
+       "hiring_fit": "absent",
+       "match_score": 0,
+       "mission_fit": "review",
+       "next_action": null,
+       "unknown_fields": [
+        "evaluator_response_unusable"
+       ],
+       "evidence_quality": "weak",
+       "rejection_reasons": [],
+       "criterion_verdicts": [
+        {
+         "origin": "unparsed",
+         "reason": "not_an_object",
+         "result": "unknown",
+         "evidence": [],
+         "criterion_id": "geography:united_states"
+        },
+        {
+         "origin": "unparsed",
+         "reason": "not_an_object",
+         "result": "unknown",
+         "evidence": [],
+         "criterion_id": "constraint:_field_hiring_value_account_executives_"
+        },
+        {
+         "origin": "unparsed",
+         "reason": "not_an_object",
+         "result": "unknown",
+         "evidence": [],
+         "criterion_id": "constraint:_field_funding_event_value_180_"
+        },
+        {
+         "origin": "unparsed",
+         "reason": "not_an_object",
+         "result": "unknown",
+         "evidence": [],
+         "criterion_id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e"
+        },
+        {
+         "origin": "unparsed",
+         "reason": "not_an_object",
+         "result": "unknown",
+         "evidence": [],
+         "criterion_id": "funding:_event_funding_subject_company_qualifier_"
+        }
+       ],
+       "failed_requirements": [],
+       "matched_requirements": []
+      },
+      "investigation_state": "investigated",
+      "qualification_holds": [],
+      "shortlist_exclusion": null
+     },
+     "enrichment": "not_started",
+     "updated_at": "2026-10-30T12:01:40.754Z",
+     "company_key": "https://www.linkedin.com/company/oscilar-inc",
+     "company_name": "Oscilar",
+     "completed_operations": [],
+     "linkedin_company_url": "https://www.linkedin.com/company/oscilar-inc"
+    }
+   ]
+  }
+ },
+ "provider_responses": [],
+ "anchors": {
+  "as_it_ran": {
+   "canonical": {
+    "discovered": 3,
+    "pending": 3,
+    "qualified": 0,
+    "ineligible": 0
+   },
+   "auto_continuation": "frontier_exhausted",
+   "evaluation_paths": {
+    "LangChain": "model_evaluated",
+    "Baseten": "model_evaluated",
+    "Oscilar": "model_evaluated"
+   },
+   "atomus_starts": 0,
+   "details_runs": 1,
+   "checkpoint_continuation_required": true
+  }
+ },
+ "expected": {}
+}

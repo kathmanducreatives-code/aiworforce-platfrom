@@ -47,12 +47,30 @@ export const MODEL_REQUEST_BODY_VERSION = "model-request-body-v1" as const;
  * vendor prefix is stripped first.
  */
 export function usesGpt5RequestShape(model: string): boolean {
-  const bare = String(model ?? "").trim().toLowerCase().replace(/^[a-z0-9_-]+[/:]/i, "");
-  return bare.startsWith("gpt-5") || bare.startsWith("o1") || bare.startsWith("o3");
+  const bare = bareModelId(model);
+  // GPT-6 takes the same shape: `reasoning_effort`, `max_completion_tokens`,
+  // no `temperature`. Without it a gpt-6 id fell through to the gpt-4.1 body.
+  return bare.startsWith("gpt-5") || bare.startsWith("gpt-6") || bare.startsWith("o1") || bare.startsWith("o3");
 }
+
+const bareModelId = (model: string) =>
+  String(model ?? "").trim().toLowerCase().replace(/^[a-z0-9_-]+[/:]/i, "");
 
 /** How hard the model should think. `null` omits the field entirely. */
 export type ReasoningEffort = "none" | "low" | "medium" | "high";
+
+/**
+ * The lowest effort a model accepts, or null when it accepts `none`.
+ *
+ * gpt-6.1-sol takes low, medium, high, xhigh and max — not `none` (OpenAI model
+ * page, 2026-10-28) — so the default `none` below would be a 400 on every call.
+ * The ROUTER raises a route's effort to this floor and says so; the body builder
+ * only refuses, because quietly changing effort here would be a routing
+ * decision made in a wire-format module.
+ */
+export function minimumReasoningEffort(model: string): ReasoningEffort | null {
+  return bareModelId(model).startsWith("gpt-6.1-sol") ? "low" : null;
+}
 
 export interface ChatBodyInput {
   model: string;
@@ -107,6 +125,12 @@ export function buildChatCompletionsBody(i: ChatBodyInput): Record<string, unkno
     : { type: "json_object" };
 
   if (usesGpt5RequestShape(i.model)) {
+    if ((i.reasoningEffort ?? "none") === "none" && minimumReasoningEffort(i.model)) {
+      throw new Error(
+        `${i.model} does not accept reasoning_effort "none"; route it with at least ` +
+        `"${minimumReasoningEffort(i.model)}" (gptModelRouter applies this floor)`,
+      );
+    }
     return {
       model: i.model,
       messages,

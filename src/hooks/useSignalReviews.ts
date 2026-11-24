@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchSignalReviews, upsertSignalReview, bulkUpdateSignalReviews } from "@/lib/signalReviews";
 import { indexReviewsBySignal, type ReviewStatus, type SignalReviewRow } from "@/lib/signalReviewModel";
+import { recordSignalDecision } from "@/lib/companyBrain/memoryApi";
 
 export function useSignalReviews(workspaceId: string | null) {
   const [reviewsBySignal, setReviewsBySignal] = useState<Record<string, SignalReviewRow>>({});
@@ -33,6 +34,11 @@ export function useSignalReviews(workspaceId: string | null) {
     try {
       const saved = await upsertSignalReview({ workspaceId, signalId, status });
       setReviewsBySignal((m) => ({ ...m, [signalId]: saved }));
+      // Remember the dismissal (or its undo) in the Company Brain as a decision
+      // about THIS signal, so ORION stops briefing it. Best-effort, not awaited.
+      if (status === "ignored" || prev?.status === "ignored") {
+        void recordSignalDecision(workspaceId, signalId, status === "ignored");
+      }
     } catch (e) {
       // rollback
       setReviewsBySignal((m) => {

@@ -70,6 +70,18 @@ export interface GenerateOpts {
    * existing caller behaves exactly as before.
    */
   budget?: { check(): { allowed: boolean; exceeded: string | null } };
+  /**
+   * HYBRID ROUTING OPT-IN. Names the workforce task this call serves. A routed
+   * model (GPT-6.1 Terra or another allow-listed one) is tried first ONLY when
+   * `resolveTaskRoute` allows it (flags on, model allow-listed, priced and
+   * verified for this account), its vendor has a key, `terraLimiter` has calls
+   * left and `onModelCall` collects the spend. Otherwise ignored, and the call
+   * runs exactly as before. A failed routed call falls back to the task's
+   * declared model (recorded), or fails loudly with AGENTORY_ROUTE_FALLBACK=none.
+   */
+  workforceTask?: WorkforceTask;
+  /** The per-request routed-call limiter (createRouteLimiter / createTerraRunLimiter). */
+  terraLimiter?: TerraRunLimiter;
 }
 
 export interface GenerateResult {
@@ -86,12 +98,23 @@ export interface GenerateResult {
   degraded?: boolean;
   /** The model the task intended, whatever actually ran. */
   intendedModel?: string;
+  /** Why Terra was or was not used, when the caller named a workforce task. */
+  terraDecision?: string;
+  /** The hybrid-routing decision, when the caller named a workforce task. */
+  routeDecision?: { task: string; decision: string; model: string | null; effort: string | null; source: string | null };
 }
 
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 import {
   readModelUsage, buildModelTelemetry, type ModelCallTelemetry,
 } from "./modelCostModel.ts";
+import { usesGpt5RequestShape } from "./modelRequestBody.ts";
+import { type WorkforceTask, type TerraRunLimiter, type EnvReader } from "./terraPolicy.ts";
+import { resolveTaskRoute, defaultEffortFor, maxUsdPerCall, type RouteEffort, type TaskRoute } from "./modelRoutePolicy.ts";
+import { priceModelCall } from "./modelCostModel.ts";
+import { minimumReasoningEffort } from "./modelRequestBody.ts";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { activeModelFamily, MODEL_FAMILIES } from "./gptModelRouter.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -170,6 +193,42 @@ export const TASK_MODELS: Record<TaskType, TaskModelPolicy> = {
 
 const ANTHROPIC_MODEL = HAIKU;
 
+// ── ORION CHAT IS OPENAI-ONLY (2026-11-12) ──────────────────────────────────
+//
+// A REQUEST-SCOPED vendor policy. `pilot-chat` enters it once per request, so
+// every `generateText`/`generateJson` made while answering that request — its
+// own calls and those of shared modules it reaches — runs on OpenAI, whatever
+// the task's default above says. Functions that never enter the scope
+// (`daily-brief`, `orchestrate`, `run-agent`, Company Brain setup, …) keep
+// their declared models, Anthropic included; nothing is removed from them.
+//
+// The model is the active GPT family's PRIMARY (GPT-5.6 Luna by default), the
+// same model Chat Brain already uses to understand the request, so one turn
+// is read and answered by one vendor. `fallback: null`: if OpenAI fails or its
+// key is missing, the call fails with an explicit code — it never falls back
+// to Anthropic.
+export interface ChatVendorScope { readonly name: "orion_openai_only" }
+export const ORION_OPENAI_ONLY: ChatVendorScope = Object.freeze({ name: "orion_openai_only" });
+export const chatVendorScope = new AsyncLocalStorage<ChatVendorScope>();
+
+/** The OpenAI model ORION chat answers with: the active family's primary. */
+export function orionChatModel(read?: (k: string) => string | undefined): string {
+  return MODEL_FAMILIES[read ? activeModelFamily(read) : activeModelFamily()].primary;
+}
+
+/** The policy a task runs under right now: its declared one, or ORION's OpenAI-only override. */
+export function effectiveTaskPolicy(
+  taskType: TaskType,
+  scope: ChatVendorScope | undefined = chatVendorScope.getStore(),
+  read?: (k: string) => string | undefined,
+): TaskModelPolicy {
+  if (!scope) return TASK_MODELS[taskType];
+  return {
+    model: orionChatModel(read), vendor: "openai", fallback: null,
+    rationale: "ORION chat runs on OpenAI only; no Anthropic fallback",
+  };
+}
+
 // ----- JSON extraction (tolerant of fences / preamble / truncation) -----
 
 export function stripFences(s: string): string {
@@ -207,10 +266,103 @@ export function extractJson(raw: string): unknown {
  * OpenAI's chat-completions API. This function used to point at the Lovable
  * gateway, which speaks the same shape; the gateway is gone, the shape stayed.
  */
+/** Completion-token headroom per effort: reasoning tokens count against the cap. */
+export const REASONING_HEADROOM: Readonly<Record<RouteEffort, number>> = Object.freeze({ none: 1, low: 2, medium: 4, high: 6 });
+
+export function openAIChatBody(
+  model: string, messages: ChatMessage[], opts: Pick<GenerateOpts, "temperature" | "maxTokens" | "jsonMode">,
+  /** The effort to send. Null/undefined keeps the historical default (`low`). */
+  effort?: RouteEffort | null,
+): Record<string, unknown> {
+  const format = opts.jsonMode ? { response_format: { type: "json_object" } } : {};
+  // GPT-5/6 reject `temperature` and `max_tokens`; they take
+  // `max_completion_tokens` and `reasoning_effort`. Reasoning tokens count
+  // against the cap, so it is raised — by the effort's headroom, and NOT at all
+  // at `none`, where no reasoning is bought (the old fixed 2x paid for nothing).
+  if (usesGpt5RequestShape(model)) {
+    const requested: RouteEffort = effort ?? "low";
+    const floor = minimumReasoningEffort(model) as RouteEffort | null;
+    const e: RouteEffort = requested === "none" && floor ? floor : requested;
+    return {
+      model, messages, reasoning_effort: e,
+      max_completion_tokens: (opts.maxTokens ?? 2048) * REASONING_HEADROOM[e],
+      ...format,
+    };
+  }
+  return {
+    model, messages,
+    temperature: opts.temperature ?? 0.7,
+    max_tokens: opts.maxTokens ?? 2048,
+    ...format,
+  };
+}
+
+export type RouteAttempt =
+  | { model: string; vendor: "openai" | "anthropic"; effort: RouteEffort | null; fallback: "declared" | "none";
+      source: "hybrid" | "terra_legacy"; decision: string }
+  | { model: null; decision: string };
+
+/**
+ * Decide the routed attempt for this call. Pure given the env reader.
+ * `hasKey` answers per vendor; a boolean means "has an OpenAI key" (legacy callers).
+ */
+/**
+ * WORST-CASE cost of one routed call, before it is sent: input bounded by one
+ * token per character (+100 for message framing), output by the hard cap the
+ * request carries (max tokens × the effort's reasoning headroom).
+ */
+export function worstCaseCallUsd(model: string, effort: RouteEffort | null,
+  opts: Partial<Pick<GenerateOpts, "systemPrompt" | "messages" | "maxTokens">>): number {
+  const chars = (opts.systemPrompt ?? "").length + (opts.messages ?? []).reduce((a, m) => a + m.content.length, 0);
+  const out = (opts.maxTokens ?? 2048) * (usesGpt5RequestShape(model) ? REASONING_HEADROOM[effort ?? "low"] : 1);
+  const p = priceModelCall({ model, usage: { input_tokens: chars + 100, cached_input_tokens: 0, output_tokens: out } });
+  return p.estimated_usd ?? Infinity;
+}
+
+export function routeAttemptFor(
+  opts: Pick<GenerateOpts, "workforceTask" | "terraLimiter" | "onModelCall" | "taskType"> &
+    Partial<Pick<GenerateOpts, "workspaceId" | "systemPrompt" | "messages" | "maxTokens">>,
+  hasKey: boolean | ((v: ModelVendor) => boolean), read?: EnvReader,
+): RouteAttempt {
+  if (!opts.workforceTask) return { model: null, decision: "no_task" };
+  const route: TaskRoute = read
+    ? resolveTaskRoute(opts.workforceTask, read, new Date(), { workspaceId: opts.workspaceId })
+    : resolveTaskRoute(opts.workforceTask, undefined, new Date(), { workspaceId: opts.workspaceId });
+  if (!route.use) return { model: null, decision: route.reason };
+  const keyFor = typeof hasKey === "function" ? hasKey : (v: ModelVendor) => v === "openai" && hasKey;
+  // The route names the task's own model at its default effort: nothing to change.
+  const declared = opts.taskType ? TASK_MODELS[opts.taskType] : null;
+  if (declared && declared.model === route.model && route.effort == null) return { model: null, decision: "same_as_declared" };
+  if (!keyFor(route.vendor)) return { model: null, decision: `no_${route.vendor}_key` };
+  if (!opts.onModelCall) return { model: null, decision: "no_spend_collector" };
+  if (!opts.terraLimiter) return { model: null, decision: "no_run_limiter" };
+  const effort = route.effort ?? defaultEffortFor(route.task, route.model);
+  // PER-REQUEST SPEND ADMISSION: a routed call whose worst case exceeds the cap
+  // is not made (the declared model serves it). Checked before the limiter is
+  // consumed, so a refused call does not use up a routed slot.
+  if (worstCaseCallUsd(route.model, effort, opts) > (read ? maxUsdPerCall(read) : maxUsdPerCall())) {
+    return { model: null, decision: "over_call_cap" };
+  }
+  if (!opts.terraLimiter.take()) return { model: null, decision: "run_call_limit_reached" };
+  return { model: route.model, vendor: route.vendor, effort,
+    fallback: route.fallback, source: route.source,
+    decision: /terra/.test(route.model) ? "terra" : "routed" };
+}
+
+/** Legacy name (b434e4ce): the routed attempt, reported as Terra-or-not. */
+export function terraAttemptFor(
+  opts: Pick<GenerateOpts, "workforceTask" | "terraLimiter" | "onModelCall">,
+  hasOpenAIKey: boolean, read?: EnvReader,
+): { model: string; decision: string } | { model: null; decision: string } {
+  const a = routeAttemptFor(opts as Pick<GenerateOpts, "workforceTask" | "terraLimiter" | "onModelCall" | "taskType">, hasOpenAIKey, read);
+  return a.model ? { model: a.model, decision: a.decision } : a;
+}
+
 async function callOpenAICompat(
   model: string,
   opts: GenerateOpts,
   apiKey: string,
+  effort?: RouteEffort | null,
 ): Promise<{ ok: boolean; content: string; usage?: unknown; error?: string; errorCode?: string }> {
   const messages: ChatMessage[] = [];
   if (opts.systemPrompt) messages.push({ role: "system", content: opts.systemPrompt });
@@ -226,13 +378,7 @@ async function callOpenAICompat(
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: opts.temperature ?? 0.7,
-        max_tokens: opts.maxTokens ?? 2048,
-        ...(opts.jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
+      body: JSON.stringify(openAIChatBody(model, messages, opts, effort)),
     });
     clearTimeout(timer);
     const text = await res.text();
@@ -254,6 +400,7 @@ async function callOpenAICompat(
 async function callAnthropic(
   opts: GenerateOpts,
   apiKey: string,
+  model: string = ANTHROPIC_MODEL,
 ): Promise<{ ok: boolean; content: string; usage?: unknown; error?: string; errorCode?: string }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 30_000);
@@ -267,7 +414,7 @@ async function callAnthropic(
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
+        model,
         max_tokens: opts.maxTokens ?? 2048,
         system: opts.systemPrompt,
         messages: opts.messages
@@ -300,8 +447,8 @@ async function callAnthropic(
  */
 export function plannedAttempts(
   taskType: TaskType, hasKey: (v: ModelVendor) => boolean,
+  policy: TaskModelPolicy = TASK_MODELS[taskType],
 ): Array<{ vendor: ModelVendor; model: string; intended: boolean }> {
-  const policy = TASK_MODELS[taskType];
   const out: Array<{ vendor: ModelVendor; model: string; intended: boolean }> = [];
   if (hasKey(policy.vendor)) out.push({ vendor: policy.vendor, model: policy.model, intended: true });
   if (policy.fallback && hasKey(policy.fallback.vendor)) {
@@ -314,20 +461,41 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   const hasKey = (v: ModelVendor) => (v === "anthropic" ? !!anthropicKey : !!openaiKey);
-  const policy = TASK_MODELS[opts.taskType];
+  const scope = chatVendorScope.getStore();
+  const policy = effectiveTaskPolicy(opts.taskType, scope);
   const started = Date.now();
 
   type Attempt = {
     provider: ProviderName; model: string; intended: boolean;
     run: () => Promise<Awaited<ReturnType<typeof callAnthropic>>>;
+    routed?: boolean; effort?: RouteEffort | null;
   };
-  const attempts: Attempt[] = plannedAttempts(opts.taskType, hasKey).map((a) =>
+  const attempts: Attempt[] = plannedAttempts(opts.taskType, hasKey, policy).map((a) =>
     a.vendor === "anthropic"
       ? { provider: "anthropic" as ProviderName, model: a.model, intended: a.intended,
           run: () => callAnthropic(opts, anthropicKey!) }
       : { provider: "openai" as ProviderName, model: a.model, intended: a.intended,
           run: () => callOpenAICompat(a.model, opts, openaiKey!) }
   );
+
+  const routed = routeAttemptFor(opts, hasKey);
+  // Inside ORION's OpenAI-only scope a route to another vendor is not taken.
+  const route: RouteAttempt = routed.model && scope && routed.vendor !== "openai"
+    ? { model: null, decision: "vendor_not_allowed_in_scope" } : routed;
+  if (route.model) {
+    const { model: rModel, effort: rEffort } = route;
+    attempts.unshift(route.vendor === "anthropic"
+      ? { provider: "anthropic", model: rModel, intended: true, routed: true, effort: null,
+          run: () => callAnthropic(opts, anthropicKey!, rModel) }
+      : { provider: "openai", model: rModel, intended: true, routed: true, effort: rEffort,
+          run: () => callOpenAICompat(rModel, opts, openaiKey!, rEffort) });
+  }
+  const routeDecision = (actual: string | null) => opts.workforceTask ? {
+    terraDecision: route.model && actual === route.model ? (route.decision === "terra" ? "terra" : "routed")
+      : route.model ? `${route.decision === "terra" ? "terra" : "routed"}_failed_fell_back` : route.decision,
+    routeDecision: { task: opts.workforceTask, decision: route.decision, model: route.model,
+      effort: route.model ? route.effort : null, source: route.model ? route.source : null },
+  } : {};
 
   if (attempts.length === 0) {
     // NO SILENT DEMOTION. The task named a model; its vendor has no credential
@@ -394,7 +562,8 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
           // reads null and every chat call prices as unknown.
           usage: readModelUsage({ usage: r.usage }),
           latency_ms: latencyMs,
-          fallback_reason: att === attempts[0] ? null : "primary_attempt_failed",
+          reasoning_effort: att.provider === "openai" && usesGpt5RequestShape(att.model) ? (att.effort ?? "low") : null,
+          fallback_reason: att === attempts[0] ? null : att.routed ? null : route.model ? "routed_attempt_failed" : "primary_attempt_failed",
         }),
         true,
       );
@@ -413,6 +582,7 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
         usage: r.usage, latencyMs,
         degraded: !att.intended,
         intendedModel: policy.model,
+        ...routeDecision(att.model),
       };
     }
     // A FAILED ATTEMPT IS STILL A CALL. It may have been billed, and during an
@@ -424,6 +594,7 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
         model: att.model,
         usage: readModelUsage(undefined),
         latency_ms: Date.now() - started,
+        reasoning_effort: att.provider === "openai" && usesGpt5RequestShape(att.model) ? (att.effort ?? "low") : null,
         fallback_reason: r.errorCode ?? "attempt_failed",
       }),
       false,
@@ -437,11 +608,22 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
     // On credits/rate errors, don't waste more Lovable calls — but let the loop
     // continue to any configured Anthropic fallback attempt.
     if (lastCode === "credits_exhausted" || lastCode === "rate_limited") exhausted.add(att.provider);
+    // AGENTORY_ROUTE_FALLBACK=none: a routed call that fails is the answer.
+    if (att.routed && route.model && route.fallback === "none") {
+      return {
+        ok: false, content: "", provider: "none", model: att.model,
+        error: `routed model failed and fallback is disabled: ${lastErr}`,
+        errorCode: "routed_model_failed", latencyMs: Date.now() - started, ...routeDecision(null),
+      };
+    }
+    // A vendor that rate-limited the ROUTED model may still serve the declared
+    // one: exhaustion is tracked per model attempt only for routed calls.
+    if (att.routed) exhausted.delete(att.provider);
   }
 
   return {
     ok: false, content: "", provider: "none", model: "",
-    error: lastErr, errorCode: lastCode, latencyMs: Date.now() - started,
+    error: lastErr, errorCode: lastCode, latencyMs: Date.now() - started, ...routeDecision(null),
   };
 }
 

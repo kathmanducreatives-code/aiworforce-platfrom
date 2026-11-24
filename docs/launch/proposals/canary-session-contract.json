@@ -1,0 +1,44 @@
+{
+  "contract": "agentory-canary-session",
+  "version": 1,
+  "id": "first-funding-canary-2",
+  "status": "PROPOSED — authorizes nothing until approved by its exact phrase (see approval_phrase)",
+  "approval_phrase": "run canary session <this file's sha256> at <commit sha>",
+  "project_ref": "tlvnfrxzjhsjgdofwehb",
+  "workspace_id": "40e2512f-09b6-433e-97fe-f9999a1f1897",
+  "mission": {
+    "scenario": "canary_funding",
+    "instruction": "Find one US company hiring Account Executives that raised funding within the last six months.",
+    "requested_count": 1,
+    "max_qualified_companies": 1,
+    "geography": "United States",
+    "signals": [["hiring", 30], ["funding", 180]],
+    "assumed_defaults": ["hiring window: last 30 days (Agentory's default; the request states no hiring timeframe)"],
+    "interpretation": "D1–D7 all PASS: companies not people, one company, US hard, AE hiring hard, funding within 180 days hard and the user's window, hiring window separate and disclosed, every hard requirement representable"
+  },
+  "actors": {
+    "apify:harvestapi~linkedin-job-search": { "max_starts": 1, "max_units": 3, "unit": "job", "max_microusd": 4000 },
+    "apify:harvestapi~linkedin-company": { "max_starts": 1, "max_units": 1, "unit": "company", "max_microusd": 4050 },
+    "apify:atomus~linkedin-company-scraper": { "max_starts": 1, "max_units": 3, "unit": "company found", "max_microusd": 10550 }
+  },
+  "model": { "actor": "openai:gpt-5.6-luna", "compile_calls": 2, "worker_attempts": 4, "max_microusd_per_call": 12480 },
+  "spending": {
+    "max_provider_microusd": 18600,
+    "max_worker_model_microusd": 49920,
+    "max_compile_microusd": 24960,
+    "max_session_microusd": 93480,
+    "provider_cap_microusd": 200000,
+    "model_cap_microusd": 50000,
+    "attempt_cap_microusd": 250000,
+    "canary_budget_microusd": 3000000,
+    "note": "The $3 canary budget is software-enforced (canary-budget.ts B1–B6); Apify's $19 account limit is not the enforcer."
+  },
+  "database": {
+    "kickoff_statements": ["insert task_plans", "insert lead_execution_calls", "insert lead_mission_queue", "select authorize_discovery_smoke"],
+    "after_run": ["stop_discovery_smoke", "reconcile_discovery_smoke_operation with Apify's own terminal figure, only for a run Apify reports terminal at or below its cap"],
+    "migrations": "none"
+  },
+  "auto_execute": true,
+  "expires_at": "2026-11-06T00:00:00Z",
+  "single_use": "the queue and plan ids are derived from this file's sha256, so the queue's primary key refuses a second kickoff under the same contract"
+}

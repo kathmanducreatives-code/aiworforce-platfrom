@@ -3,6 +3,11 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
+import { allowDashboardWithoutBrain } from '@/lib/env/testOnboardingBypass';
+
+// TEST only (see testOnboardingBypass.ts): the isolated TEST project forbids a
+// Company Brain, so its users would otherwise never get past this gate.
+const TEST_WITHOUT_BRAIN = allowDashboardWithoutBrain(import.meta.env);
 
 const ALLOWED_PRE_ONBOARDING = new Set<string>([
   '/onboarding/company-brain',
@@ -33,7 +38,7 @@ export default function OnboardingGate({ children }: { children: ReactNode }) {
   if (!user) return <Navigate to="/auth" replace />;
 
   const completed = !!data?.onboarding_completed;
-  if (!completed && !ALLOWED_PRE_ONBOARDING.has(location.pathname)) {
+  if (!completed && !TEST_WITHOUT_BRAIN && !ALLOWED_PRE_ONBOARDING.has(location.pathname)) {
     return <Navigate to="/onboarding/company-brain" replace state={{ from: location.pathname }} />;
   }
 

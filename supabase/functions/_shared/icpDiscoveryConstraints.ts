@@ -136,6 +136,15 @@ const VOCABULARY_TO_LABELS: ReadonlyArray<readonly [RegExp, readonly string[]]> 
     ["Automation Machinery Manufacturing", "Industrial Machinery Manufacturing"]],
   [/\brobotics?\b/i, ["Robotics Engineering"]],
   [/\bmanufactur\w*/i, ["Manufacturing"]],
+  // Trades and distribution (ATLAS company-first discovery, 2026-11-20). Narrow on purpose:
+  // "commercial contracting" / "general contractors", not "contract" (a contract lawyer);
+  // "industrial distribution" / "MRO supply", not "distribution" alone (software resellers).
+  [/\b(commercial (general )?contract(ing|ors?)|general contractors?|specialty (trade )?contractors?)\b/i,
+    ["Construction", "Nonresidential Building Construction", "Specialty Trade Contractors"]],
+  [/\b((industrial|mro) (distribut\w*|suppl(y|ier|iers|ies))|industrial distributors?)\b/i,
+    ["Wholesale Machinery", "Wholesale Building Materials", "Wholesale Hardware, Plumbing, Heating Equipment"]],
+  [/\b(commercial )?field[- ]services?\b/i,
+    ["Facilities Services", "Commercial and Industrial Machinery Maintenance", "Building Equipment Contractors"]],
 ]);
 
 const STOPWORDS = new Set([

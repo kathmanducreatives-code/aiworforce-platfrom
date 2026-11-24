@@ -8,6 +8,7 @@
 // own Company Brain (competitors_and_tools). This file ships zero global seeds.
 
 import type { CompanyBrainContext } from "../companyBrainCompiler.ts";
+import { effectiveIndustryExclusions } from "../brainIndustryExclusions.ts";
 
 /** Generic, category-agnostic GTM signal families. These describe *shapes* of
  * buying behaviour, not any specific company — safe to keep global. */
@@ -110,7 +111,7 @@ export function buildRadarIntelligenceProfile(brain: CompanyBrainContext): Radar
       geography: brain.icp.locations,
       must_have: uniqLower([...brain.positive_examples, ...brain.icp.target_customer_segments]),
       excluded_company_types: uniqLower(brain.disqualifiers.company_types),
-      excluded_industries: uniqLower(brain.disqualifiers.industries),
+      excluded_industries: uniqLower(effectiveIndustryExclusions(brain).industries),
       excluded_keywords: uniqLower(brain.disqualifiers.keywords),
       excluded_domains: uniqLower(brain.disqualifiers.domains),
     },

@@ -1,0 +1,399 @@
+// ATLAS SIMULATOR — one scenario through the REAL lead-pipeline service, offline.
+//
+// Real: interpretation contract (contractFromProposal + compileContract), capability
+// routing, the strategy planner, budget estimate, signed approval, Actor input building,
+// company normalisation, grounded business-model validation, eligibility, dedupe/merge,
+// persistence (the real persistRows over an in-memory store with the real unique keys)
+// and the Workbench plan filter.
+//
+// Mocked (the external boundary only): the interpreter MODEL's answer (the scenario's
+// `interpretation`), Apify Actor responses, the grounding MODEL's classification (it may
+// only quote page text the scenario provides; the real validator re-checks every quote),
+// billing, and the database. No network: `globalThis.fetch` is disabled by the CLI.
+//
+// Scenarios: tests/fixtures/atlas-sim/*.json. Used by scripts/dev/atlas-sim.ts and by
+// tests/edge-functions/_shared/leadPipeline/atlasSimScenarios.test.ts.
+
+import { handleStrategyRequest, parseStrategyRequest, readPipelineFlags, type StrategyDeps } from "../../../supabase/functions/_shared/leadPipeline/service.ts";
+import { modelGrounder } from "../../../supabase/functions/_shared/leadPipeline/businessModelCheck.ts";
+import { readFlags } from "../../../supabase/functions/_shared/discoveryProviders/flags.ts";
+import { memoryLedger } from "../../../supabase/functions/_shared/discoveryProviders/budget.ts";
+import { memoryCheckpointStore } from "../../../supabase/functions/_shared/leadPipeline/checkpoint.ts";
+import { apifyHttpTransport, memoryRunLedger, type ApifyTransport } from "../../../supabase/functions/_shared/leadPipeline/apifyRuns.ts";
+import { ACTOR_BUILDS } from "../../../supabase/functions/_shared/leadPipeline/actorBuilds.ts";
+import { PIPELINE_ACTORS } from "../../../supabase/functions/_shared/leadPipeline/apifyInvoker.ts";
+import { fakeApify } from "./fakeApifyAsync.ts";
+import { planSigner } from "../../../supabase/functions/_shared/leadPipeline/planToken.ts";
+import { persistRows, type LeadStore } from "../../../supabase/functions/_shared/leadPipeline/persistRows.ts";
+import type { ActorInvoker } from "../../../supabase/functions/_shared/discoveryProviders/adapters/apify.ts";
+import type { PipelineRow } from "../../../supabase/functions/_shared/leadPipeline/projection.ts";
+import type { ExistingRecord } from "../../../supabase/functions/_shared/leadPipeline/exclusions.ts";
+import { contractFromProposal } from "../../../supabase/functions/_shared/missionContract/interpret.ts";
+import { compileContract } from "../../../supabase/functions/_shared/missionContract/compile.ts";
+import { contractHash, type MissionContract } from "../../../supabase/functions/_shared/missionContract/contract.ts";
+import { leadPlanOrFilter } from "../../../src/lib/leads/leadPlanFilter.ts";
+import { LINKEDIN_INDUSTRY_BY_LABEL } from "../../../supabase/functions/_shared/linkedinIndustryTaxonomy.ts";
+
+export const SIM_WS = "22222222-2222-4222-8222-222222222222";
+export const OTHER_WS = "33333333-3333-4333-8333-333333333333";
+const NOW = () => new Date("2026-11-07T12:00:00Z");
+
+// ── scenario format ──────────────────────────────────────────────────────────
+
+export type ProviderMode = "ok" | "empty" | "timeout" | "http_502" | "invalid_input";
+export interface SimCompany {
+  slug: string; name: string; site: string;
+  /** LinkedIn slug when it differs from `slug` (two LinkedIn pages, one company). */
+  linkedinSlug?: string;
+  hq?: { text: string; country: string; countryFull: string; city?: string };
+  employees?: number;
+  /** LinkedIn industry label on the job's company and the company record (default "Software Development"). */
+  industry?: string;
+  job?: { title?: string; postedDate?: string; state?: string } | null;
+  inRecords?: boolean;
+  /** The company's homepage text; null = the site returns nothing useful. */
+  page?: string | null;
+  /** The grounding model's reading of the page (it can only quote `page`). */
+  model?: "b2b_software" | "b2b_service" | "consumer" | "mixed" | "unknown";
+  /** Company search: returned even when the request's LinkedIn filters exclude it (LinkedIn's industry filter is imperfect). */
+  leaksThroughFilter?: boolean;
+}
+export interface Scenario {
+  name: string; description: string; covers: string[];
+  query: string; requestedCount?: number;
+  /** The interpreter model's answer (Mission Contract proposal shape). */
+  interpretation: Record<string, unknown>;
+  companies: SimCompany[];
+  providers?: { jobs?: ProviderMode; records?: ProviderMode; pages?: ProviderMode; search?: ProviderMode; duplicateDelivery?: boolean; unknownSpend?: boolean };
+  /** Extra function env for this scenario (e.g. LEAD_PIPELINE_COMPANY_SEARCH). */
+  flags?: Record<string, string>;
+  grounding?: boolean;
+  approval?: "approve" | "none" | "tampered_hash" | "under_estimate" | "reject";
+  allowReviewOnly?: boolean;
+  /** FLEXIBLE DISCOVERY: the mode the request is sent in (absent = strict). */
+  mode?: "strict" | "flexible";
+  /** The simulated model's answer when Flexible Discovery asks for related industries (absent = no model). */
+  relatedIndustries?: string[];
+  runs?: number;
+  workspace?: "member" | "not_member";
+  persistence?: { fail?: boolean; failNames?: string[]; planRecordFails?: boolean; existingAccounts?: { name: string; domain: string }[]; existingRecords?: ExistingRecord[] };
+  /**
+   * V5 Phase C: run Apify ASYNCHRONOUSLY against the fake Apify API (fakeApifyAsync.ts) on a
+   * virtual clock: start → record run id → poll → items → receipt. A run that outlives the
+   * request answers 202 and the SAME strategy_run is sent again (up to `resumes`), adopting it.
+   */
+  async?: {
+    /** Seconds each Actor run takes (per actor key, or one number for all). Default 20. */
+    durationS?: number | Record<string, number>;
+    /** This request's wait on one run before 202 (default 90 000 ms). */
+    deadlineMs?: number;
+    /** strategy_run re-sent while 202, with this many virtual seconds between (default 4 × 60 s). */
+    resumes?: number; resumeGapS?: number;
+    /** Actor keys whose start response is lost after the run was created. */
+    dropStart?: string[];
+    /** Actor keys whose receipt cannot be read once terminal. */
+    receiptUnreadable?: string[];
+    /** Actor keys whose run ends FAILED (it may still have billed its start). */
+    failed?: string[];
+    /** Charges post this many seconds after finish (a read inside the window sees only the start). */
+    lateS?: number;
+    /** Send the same strategy_run once more whatever the answer (a user retrying). */
+    resendOnce?: boolean;
+  };
+  expect?: Record<string, unknown>;
+}
+
+// ── mocked boundary ──────────────────────────────────────────────────────────
+
+const hqOf = (c: SimCompany) => c.hq ?? { text: "Austin, United States", country: "US", countryFull: "United States", city: "Austin" };
+const li = (c: SimCompany) => c.linkedinSlug ?? c.slug;
+/** LinkedIn's size band for a head count (the record carries both, and they must agree). */
+function band(n: number) {
+  for (const [a, b] of [[1, 10], [11, 50], [51, 200], [201, 500], [501, 1000], [1001, 5000], [5001, 10000]]) if (n >= a && n <= b) return { start: a, end: b };
+  return { start: 10001, end: null };
+}
+
+function jobItem(i: number, c: SimCompany) {
+  const h = hqOf(c);
+  return { id: `j${i}`, title: c.job?.title ?? "Account Executive", linkedinUrl: `https://www.linkedin.com/jobs/view/j${i}`, jobState: c.job?.state ?? "LISTED",
+    postedDate: c.job?.postedDate ?? "2026-11-02",
+    company: { id: `c-${li(c)}`, universalName: li(c), name: c.name, linkedinUrl: `https://www.linkedin.com/company/${li(c)}`, website: `https://${c.site}`,
+      employeeCount: c.employees ?? 80, employeeCountRange: band(c.employees ?? 80), industries: [{ name: c.industry ?? "Software Development" }],
+      locations: [{ headquarter: true, parsed: { text: h.text } }] },
+    location: { linkedinText: h.text }, descriptionText: `${c.name} is hiring.` };
+}
+/** LinkedIn's company-search filters, as the Actor applies them: industry id, location text, declared band. */
+function searchMatches(c: SimCompany, input: Record<string, unknown>): boolean {
+  const ids = (input.industryIds as string[] | undefined) ?? [];
+  const locs = (input.locations as string[] | undefined) ?? [];
+  const sizes = (input.companySize as string[] | undefined) ?? [];
+  const id = LINKEDIN_INDUSTRY_BY_LABEL.get((c.industry ?? "Software Development").toLowerCase());
+  if (ids.length && (!id || !ids.includes(id))) return false;
+  if (locs.length && !locs.some((l) => hqOf(c).text.toLowerCase().includes(l.toLowerCase()) || hqOf(c).countryFull.toLowerCase() === l.toLowerCase())) return false;
+  const b = band(c.employees ?? 85);
+  if (sizes.length && !sizes.includes(b.end === null ? `${b.start}+` : `${b.start}-${b.end}`)) return false;
+  return true;
+}
+/** A short-mode company-search row (no size band, no member count — as the Actor returns it). */
+function searchItem(c: SimCompany) {
+  const h = hqOf(c);
+  return { id: `cs-${li(c)}`, name: c.name, linkedinUrl: `https://www.linkedin.com/company/${li(c)}`, website: `https://${c.site}`,
+    industry: c.industry ?? "Software Development", location: { linkedinText: h.text }, pageType: "COMPANY" };
+}
+function recordItem(c: SimCompany) {
+  const h = hqOf(c);
+  return { id: `li-${li(c)}`, name: c.name, linkedinUrl: `https://www.linkedin.com/company/${li(c)}`, website: `https://${c.site}`, description: null,
+    employeeCount: c.employees ?? 85, employeeCountRange: band(c.employees ?? 85),
+    locations: [{ headquarter: true, city: h.city ?? null, country: h.country, parsed: { text: h.text, countryFull: h.countryFull } }], companyType: "Privately Held",
+    ...(c.industry ? { industries: [{ name: c.industry }] } : {}) };
+}
+
+export interface ActorCall { actor: string; input: Record<string, unknown>; key: string; maxItems: number; outcome: string; items: number; chargedUsd: number | null }
+
+function simApify(s: Scenario) {
+  const calls: ActorCall[] = [];
+  const p = s.providers ?? {};
+  const modeFor = (actor: string): ProviderMode =>
+    (actor === "apify_linkedin_job_search" ? p.jobs : actor === "apify_linkedin_company_details" ? p.records : actor === "apify_website_content" ? p.pages : actor === "apify_linkedin_company_search" ? p.search : "ok") ?? "ok";
+  const itemsFor = (actor: string, input: Record<string, unknown>, maxItems: number): unknown[] => {
+    const mode = modeFor(actor);
+    let items: unknown[] = [];
+    if (mode === "ok") {
+      if (actor === "apify_linkedin_job_search") items = s.companies.filter((c) => c.job !== null).map((c, i) => jobItem(i, c));
+      else if (actor === "apify_linkedin_company_details") {
+        // The Actor reads the company pages it is GIVEN: a record for a company nobody asked for
+        // never comes back (it used to return the first N scenario companies regardless).
+        const asked = new Set(((input.companies as string[] | undefined) ?? []).map((u) => u.toLowerCase().replace(/\/+$/, "")));
+        items = s.companies.filter((c) => c.inRecords !== false && (!asked.size || asked.has(`https://www.linkedin.com/company/${li(c)}`))).map(recordItem);
+      }
+      else if (actor === "apify_linkedin_company_search") items = s.companies.filter((c) => c.leaksThroughFilter || searchMatches(c, input)).map(searchItem);
+      else if (actor === "apify_website_content") {
+        items = (input.startUrls as { url: string }[]).map(({ url }) => {
+          const u = new URL(url); const c = s.companies.find((x) => x.site === u.host);
+          const home = u.pathname === "/";
+          return home && c?.page ? { url, text: c.page, crawl: { loadedUrl: url, httpStatusCode: 200 } } : { url, text: "", crawl: { loadedUrl: url, httpStatusCode: 404 } };
+        });
+      }
+    }
+    if (p.duplicateDelivery) items = [...items, ...items];
+    return items.slice(0, maxItems);                  // the Actor honours maxItems
+  };
+  const invoke: ActorInvoker = (actor, input, opts) => {
+    const mode = modeFor(actor);
+    const call: ActorCall = { actor, input: structuredClone(input) as Record<string, unknown>, key: opts.idempotencyKey, maxItems: opts.maxItems, outcome: mode, items: 0, chargedUsd: null };
+    calls.push(call);
+    if (mode === "timeout") return Promise.reject(new Error(`apify timeout (${actor})`));
+    if (mode === "http_502") return Promise.reject(new Error(`apify 502 (${actor})`));
+    if (mode === "invalid_input") return Promise.reject(new Error(`apify 400 invalid input (${actor})`));
+    const items = itemsFor(actor, input, opts.maxItems);
+    call.items = items.length;
+    const charged = p.unknownSpend ? undefined : Number((items.length * 0.001 + 0.001).toFixed(5));
+    call.chargedUsd = charged ?? null;
+    return Promise.resolve({ items, runId: `run-${actor}-${calls.length}`, ...(charged === undefined ? {} : { chargedUsd: charged }) });
+  };
+  return { invoke, calls, itemsFor, modeFor };
+}
+
+/** The grounding model, mocked: classifies the page and quotes ONLY its first sentence. */
+function simModel(s: Scenario, log: { host: string; value: string }[]) {
+  return (req: { messages: { content: string }[] }) => {
+    const p = JSON.parse(req.messages[0].content);
+    const page = (p.evidence as { evidence_id: string; evidence_type: string; source_text: string | null }[]).find((x) => x.evidence_type === "web_page" && x.source_text);
+    const c = s.companies.find((x) => x.page && page?.source_text === x.page);
+    const value = c?.model ?? "unknown";
+    log.push({ host: c?.site ?? "(no page)", value });
+    const excerpt = page?.source_text?.split(". ")[0] ?? "";
+    const claims = value === "unknown" || !page ? [] : [{ claim: `${c?.site} business model`, claim_type: "business_model", evidence_ids: [page.evidence_id], evidence_excerpts: [{ evidence_id: page.evidence_id, excerpt }] }];
+    return Promise.resolve({ ok: true, json: {
+      business_model: { value, confidence: value === "unknown" ? 0.2 : 0.9, claims }, company_fit: "pass", agentory_use_case: "plausible",
+      mission_signal_assessment: { strongest_signal: null, signal_strength: "none", evidence_ids: [], reason: "" }, supporting_claims: [], conflicting_evidence_ids: [],
+      missing_evidence: [], unknown_fields: [], confidence: 0.9, reason: "simulated" } });
+  };
+}
+
+/** The real persistRows against an in-memory store with the real unique keys. */
+function memoryStore(failWrites: boolean, failNames: string[] = []) {
+  type Row = Record<string, unknown> & { id: string; workspace_id: string };
+  const accounts: Row[] = [], contacts: Row[] = [], leads: Row[] = [];
+  let n = 0;
+  const id = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
+  const ins = (t: Row[], r: Record<string, unknown>) => {
+    if (failWrites) return Promise.reject(new Error("simulated database write failure"));
+    const x = { id: id(), ...r } as Row; t.push(x); return Promise.resolve({ id: x.id });
+  };
+  const store: LeadStore = {
+    findAccountByDomain: (ws, d) => Promise.resolve((accounts.find((a) => a.workspace_id === ws && a.domain === d) ?? null) as never),
+    findAccountByName: (ws, nm) => Promise.resolve((accounts.find((a) => a.workspace_id === ws && a.name === nm) ?? null) as never),
+    insertAccount: (r) => failNames.includes(String(r.name)) ? Promise.reject(new Error(`simulated write failure for ${r.name}`))
+      : accounts.some((a) => a.workspace_id === r.workspace_id && a.name === r.name) ? Promise.resolve({ conflict: true as const }) : ins(accounts, r),
+    updateAccount: (i, p) => { Object.assign(accounts.find((a) => a.id === i)!, p); return Promise.resolve(); },
+    findContactByLinkedin: (ws, u) => Promise.resolve((contacts.find((c) => c.workspace_id === ws && c.linkedin_url === u) ?? null) as never),
+    insertContact: (r) => ins(contacts, r),
+    updateContact: (i, p) => { Object.assign(contacts.find((c) => c.id === i)!, p); return Promise.resolve(); },
+    findLeadById: (ws, i) => Promise.resolve((leads.find((l) => l.workspace_id === ws && l.id === i) ?? null) as never),
+    findPipelineLeadForAccount: (ws, a, t) => Promise.resolve((leads.find((l) => l.workspace_id === ws && l.account_id === a && l.lead_type === t) ?? null) as never),
+    insertLead: (r) => ins(leads, r),
+    updateLead: (i, p) => { Object.assign(leads.find((l) => l.id === i)!, p); return Promise.resolve(); },
+  };
+  return { store, accounts, contacts, leads };
+}
+
+// ── run ──────────────────────────────────────────────────────────────────────
+
+export interface SimResult {
+  scenario: Scenario;
+  correlationId: string;
+  plan: { status: number; body: Record<string, unknown> };
+  runs: { approval: string; status: number; body: Record<string, unknown> }[];
+  actorCalls: ActorCall[];
+  /** Actor runs PURCHASED (async: runs created at the fake Apify; sync: invocations). */
+  purchases: number;
+  groundingCalls: { host: string; value: string }[];
+  db: { accounts: Record<string, unknown>[]; contacts: Record<string, unknown>[]; leads: Record<string, unknown>[] };
+  planRecords: { planId: string | null; status: string; summary: string }[];
+  workbench: { planId: string; leadIds: string[]; filter: string | null }[];
+  timingsMs: { plan: number; runs: number[] };
+}
+
+/** The fake Apify API wired as the pipeline's async transport (Phase C). */
+function asyncRig(s: Scenario, ap: ReturnType<typeof simApify>, base: ReturnType<typeof memoryLedger>) {
+  const a = s.async!;
+  const keyOf = (actorId: string) => Object.entries(PIPELINE_ACTORS).find(([, v]) => v.actorId === actorId)?.[0] ?? actorId;
+  const api = fakeApify({
+    builds: Object.fromEntries(Object.values(ACTOR_BUILDS).map((b) => [b.actorId, b.build])),
+    startStatus: (actorId) => { const m = ap.modeFor(keyOf(actorId)); return m === "http_502" ? 502 : m === "invalid_input" ? 400 : null; },
+    dropStartResponse: (actorId) => (a.dropStart ?? []).includes(keyOf(actorId)),
+    plan: (actorId, input) => {
+      const k = keyOf(actorId), price = PIPELINE_ACTORS[k];
+      const d = typeof a.durationS === "number" ? a.durationS : a.durationS?.[k] ?? 20;
+      const mode = ap.modeFor(k);
+      return { durationS: mode === "timeout" ? 10_000 : d, terminal: (a.failed ?? []).includes(k) ? "FAILED" : "SUCCEEDED",
+        items: ap.itemsFor(k, input, Number(input.maxItems ?? 100) || 100), receiptUnreadable: (a.receiptUnreadable ?? []).includes(k), lateS: a.lateS ?? 0, lateUsd: price?.perStartUsd ?? 0,
+        pricing: { "apify-actor-start": price?.perStartUsd ?? 0.001, "apify-default-dataset-item": price?.perItemUsd ?? 0.001 } };
+    },
+  });
+  const ledger = memoryRunLedger(base);
+  const calls: ActorCall[] = [];
+  let lastKey = "";
+  const reserve = ledger.reserve.bind(ledger);
+  ledger.reserve = (e) => { lastKey = e.key; return reserve(e); };
+  const http = apifyHttpTransport({ token: "sim-token", fetch: api.fetch as never });
+  const transport: ApifyTransport = { ...http, async start(actorId, input, q) {
+    const r = await http.start(actorId, input, q);
+    const k = keyOf(actorId);
+    calls.push({ actor: k, input: structuredClone(input), key: lastKey, maxItems: q.maxItems, outcome: r.ok ? "started" : r.definite ? `refused ${r.status}` : "start unanswered", items: Math.min(q.maxItems, ap.itemsFor(k, input, q.maxItems).length), chargedUsd: null });
+    return r;
+  } };
+  return { api, calls, apifyRuns: { transport, ledger, deadlineMs: a.deadlineMs ?? 90_000, now: api.now, sleep: api.sleep } };
+}
+
+export async function runScenario(s: Scenario): Promise<SimResult> {
+  const signer = await planSigner("offline-sim-secret-0123456789abcdef");
+  const env: Record<string, string> = { LEAD_PIPELINE_ENABLED: "true", LEAD_PIPELINE_WORKSPACES: SIM_WS, PROVIDER_DISCOVERY_ENABLED: "true", PROVIDER_APIFY_DISCOVERY_ENABLED: "true", ...(s.flags ?? {}) };
+  const ap = simApify(s);
+  const ledger = memoryLedger();
+  const rig = s.async ? asyncRig(s, ap, ledger) : null;
+  const grounding: { host: string; value: string }[] = [];
+  const mem = memoryStore(s.persistence?.fail === true, s.persistence?.failNames ?? []);
+  for (const a of s.persistence?.existingAccounts ?? []) {
+    mem.accounts.push({ id: `pre-${a.domain}`, workspace_id: SIM_WS, name: a.name, domain: a.domain, raw: {} });
+  }
+  const planRecords: SimResult["planRecords"] = [];
+  let planSeq = 0;
+  const d: StrategyDeps = {
+    userId: "u-owner", flags: readPipelineFlags((k) => env[k]), discoveryFlags: readFlags((k) => env[k]),
+    store: { memberRole: (u: string, w: string) => Promise.resolve(w === SIM_WS && u === "u-owner" ? "owner" : null), list: () => Promise.resolve([]), secret: () => Promise.resolve(null) } as never,
+    ledger, checkpoints: memoryCheckpointStore(),
+    apifyRuns: rig?.apifyRuns ?? null,
+    loadExisting: () => Promise.resolve(s.persistence?.existingRecords ?? []),
+    leadoceanFor: () => { throw new Error("LeadOcean is not simulated (flag off)"); },
+    apify: ap.invoke,
+    persist: (rows: PipelineRow[]) => persistRows(mem.store, rows),
+    now: NOW,
+    interpret: async (query: string) => {
+      const { contract } = contractFromProposal(query, s.interpretation as never);
+      // As lead-pipeline/index.ts does: open questions are a clarification, never compiled
+      // (compiling an ambiguous or empty contract throws ContractInvalidError).
+      if (contract.ambiguities.length) {
+        const questions = contract.ambiguities.map((a) => a.question);
+        return { error: "needs_clarification", clarification: { questions, message: questions.join(" ") } } as never;
+      }
+      const hash = await contractHash(contract);
+      return { mission: await compileContract(contract), contract, brain: { status: "absent", fields: [], applied: [], rejected: [] },
+        replay: { proposal: { contract, contractHash: hash }, brain: { status: "absent", fields: [], context: null } } } as never;
+    },
+    recompile: async (_q: string, _n: number | null, replay: { proposal: unknown }) => {
+      const a = replay.proposal as { contract: MissionContract };
+      return { mission: await compileContract(a.contract), contract: a.contract } as never;
+    },
+    recordRunPlan: (p: { status: string; summary: string }) => {
+      if (s.persistence?.planRecordFails) { planRecords.push({ planId: null, status: p.status, summary: p.summary }); return Promise.reject(new Error("simulated plan record failure")); }
+      const planId = `aaaaaaaa-0000-4000-8000-${String(++planSeq).padStart(12, "0")}`;
+      planRecords.push({ planId, status: p.status, summary: p.summary });
+      return Promise.resolve(planId);
+    },
+    signer,
+    // The only model call a simulated plan makes: Flexible Discovery's related industries.
+    advisor: s.relatedIndustries ? (async (o: { functionName?: string }) => o.functionName === "lead-pipeline-flexible-industries"
+      ? { ok: true, content: JSON.stringify({ related: s.relatedIndustries }), json: { related: s.relatedIndustries }, model: "sim-model" }
+      : { ok: false, content: "", error: "the simulator answers only the related-industries call", model: "sim-model" }) as never : null,
+    ...(s.grounding === false ? {} : { groundBusinessModel: modelGrounder(simModel(s, grounding) as never, s.query) }),
+  } as StrategyDeps;
+
+  const ws = s.workspace === "not_member" ? OTHER_WS : SIM_WS;
+  const correlationId = `sim-${s.name}`;
+  const req = (b: Record<string, unknown>, walk = correlationId) =>
+    parseStrategyRequest({ workspace_id: ws, walk_id: walk, query: s.query, requested_count: s.requestedCount ?? 5, ...(s.mode ? { discovery_mode: s.mode } : {}), ...b })!;
+
+  const t0 = performance.now();
+  const plan = await handleStrategyRequest(req({ action: "strategy_plan", ...(s.allowReviewOnly ? { allow_review_only: true } : {}) }), d);
+  const tPlan = performance.now() - t0;
+  const runs: SimResult["runs"] = [];
+  const runTimes: number[] = [];
+  const p = plan.body.plan as { planHash?: string; estimate?: { apifyUsd: number } } | undefined;
+  const mode = s.approval ?? "approve";
+  if (plan.status === 200 && p?.planHash && mode !== "reject") {
+    for (let i = 0; i < (s.runs ?? 1); i++) {
+      // One approval runs one walk: a repeated run is a NEW plan and a NEW approval, as in the
+      // Workbench. The first run uses the plan reported above.
+      const walk = i === 0 ? correlationId : `${correlationId}-${i + 1}`;
+      let cur = plan;
+      if (i > 0) cur = await handleStrategyRequest(req({ action: "strategy_plan", ...(s.allowReviewOnly ? { allow_review_only: true } : {}) }, walk), d);
+      const cp = cur.body.plan as { planHash: string; estimate: { apifyUsd: number } };
+      const tok = cur.body.approval_token;
+      const approval = mode === "none" ? undefined
+        : mode === "tampered_hash" ? { plan_hash: cp.planHash.replace(/^./, (c) => (c === "a" ? "b" : "a")), apify_usd: cp.estimate.apifyUsd, token: tok }
+        : mode === "under_estimate" ? { plan_hash: cp.planHash, apify_usd: Number((cp.estimate.apifyUsd / 2).toFixed(5)), token: tok }
+        : { plan_hash: cp.planHash, apify_usd: cp.estimate.apifyUsd, token: tok };
+      const t = performance.now();
+      const send = () => handleStrategyRequest(req({ action: "strategy_run", ...(approval ? { approval } : {}), ...(s.allowReviewOnly ? { allow_review_only: true } : {}) }, walk), d);
+      let r = await send();
+      runTimes.push(performance.now() - t);
+      runs.push({ approval: mode, status: r.status, body: r.body });
+      // 202 running: the SAME request again (same walk, same approval) adopts the run in progress.
+      for (let k = 0; rig && (r.status === 202 || (k === 0 && s.async?.resendOnce)) && k < (s.async?.resumes ?? 4); k++) {
+        rig.api.advance((s.async?.resumeGapS ?? 60) * 1000);
+        r = await send();
+        runs.push({ approval: mode, status: r.status, body: r.body });
+      }
+    }
+  }
+
+  const workbench = planRecords.filter((r) => r.planId).map((r) => {
+    const filter = leadPlanOrFilter(r.planId!);
+    const leadIds = mem.leads.filter((l) => l.workspace_id === SIM_WS && (l.plan_id === r.planId
+      || (l.raw as { agentory_pipeline?: { plan_id?: string } })?.agentory_pipeline?.plan_id === r.planId)).map((l) => String(l.id));
+    return { planId: r.planId!, leadIds, filter };
+  });
+
+  return { scenario: s, correlationId, plan, runs, actorCalls: rig ? rig.calls : ap.calls, purchases: rig ? rig.api.purchases() : ap.calls.length, groundingCalls: grounding,
+    db: { accounts: mem.accounts, contacts: mem.contacts, leads: mem.leads }, planRecords, workbench, timingsMs: { plan: tPlan, runs: runTimes } };
+}
+
+export async function loadScenarios(dir: URL): Promise<Scenario[]> {
+  const out: Scenario[] = [];
+  for await (const e of Deno.readDir(dir)) {
+    if (e.isFile && e.name.endsWith(".json")) out.push(JSON.parse(await Deno.readTextFile(new URL(e.name, dir))));
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}

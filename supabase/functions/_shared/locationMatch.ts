@@ -93,7 +93,15 @@ const REGION_CODE_TO_COUNTRY: Record<string, string> = {};
  * A NULL name means "code only": the region's full name collides with something
  * else (a sovereign country) and must not be matched as text.
  */
+/**
+ * Every registered sub-national region, by country: the ONE region table (read by
+ * geographyResolver.ts for state-level requirements). Read-only to callers.
+ */
+export const REGIONS: Readonly<Record<string, ReadonlyArray<{ name: string | null; code: string | null }>>> = {};
+
 function registerRegions(country: string, entries: Array<[string | null, string | null]>): void {
+  (REGIONS as Record<string, Array<{ name: string | null; code: string | null }>>)[country] =
+    [...(REGIONS[country] ?? []), ...entries.map(([name, code]) => ({ name, code }))];
   for (const [name, code] of entries) {
     if (name) REGION_NAME_TO_COUNTRY[name.toLowerCase()] = country;
     if (code) {

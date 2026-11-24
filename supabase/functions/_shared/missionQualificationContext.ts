@@ -44,10 +44,11 @@
 
 import { criteriaExecutionPolicy, hardConstraintsBackedByCriteria, rejectingAxes } from "./criteriaExecutionPolicy.ts";
 import type { LeadMissionV1 } from "./leadMission.ts";
-import { deriveMissionCriteria, type MissionCriterion } from "./missionCriteria.ts";
+import type { MissionCriterion } from "./missionCriteria.ts";
+import { criteriaFrozenAtCompile, criteriaOf, hiringRequirementOf } from "./missionCriteriaReader.ts";
 import { PRODUCTION_READINESS, type ReadinessPolicy } from "./routeReadiness.ts";
 import {
-  classifyRoleFamily, roleFamilyAliases, type RoleFamily,
+  classifyRoleFamily, excludedByRole, roleFamilyAliases, type RoleFamily,
 } from "./roleFamilies.ts";
 
 export const QUALIFICATION_CONTEXT_VERSION = "mission-qualification-context-v1" as const;
@@ -161,6 +162,13 @@ export interface MissionRoleVocabulary {
   source: "mission" | "default_commercial";
   /** Normalized title fragments that QUALIFY for this Mission. Empty when default. */
   required_titles: readonly string[];
+  /**
+   * Roles the Mission EXCLUDES ("AEs but not SDRs"), from its hiring criterion (S2). A
+   * posting naming one never satisfies the requirement, whatever else it matches.
+   */
+  excluded_titles?: readonly string[];
+  /** Where the titles came from: the hiring CRITERION (S2), or the legacy carrier fields. */
+  from?: "criteria" | "mission_fields";
 }
 
 /**
@@ -240,9 +248,25 @@ export function buildQualificationContext(
   const signals = Array.isArray((mission as unknown as Record<string, unknown>).required_signals)
     ? (mission as unknown as { required_signals: Array<Record<string, unknown>> }).required_signals
     : [];
+  // ── S2: THE HIRING CRITERION IS THE SOURCE ───────────────────────────────
+  //
+  // With `criteriaAuthority`, the roles are the hiring CRITERION's own (role terms and
+  // families, exclusions included), read through the one reader every component uses —
+  // not re-read from `required_signal_terms`, which held the model's raw words and
+  // missed a role stated only in a constraint (S0 consistency check). The carrier fields
+  // below are the fallback for a mission whose criterion names no role (legacy
+  // compatibility: a stored mission keeps the vocabulary it ran with).
+  const runCriteria = criteriaOf(mission, { readiness: opts.readiness ?? PRODUCTION_READINESS, legacy: "rederive" });
+  const hiringReq = opts.criteriaAuthority ? hiringRequirementOf(runCriteria) : null;
+  // Only a FROZEN mission's criteria are its approved meaning (S3). A legacy mission keeps
+  // the vocabulary it ran with in production: measured over the 83 stored missions, the
+  // criteria source would have changed 5 legacy searches — Z08's narrowed to its D4-damaged
+  // criteria — so legacy is unchanged here and listed for the owner (S5) instead.
+  const fromCriteria = criteriaFrozenAtCompile(mission) && !!hiringReq &&
+    (hiringReq.roleTerms.length > 0 || hiringReq.roleFamilies.length > 0);
   // Families are KEYS and must be expanded to titles; terms are already phrases.
-  const fromFamilies = signals
-    .flatMap((s) => strs(s?.role_families))
+  const fromFamilies = (fromCriteria ? [hiringReq!.roleFamilies] : signals.map((s) => strs(s?.role_families)))
+    .flat()
     .flatMap((fam) => {
       const canonical = MISSION_FAMILY_TO_CANONICAL[fam];
       return canonical ? roleFamilyAliases(canonical) : [];
@@ -286,7 +310,7 @@ export function buildQualificationContext(
   // is a title and is left exactly as it is; a term that resolves to a family
   // WITHOUT being one of its titles is the category name, and only that is
   // expanded.
-  const rawTerms = strs((mission as unknown as Record<string, unknown>).required_signal_terms);
+  const rawTerms = fromCriteria ? hiringReq!.roleTerms : strs((mission as unknown as Record<string, unknown>).required_signal_terms);
   const fromTerms = rawTerms.flatMap((term) => {
     const fam = classifyRoleFamily(term);
     if (!fam || fam === "custom") return [term];
@@ -299,14 +323,21 @@ export function buildQualificationContext(
     [...fromFamilies, ...fromTerms].map(normalizeRoleTerm).filter((t): t is string => !!t),
   )];
 
+  const excluded_titles = [...new Set((hiringReq?.excludedRoleTerms ?? []).map(normalizeRoleTerm).filter((t): t is string => !!t))];
+  // An excluded role is never SEARCHED for either: the family expansion above lists every
+  // title of the family, so "AEs but not SDRs" used to send "SDR" to the job search.
+  if (excluded_titles.length) {
+    const ex = { excludedRoleTerms: hiringReq!.excludedRoleTerms };
+    for (let i = required_titles.length - 1; i >= 0; i--) if (excludedByRole(required_titles[i], ex)) required_titles.splice(i, 1);
+  }
   const role_vocabulary: MissionRoleVocabulary = required_titles.length > 0
-    ? { source: "mission", required_titles }
-    : { source: "default_commercial", required_titles: [] };
+    ? { source: "mission", required_titles, ...(excluded_titles.length ? { excluded_titles } : {}), from: fromCriteria ? "criteria" : "mission_fields" }
+    : { source: "default_commercial", required_titles: [], ...(excluded_titles.length ? { excluded_titles } : {}) };
 
   return {
     version: QUALIFICATION_CONTEXT_VERSION,
     // Q1 — under the run's readiness, as the canonical decision derives them.
-    criteria: deriveMissionCriteria(mission, opts.readiness ?? PRODUCTION_READINESS),
+    criteria: runCriteria,
     original_user_query: String(
       (mission as unknown as Record<string, unknown>).original_user_query ?? ""),
     target_entity: lc((mission as unknown as Record<string, unknown>).target_entity) || "company",

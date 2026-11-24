@@ -346,3 +346,36 @@ Deno.test("a confirmed card with no valid mission is refused, never delegated", 
   assert(start > 0 && start < brain,
     "an approved Start must execute before the model is consulted");
 });
+
+// ── RELEASE GUARD (2026-11-12) ─────────────────────────────────────────────
+// AGENTORY_DELEGATION_ENABLED=false: the same approved Start delegates NOTHING
+// and says so — used while an environment's agent backend is older than chat.
+Deno.test("delegation guard: with AGENTORY_DELEGATION_ENABLED=false an approved Start calls nothing", async () => {
+  const { DELEGATION_DISABLED_REPLY } = await import(
+    Deno.env.get("PILOT_CHAT_MODULE") ?? "../../../supabase/functions/pilot-chat/index.ts");
+  const tables = seed();
+  const net = installFakeNetwork({
+    supabaseUrl: SUPABASE_URL, tables,
+    modelReplies: [
+      { when: (_u, s) => isBrain(s), content: brainReply },
+      { when: (_u, s) => !isBrain(s), content: "prose" },
+    ],
+    functionReplies: { orchestrate: { task_plan_id: "plan-1" } },
+  });
+  Deno.env.set("AGENTORY_DELEGATION_ENABLED", "false");
+  try {
+    const preview = await sendTurn(SOURCING, tables);
+    const card = preview.metadata.workflow_confirmation as Record<string, unknown>;
+    assert(card, "the preview still renders");
+    const started = await sendTurn(SOURCING, tables, {
+      action_source: "lead_intake_card",
+      metadata: { confirmed: true, lead_mission: card.lead_mission },
+    });
+    assertEquals(started.status, 200);
+    assertEquals(net.functionCalls.length, 0, "nothing delegated");
+    assertEquals(started.content, DELEGATION_DISABLED_REPLY);
+  } finally {
+    Deno.env.delete("AGENTORY_DELEGATION_ENABLED");
+    net.restore();
+  }
+});

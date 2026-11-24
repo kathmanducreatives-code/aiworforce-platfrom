@@ -111,3 +111,33 @@ Deno.test("a hard check reads as one line with its evidence source and business-
     "PASS — business model b2b_saas (proven · model extraction · medium confidence · grounded evidence evaluation · grounding review · business model accepted)");
   assertEquals(describeHardCheck(v.leads[1].hard_check_details[0]), "PENDING — business model not yet verified (no evidence)");
 });
+
+Deno.test("canary session 2: an old run's unanswerable `constraint` reads as NOT VERIFIABLE, never as evidence still to come", () => {
+  // LangChain's hard checks exactly as the run stored them (task 25906701…).
+  const view = readMissionView({ workbench_mission_view: {
+    version: "v", stage: "completing_evidence",
+    counts: { discovered: 1, pending: 1 },
+    leads: [{
+      company: { key: "https://www.linkedin.com/company/langchain", name: "LangChain" }, bucket: "pending", label: null,
+      hard_checks: { hiring: "pass", funding: "unknown", geography: "unknown", constraint: "unknown" },
+      hard_check_details: [
+        { criterion_id: "constraint:_field_hiring_value_account_executives_", dimension: "constraint", result: "unknown",
+          reason: "no evidence dimension answers constraint", provenance: null },
+        { criterion_id: "funding:_event_funding_subject_company_qualifier_", dimension: "funding", result: "unknown",
+          reason: "No funding announcement or funding date was supplied.", provenance: null },
+      ],
+    }],
+  } })!;
+  const [legacy, funding] = view.leads[0].hard_check_details;
+  assert(legacy.legacy_unverifiable);
+  assert(describeHardCheck(legacy).startsWith("NOT VERIFIABLE"), describeHardCheck(legacy));
+  assertFalse(funding.legacy_unverifiable, "a real open requirement still reads as pending");
+  assert(describeHardCheck(funding).startsWith("PENDING"));
+  // Today's compiler: the same kind of requirement is disclosed, with another reason — not marked legacy.
+  const today = readMissionView({ workbench_mission_view: { version: "v", stage: "s", counts: { discovered: 1, pending: 1 }, leads: [{
+    company: { key: "k" }, bucket: "pending", label: null, hard_checks: {},
+    hard_check_details: [{ criterion_id: "constraint:x", dimension: "constraint", result: "unknown",
+      reason: "no current source can establish sales headcount: 11 SDRs; it stays open until the company's own cited words do", provenance: null }],
+  }] } })!;
+  assertFalse(today.leads[0].hard_check_details[0].legacy_unverifiable);
+});
