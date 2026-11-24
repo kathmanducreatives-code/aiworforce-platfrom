@@ -296,17 +296,22 @@ function userPrompt(utterance: string, ctx: ChatBrainContext): string {
 /**
  * Read one message into a request.
  *
- * Two calls at most: the read, and a repair when the answer's SHAPE was wrong.
- * A second failure degrades to `unreadable`, which the caller turns into a
+ * Two calls at most: the read, and ONE repair, when the answer's SHAPE was
+ * wrong or when the read was CUT OFF at its output limit. A second failure
+ * degrades to `unreadable` / `provider_failure`, which the caller turns into a
  * clarification — never into a default objective.
  */
+export const UNDERSTANDING_MAX_TOKENS = 1500;
+/** The one retry after a cut-off read: concise, with room to finish. */
+export const UNDERSTANDING_RETRY_MAX_TOKENS = 3000;
+
 export async function understandRequest(
   utterance: string, ctx: ChatBrainContext, deps: GptDeps,
 ): Promise<ChatBrainOutcome> {
   const log = ctx.log ?? (() => {});
 
   const attempt = async (stage: "request_understanding" | "request_understanding_repair",
-    extra?: string) => {
+    extra?: string, maxTokens = UNDERSTANDING_MAX_TOKENS) => {
     const route = routeModel(stage, {});
     ctx.onRoute?.(route);
     const r: GptResult<unknown> = await gptStructured<unknown>({
@@ -314,7 +319,7 @@ export async function understandRequest(
       system: extra ? `${SYSTEM}\n\nYour previous answer was rejected: ${extra}\nReturn a corrected answer.` : SYSTEM,
       user: userPrompt(utterance, ctx),
       schema: RESPONSE_SCHEMA as unknown as { name: string; schema: Record<string, unknown> },
-      maxTokens: 1500,
+      maxTokens,
       model: route.model,
       reasoningEffort: route.reasoning_effort,
       tier: route.tier,
@@ -324,6 +329,23 @@ export async function understandRequest(
   };
 
   const first = await attempt("request_understanding");
+  if (!first.ok && first.code === "incomplete_response") {
+    // CUT OFF, not misread (TEST 2026-11-23, R1.2 F6: the read stopped at its
+    // 1,500-token limit and the turn was answered unread). The same single
+    // repair the shape check uses: told why, asked to be concise, given room.
+    log("chat_brain_truncated", { detail: first.detail });
+    const retry = await attempt("request_understanding_repair",
+      "it exceeded the output limit and was cut off. Return the same structure concisely: one entry per distinct part, no repeated or speculative entries",
+      UNDERSTANDING_RETRY_MAX_TOKENS);
+    if (!retry.ok) {
+      log("chat_brain_provider_failed", { code: retry.code, detail: retry.detail, after: "truncation_retry" });
+      return { ok: false, reason: "provider_failure", violations: [] };
+    }
+    const reparsed = parseRequestStrict(retry.value, utterance);
+    if (reparsed.request) return { ok: true, request: reparsed.request, repairs: reparsed.repairs, repaired: true };
+    log("chat_brain_unreadable", { violations: reparsed.violations, after: "truncation_retry" });
+    return { ok: false, reason: "unreadable", violations: reparsed.violations };
+  }
   if (!first.ok) {
     log("chat_brain_provider_failed", { code: first.code, detail: first.detail });
     return { ok: false, reason: "provider_failure", violations: [] };

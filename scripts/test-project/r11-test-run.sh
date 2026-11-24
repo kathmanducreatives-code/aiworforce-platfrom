@@ -86,9 +86,20 @@ echo "  TEST pilot-chat build = ${build:-none} (HEAD $head)"
 
 echo "== 6. live run"
 rc=0
+if [ -n "${R11_FOCUS:-}" ]; then
+  # FOCUSED RETEST (R11_FOCUS="F3-signals,F3-analyze,F6-under30" R11_FOCUS_REPEAT=2): only those
+  # R1.2 turns, in suite order, in R11_FOCUS_REPEAT fresh conversations, plus the R1.2.1 binding
+  # probe and the isolation probe. Same assertions; the full suites are not re-run.
+  ORION_R11_APPROVED="I approve the ORION R1.1 TEST run on $REF" ORION_PILOT_SUPABASE_URL="https://$REF.supabase.co" \
+  ORION_PILOT_ANON_KEY="${ORION_PILOT_ANON_KEY:-$ANON_DEFAULT}" \
+    deno run --allow-env --allow-net --allow-read --allow-write=. scripts/orion-pilot/run-r11.ts \
+      --suite r12 --only "$R11_FOCUS" --repeat "${R11_FOCUS_REPEAT:-2}" --binding-probe || rc=$?
+  R11_SKIP_R12=1
+else
 ORION_R11_APPROVED="I approve the ORION R1.1 TEST run on $REF" ORION_PILOT_SUPABASE_URL="https://$REF.supabase.co" \
 ORION_PILOT_ANON_KEY="${ORION_PILOT_ANON_KEY:-$ANON_DEFAULT}" \
   deno run --allow-env --allow-net --allow-read --allow-write=. scripts/orion-pilot/run-r11.ts || rc=$?
+fi
 # R1.2: the owner's manual acceptance prompts (14 turns), same conversation rules, no retries.
 if [ "${R11_SKIP_R12:-0}" != 1 ]; then
   ORION_R11_APPROVED="I approve the ORION R1.1 TEST run on $REF" ORION_PILOT_SUPABASE_URL="https://$REF.supabase.co" \
