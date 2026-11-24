@@ -37,10 +37,15 @@ const item = (dimension: EvidenceItem["dimension"], value: unknown, actor: strin
   method: "provider_field", observed_at: NOW.toISOString(), valid_until: null, confidence: "high",
   derived_from: [], mission_id: "t", origin: "lead_mission",
 });
-/** LanceDB after LinkedIn details and the job search: everything but the stage and the business model. */
+/**
+ * LanceDB after LinkedIn details and the job search: everything but the stage
+ * and the business model. The record's items carry the details ACTOR: the
+ * registry's generic "linkedin" label is also what a job row's company object
+ * carries, and no longer means the record was read (canary session 2).
+ */
 const LANCEDB = buildCompanyEvidenceGraph("lancedb", [
-  item("geography", "San Francisco, CA, United States", "linkedin"),
-  item("headcount", 40, "linkedin"),
+  item("geography", "San Francisco, CA, United States", "apify_linkedin_company_details"),
+  item("headcount", 40, "apify_linkedin_company_details"),
   item("hiring", true, "apify_linkedin_job_search"),
 ], { now: NOW });
 const unknown = (dimension: string) => ({ criterion_id: `${dimension}:x`, dimension, result: "unknown", reason: `${dimension} is not established` });
@@ -90,7 +95,7 @@ Deno.test("business model: once the pages are in the registry, the route is trie
   // No new evidence to buy — the honest state after a re-grounding that could
   // not settle the claim. It must not re-buy the same pages every slice.
   const withPages = buildCompanyEvidenceGraph("lancedb", [
-    item("geography", "San Francisco, CA, United States", "linkedin"),
+    item("geography", "San Francisco, CA, United States", "apify_linkedin_company_details"),
     item("web_claim", "A platform for financial firms.", "company_website"),
   ], { now: NOW });
   const [g] = evidenceGapsFor([unknown("industry")], withPages);

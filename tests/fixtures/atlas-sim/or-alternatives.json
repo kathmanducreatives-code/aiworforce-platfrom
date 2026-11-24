@@ -1,0 +1,138 @@
+{
+ "name": "or-alternatives",
+ "description": "(manufacturers OR industrial distributors) headquartered in (Texas OR Ohio), hiring AEs: a Texas manufacturer and an Ohio distributor are kept; a California one is rejected (Phase A; was AND).",
+ "covers": [
+  "either/or industries and headquarters"
+ ],
+ "query": "Find 5 manufacturers or industrial distributors headquartered in Texas or Ohio that are hiring Account Executives.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [
+    {
+     "span": "Account Executives",
+     "title": "account_executive",
+     "family": null,
+     "relation": "required"
+    }
+   ],
+   "role_match": "any",
+   "places": [
+    {
+     "span": "Texas",
+     "place": null,
+     "other_place": "Texas",
+     "scope": "headquarters",
+     "necessity": "required"
+    },
+    {
+     "span": "Ohio",
+     "place": null,
+     "other_place": "Ohio",
+     "scope": "headquarters",
+     "necessity": "required"
+    }
+   ],
+   "industries": [
+    {
+     "span": "manufacturers",
+     "industry": "manufacturing",
+     "necessity": "required"
+    },
+    {
+     "span": "industrial distributors",
+     "industry": "industrial distribution",
+     "necessity": "required"
+    }
+   ],
+   "signals": [
+    {
+     "span": "hiring Account Executives",
+     "kind": "hiring",
+     "necessity": "required"
+    }
+   ],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": []
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": 5,
+   "count_span": "5",
+   "person_roles": []
+  },
+  "company_size": null,
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "lonestar",
+   "name": "Lone Star Fabrication",
+   "site": "lonestar.example",
+   "industry": "Manufacturing",
+   "employees": 120,
+   "model": "b2b_service",
+   "page": "Lone Star Fabrication builds enclosures for OEMs and plant operators.",
+   "hq": {
+    "text": "Houston, Texas, United States",
+    "country": "US",
+    "countryFull": "United States",
+    "city": "Houston"
+   }
+  },
+  {
+   "slug": "buckeye",
+   "name": "Buckeye Industrial Supply",
+   "site": "buckeye.example",
+   "industry": "Wholesale Machinery",
+   "employees": 80,
+   "model": "b2b_service",
+   "page": "Buckeye Industrial Supply distributes MRO supplies to manufacturers.",
+   "hq": {
+    "text": "Columbus, Ohio, United States",
+    "country": "US",
+    "countryFull": "United States",
+    "city": "Columbus"
+   }
+  },
+  {
+   "slug": "goldenmfg",
+   "name": "Golden State Molding",
+   "site": "goldenmfg.example",
+   "industry": "Manufacturing",
+   "employees": 90,
+   "model": "b2b_service",
+   "page": "Golden State Molding molds parts for manufacturers.",
+   "hq": {
+    "text": "Fresno, California, United States",
+    "country": "US",
+    "countryFull": "United States",
+    "city": "Fresno"
+   }
+  }
+ ],
+ "allowReviewOnly": true,
+ "expect": {
+  "planStatus": 200,
+  "planState": "ready",
+  "runStatuses": [
+   200
+  ],
+  "outcome": "needs_verification",
+  "qualified": [],
+  "needsVerification": [
+   "Buckeye Industrial Supply",
+   "Lone Star Fabrication"
+  ],
+  "excluded": 1,
+  "leadsSaved": 2,
+  "actorCalls": 2,
+  "persistFailed": 0,
+  "rejected": [
+   "Golden State Molding"
+  ]
+ }
+}

@@ -1,0 +1,93 @@
+{
+  "_provenance": {
+    "what": "A LeadOcean company record (GET /v1/companies/enrich, or a /v1/search/companies row), in the key structure OBSERVED in validation test V. All values synthetic (.example).",
+    "observed": [
+      "company_data.{company_id,company_name,company_domain,company_type,company_industries[].{name3,name2},naics,naics_sector,naics_primary,sic,company_employees.{number_of_employees,_code,_min,_max},company_social_links.linkedin.url,company_primary_address.{city,state,country,country_code,continent,postal_code},company_profile.{date_founded,entity_type,publicly_traded},company_funding.{last_round_type,last_round_date,last_round_year,total_raised_usd,lead_investors},company_tags}",
+      "company_metrics.{completion_score,marketability_score}",
+      "meta.{fetched_at (serve time, NOT freshness),key,schema,sources,source_ids.company_id}"
+    ],
+    "source": "validation test V; structure only \u2014 no real value is copied"
+  },
+  "success": true,
+  "data": [
+    {
+      "company_data": {
+        "company_id": "lo-company-77",
+        "company_name": "Northwind Analytics",
+        "company_domain": "northwind.example",
+        "company_type": "Privately Held",
+        "company_industries": [
+          {
+            "name3": "Software Development",
+            "name2": "software-development"
+          }
+        ],
+        "naics": [
+          "541511"
+        ],
+        "naics_sector": "54",
+        "naics_primary": "541511",
+        "sic": [
+          "7372"
+        ],
+        "company_employees": {
+          "number_of_employees": 140,
+          "number_of_employees_code": "51-200",
+          "number_of_employees_min": 51,
+          "number_of_employees_max": 200
+        },
+        "company_social_links": {
+          "linkedin": {
+            "url": "https://www.linkedin.com/company/northwind-example"
+          }
+        },
+        "company_primary_address": {
+          "city": "Austin",
+          "state": "Texas",
+          "country": "United States",
+          "country_code": "US",
+          "continent": "North America",
+          "postal_code": null
+        },
+        "company_profile": {
+          "date_founded": "2015-01-01",
+          "entity_type": "company",
+          "publicly_traded": false
+        },
+        "company_funding": {
+          "last_round_type": "Series A",
+          "last_round_date": "2026-09-15",
+          "last_round_year": 2026,
+          "total_raised_usd": 12000000,
+          "lead_investors": [
+            "Example Ventures"
+          ]
+        },
+        "company_tags": [
+          "analytics"
+        ]
+      },
+      "company_metrics": {
+        "completion_score": 0.8,
+        "marketability_score": null
+      },
+      "meta": {
+        "fetched_at": "2026-10-31T00:00:00.000Z",
+        "key": "company/lo-company-77",
+        "schema": "leadocean.company.v1",
+        "sources": [
+          "leadocean"
+        ],
+        "source_ids": {
+          "company_id": "lo-company-77"
+        }
+      }
+    }
+  ],
+  "meta": {
+    "count": 1,
+    "credits": 1,
+    "nextCursor": null,
+    "unsupportedFilters": []
+  }
+}

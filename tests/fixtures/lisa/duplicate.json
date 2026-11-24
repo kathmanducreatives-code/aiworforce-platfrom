@@ -1,0 +1,50 @@
+{
+  "name": "duplicate",
+  "fictional": true,
+  "note": "The same Series B on three sites \u2192 ONE event with three evidence rows.",
+  "now": "2026-11-10T12:00:00Z",
+  "subject": {
+    "kind": "competitor",
+    "domain": "corvane.example",
+    "name": "Corvane Systems",
+    "origin": "brain_competitor",
+    "categories": [
+      "funding",
+      "hiring",
+      "expansion",
+      "product_launch"
+    ],
+    "cadence_minutes": 10080
+  },
+  "responses": {
+    "funding": {
+      "hits": [
+        {
+          "url": "https://northwire-news.example/corvane-series-b",
+          "title": "Corvane Systems raises $40 million Series B",
+          "description": "Corvane Systems, the predictive-maintenance vendor, raised a $40 million Series B led by Halden Ventures.",
+          "published_at": "2026-11-03"
+        },
+        {
+          "url": "https://fabwire.example/2026/11/corvane-b",
+          "title": "Corvane Systems closes $40M Series B round",
+          "description": "Corvane Systems closed a $40M Series B round to expand in North America.",
+          "published_at": "2026-11-04"
+        },
+        {
+          "url": "https://corvane.example/news/series-b",
+          "title": "Corvane Systems announces $40 million Series B",
+          "description": "Today Corvane Systems announced a $40 million Series B.",
+          "published_at": "2026-11-03"
+        }
+      ],
+      "error": null,
+      "credits": 1
+    }
+  },
+  "expect": {
+    "events": 1,
+    "evidence": 3,
+    "verification": "corroborated"
+  }
+}

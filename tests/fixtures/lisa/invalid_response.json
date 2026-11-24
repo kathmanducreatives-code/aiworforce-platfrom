@@ -1,0 +1,31 @@
+{
+  "name": "invalid_response",
+  "fictional": true,
+  "note": "The provider returns a non-array: counted as a provider error, no signal fabricated.",
+  "now": "2026-11-10T12:00:00Z",
+  "subject": {
+    "kind": "competitor",
+    "domain": "corvane.example",
+    "name": "Corvane Systems",
+    "origin": "brain_competitor",
+    "categories": [
+      "funding",
+      "hiring",
+      "expansion",
+      "product_launch"
+    ],
+    "cadence_minutes": 10080
+  },
+  "responses": {
+    "funding": {
+      "hits": "<html>oops</html>",
+      "error": null,
+      "credits": 1
+    }
+  },
+  "expect": {
+    "events": 0,
+    "status": "partial",
+    "provider_errors": 1
+  }
+}

@@ -245,5 +245,8 @@ Deno.test("WIRING: run-agent prices affordability with the purchase's own spec c
     "the gate uses the same compiler and the same ledger");
   assert(!call.includes("evidenceBudget"), "no second, raw-priced budget reader");
   assert(call.includes("markRouteUnaffordable(company, verifier)"));
-  assert(src.includes("unaffordable_routes: cand.unaffordable_routes ?? []"), "the candidates carry the mark");
+  // The candidates are built by the shared `verifiableCandidatesFrom` (canary session 2).
+  assert(src.includes("const vCandidates = () => verifiableCandidatesFrom(engineRun, vCriteria, String(task.id));"));
+  const engine = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/leadCapabilityEngine.ts", import.meta.url));
+  assert(engine.includes("unaffordable_routes: cand.unaffordable_routes ?? []"), "the candidates carry the mark");
 });

@@ -1,0 +1,34 @@
+{
+  "name": "northstar_rumour",
+  "fictional": true,
+  "note": "Phase 5: the same kind of claim from ONE outlet only (single_source) \u2014 must not become a trusted recommendation.",
+  "now": "2026-11-10T12:00:00Z",
+  "subject": {
+    "kind": "market",
+    "domain": null,
+    "name": "ICP: Manufacturing",
+    "origin": "icp",
+    "categories": [
+      "expansion"
+    ],
+    "cadence_minutes": 10080
+  },
+  "responses": {
+    "expansion": {
+      "hits": [
+        {
+          "url": "https://rumour-mill.example/northstar-ohio",
+          "title": "Northstar Manufacturing opens new production facility in Ohio",
+          "description": "Northstar Manufacturing opens a production facility in Ohio, a source says.",
+          "published_at": "2026-11-07"
+        }
+      ],
+      "error": null,
+      "credits": 1
+    }
+  },
+  "expect": {
+    "events": 1,
+    "verification": "single_source"
+  }
+}

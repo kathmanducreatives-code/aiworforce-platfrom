@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# STUB Supabase CLI for release-script dry runs. Never contacts anything.
+#   STUB_LOG       file to append every invocation (with cwd) to
+#   STUB_DOWNLOAD  ok (default) | fail | empty | repo  — how `functions download` behaves
+#   STUB_SECRETS   space-separated secret names `secrets list` reports
+#   STUB_STATE     dir: `functions deploy <fn>` touches $STUB_STATE/deployed-<fn>
+echo "supabase $* | cwd=$PWD" >> "${STUB_LOG:-/dev/null}"
+args=("$@"); workdir=""
+for ((i=0; i<${#args[@]}; i++)); do [ "${args[$i]}" = "--workdir" ] && workdir="${args[$((i+1))]}"; done
+case "$1 $2" in
+  "secrets list") echo "   NAME | DIGEST"; echo "  ------|------"; for n in ${STUB_SECRETS:-}; do echo "  $n | x"; done ;;
+  "secrets set") : ;;
+  "functions download")
+    fn="$3"
+    case "${STUB_DOWNLOAD:-ok}" in
+      fail) echo "Error: unexpected status 401: token sbp_0123456789abcdef0123456789abcdef0123 rejected; Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.c2lnbmF0dXJlLXZhbHVl" >&2; exit 1 ;;
+      empty) mkdir -p "$workdir/supabase/functions/$fn" ;;
+      repo) mkdir -p "supabase/functions/$fn"; echo "// overwritten by a misdirected download" > "supabase/functions/$fn/index.ts" ;;
+      *) [ -n "$workdir" ] || { echo "refusing in stub: no --workdir" >&2; exit 3; }
+         mkdir -p "$workdir/supabase/functions/$fn"
+         printf '// backup of %s (stub)\nimport { serve } from "x";\nDeno.serve(async (req) => new Response("ok"));\n%s\n' "$fn" "$(head -c 400 /dev/zero | tr '\0' '/')" > "$workdir/supabase/functions/$fn/index.ts" ;;
+    esac ;;
+  "functions deploy") [ -n "${STUB_STATE:-}" ] && touch "$STUB_STATE/deployed-$3" ;;
+  *) echo "stub: unhandled: $*" >&2 ;;
+esac

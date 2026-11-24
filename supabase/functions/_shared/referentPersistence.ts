@@ -56,7 +56,9 @@ export type PresentedKind =
   /** A lead run's results, as opened in Workbench. */
   | "lead_results"
   /** The companies a workspace is watching, listed by the read surface. */
-  | "watched_companies";
+  | "watched_companies"
+  /** The companies ORION cited as evidence in a business answer. */
+  | "orion_evidence";
 
 /** One entity, exactly as the user saw it. */
 export interface PresentedReferent {
@@ -192,7 +194,7 @@ export function readPresentedReferents(
 
   return {
     version: PRESENTED_REFERENTS_VERSION,
-    kind: (set.kind === "watched_companies" ? "watched_companies" : "lead_results"),
+    kind: (set.kind === "watched_companies" || set.kind === "orion_evidence" ? set.kind : "lead_results"),
     presented_at: str(set.presented_at) ?? "",
     entities,
   };

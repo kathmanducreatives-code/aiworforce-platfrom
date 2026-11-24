@@ -1,0 +1,129 @@
+{
+ "name": "company-first-distributors",
+ "description": "Company-first discovery (flag on): US industrial distributors that must be B2B. Consumer and foreign-HQ candidates are rejected with reasons.",
+ "covers": [
+  "industrial distribution narrows by reviewed LinkedIn codes 1187/49/1178",
+  "a consumer distributor is rejected on its own website"
+ ],
+ "query": "Find 5 industrial distributors headquartered in the US. Companies must be B2B.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [],
+   "role_match": "any",
+   "places": [
+    {
+     "span": "headquartered in the US",
+     "place": "united states",
+     "other_place": null,
+     "scope": "headquarters",
+     "necessity": "required"
+    }
+   ],
+   "industries": [
+    {
+     "span": "industrial distributors",
+     "industry": "industrial distribution",
+     "necessity": "required"
+    },
+    {
+     "span": "Companies must be B2B",
+     "industry": "B2B",
+     "necessity": "required"
+    }
+   ],
+   "signals": [],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": []
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": 5,
+   "count_span": "5",
+   "person_roles": []
+  },
+  "company_size": null,
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "midstate",
+   "name": "Midstate Industrial Supply",
+   "site": "midstate.example",
+   "industry": "Wholesale Machinery",
+   "employees": 85,
+   "model": "b2b_service",
+   "page": "Midstate Industrial Supply distributes bearings and MRO supplies to manufacturers and maintenance teams."
+  },
+  {
+   "slug": "tristate",
+   "name": "Tri-State Building Supply",
+   "site": "tristate.example",
+   "industry": "Wholesale Building Materials",
+   "employees": 140,
+   "model": "b2b_service",
+   "page": "Tri-State Building Supply sells lumber and drywall to contractors and builders."
+  },
+  {
+   "slug": "hydro",
+   "name": "HydroFlow Distributors",
+   "site": "hydro.example",
+   "industry": "Wholesale Hardware, Plumbing, Heating Equipment",
+   "employees": 60,
+   "model": "b2b_service",
+   "page": "HydroFlow distributes plumbing and heating equipment to mechanical contractors."
+  },
+  {
+   "slug": "diyking",
+   "name": "DIY King Hardware",
+   "site": "diyking.example",
+   "industry": "Wholesale Hardware, Plumbing, Heating Equipment",
+   "employees": 45,
+   "model": "consumer",
+   "page": "DIY King sells tools and hardware to homeowners and weekend DIYers."
+  },
+  {
+   "slug": "maplewholesale",
+   "name": "Maple Wholesale",
+   "site": "maplewholesale.example",
+   "industry": "Wholesale Machinery",
+   "employees": 70,
+   "model": "b2b_service",
+   "page": "Maple Wholesale supplies machinery to plants.",
+   "hq": {
+    "text": "Hamilton, Ontario, Canada",
+    "country": "CA",
+    "countryFull": "Canada",
+    "city": "Hamilton"
+   }
+  }
+ ],
+ "flags": {
+  "LEAD_PIPELINE_COMPANY_SEARCH": "true"
+ },
+ "allowReviewOnly": true,
+ "expect": {
+  "planStatus": 200,
+  "planState": "ready",
+  "runStatuses": [
+   200
+  ],
+  "outcome": "needs_verification",
+  "qualified": [],
+  "needsVerification": [
+   "HydroFlow Distributors",
+   "Midstate Industrial Supply",
+   "Tri-State Building Supply"
+  ],
+  "excluded": 1,
+  "leadsSaved": 3,
+  "actorCalls": 3,
+  "persistFailed": 0,
+  "rejected": [
+   "DIY King Hardware"
+  ]
+ }
+}
