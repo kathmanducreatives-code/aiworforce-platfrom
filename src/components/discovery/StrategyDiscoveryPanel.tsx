@@ -17,9 +17,9 @@ import { invokeFunction } from '@/lib/agentoryApi';
 import { useOptionalChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { PROVIDER_LABEL, usd } from '@/lib/providerRunSummary';
 import {
-  BUSINESS_MODEL_LABEL, OUTCOME_LABEL, STRATEGY_CHOICES, VERDICT_LABEL, comparisonRow, overlapView, planStrategy, routeLine, runStrategy, spendLine,
+  ATTRIBUTE_LABEL, BUSINESS_MODEL_LABEL, OUTCOME_LABEL, STRATEGY_CHOICES, TIER_LABEL, VERDICT_LABEL, comparisonRow, overlapView, planStrategy, routeLine, runStrategy, spendLine,
   strategyDiscoveryUiEnabled, strategyLabel, worstCaseLine,
-  type CompanyRow, type ComparisonRow, type Invoke, type OutcomeView, type StrategyChoice, type StrategyPlanView, type StrategyRunView,
+  type CompanyRow, type ComparisonRow, type DiscoveryMode, type FlexibleMatchView, type MatchTier, type Invoke, type OutcomeView, type StrategyChoice, type StrategyPlanView, type StrategyRunView,
 } from '@/lib/strategyDiscovery';
 import { simulatedInvoke, strategyDiscoveryMockMode, type Simulation } from '@/lib/strategyDiscoveryMock';
 import simulation from '@/lib/__fixtures__/strategyDiscoverySimulation.json';
@@ -56,13 +56,15 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
   const [reviewOnly, setReviewOnly] = useState(false);
   // The user's permission to count LIKELY B2B matches (labelled, never verified; hash-bound on the server).
   const [acceptLikely, setAcceptLikely] = useState(false);
+  // Strict (default, unchanged) or Flexible Discovery: a different plan, approved separately.
+  const [mode, setMode] = useState<DiscoveryMode>('strict');
 
-  const request = (c: StrategyChoice, ro = reviewOnly, al = acceptLikely) => ({ workspaceId: workspaceId ?? '', messageId, query, choice: c, requestedCount, reviewOnly: ro, acceptLikely: al });
+  const request = (c: StrategyChoice, ro = reviewOnly, al = acceptLikely, m = mode) => ({ workspaceId: workspaceId ?? '', messageId, query, choice: c, requestedCount, reviewOnly: ro, acceptLikely: al, mode: m });
 
-  const makePlan = async (c: StrategyChoice, ro = false, al = acceptLikely) => {
+  const makePlan = async (c: StrategyChoice, ro = false, al = acceptLikely, m = mode) => {
     if (!workspaceId) return;
-    setChoice(c); setReviewOnly(ro); setAcceptLikely(al); setState('planning'); setError(null); setApproved(false); setRun(null); setPlan(null);
-    const r = await planStrategy(invoke, request(c, ro, al));
+    setChoice(c); setReviewOnly(ro); setAcceptLikely(al); setMode(m); setState('planning'); setError(null); setApproved(false); setRun(null); setPlan(null);
+    const r = await planStrategy(invoke, request(c, ro, al, m));
     setState('idle');
     if (r.ok) setPlan(r.value); else setError(r.error);
   };
@@ -86,7 +88,10 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
     );
   }
 
-  const canRun = plan?.status === 'ready' && approved && state === 'idle' && !run;
+  // Flexible asked for, but the backend planned strictly (it predates Flexible Discovery): say so
+  // and never let that plan be approved as if it were Flexible.
+  const flexibleUnsupported = mode === 'flexible' && !!plan && plan.discoveryMode !== 'flexible';
+  const canRun = plan?.status === 'ready' && approved && state === 'idle' && !run && !flexibleUnsupported;
   const overlap = overlapView(run?.summary ?? null);
 
   return (
@@ -96,6 +101,15 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
           Simulated data — development only. No provider was called and these are not real companies.
         </div>
       )}
+      <div className="mb-1.5 flex items-center gap-1.5 flex-wrap" role="group" aria-label="Discovery mode" data-testid="strategy-mode">
+        {([['strict', 'Strict', 'Every requirement you state must be proven. Requirements no approved tool can prove block the plan.'],
+          ['flexible', 'Flexible', 'Industry and consumer-only rank results instead of blocking them. Headquarters, hiring and other requirements still apply.']] as const).map(([id, label, blurb]) => (
+          <button key={id} type="button" title={blurb} onClick={() => void makePlan(choice, false, acceptLikely, id)} aria-pressed={mode === id} disabled={state !== 'idle'}
+            data-testid={`strategy-mode-${id}`}
+            className={`h-7 px-2.5 rounded-md text-[11.5px] border transition-colors ${mode === id ? 'border-emerald-300/40 bg-emerald-300/[0.08] text-[#ECE9E4]' : 'border-white/[0.06] text-[#8B8F96] hover:text-[#ECE9E4]'}`}
+          >{label} Discovery</button>
+        ))}
+      </div>
       <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="Discovery strategy">
         {STRATEGY_CHOICES.map((o) => (
           <button
@@ -126,6 +140,25 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
               ))}
             </ul>
           )}
+          {plan.flexible && (
+            <div className="rounded-lg border border-emerald-300/25 bg-emerald-300/[0.04] px-3 py-2 space-y-1" data-testid="strategy-relaxed">
+              <div className="text-[#ECE9E4] font-medium">Flexible Discovery relaxes {plan.flexible.relaxed.length === 1 ? 'one requirement' : `${plan.flexible.relaxed.length} requirements`}</div>
+              {plan.flexible.relaxed.length === 0 && <p className="text-[#A3A7AD]">Nothing in this request is relaxed; it runs as Strict would.</p>}
+              {plan.flexible.relaxed.map((r) => (
+                <p key={r.label} className="text-[#A3A7AD]" data-testid="strategy-relaxed-item"><span className="text-[#ECE9E4]">{r.label}</span>: required → preference. {r.why.charAt(0).toUpperCase() + r.why.slice(1)}.</p>
+              ))}
+              {plan.flexible.industries.related.length > 0 && (
+                <p className="text-[11px] text-[#8B8F96]" data-testid="strategy-related-industries">Related industries GPT suggested for ranking (not proof): {plan.flexible.industries.related.join(', ')}</p>
+              )}
+              {plan.flexible.industries.note && <p className="text-[11px] text-[#6E7278]">{plan.flexible.industries.note}</p>}
+              <p className="text-[11px] text-[#6E7278]">Only Strong and Close matches count toward the number you asked for. Every other requirement still applies.</p>
+            </div>
+          )}
+          {flexibleUnsupported && (
+            <div className="rounded-lg border border-amber-300/30 bg-amber-300/[0.06] px-3 py-2 text-amber-100/90" data-testid="strategy-flexible-unsupported">
+              This server doesn't support Flexible Discovery yet, so the plan below is a Strict plan. It can't be approved in Flexible mode. Switch to Strict to run it as Strict.
+            </div>
+          )}
           <RequirementList plan={plan} />
           {plan.status === 'blocked' && plan.questions.length > 0 && (
             <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.04] px-3 py-2 space-y-1.5" data-testid="strategy-questions">
@@ -155,7 +188,7 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
           {plan.status === 'ready' && reviewOnly && (
             <div className="text-[11px] text-amber-200/80" data-testid="strategy-review-only-note">Review-only: requirements no approved tool can prove stay unverified. Those companies are listed as “Needs verification” and are never counted as qualified.</div>
           )}
-          {plan.status === 'ready' && (
+          {plan.status === 'ready' && !flexibleUnsupported && (
             <div className="flex items-center gap-2 pt-1">
               {plan.worstCase.apifyUsd > 0 || plan.worstCase.leadoceanRecords > 0 ? (
                 <label className="flex items-center gap-1.5 text-[#A3A7AD] cursor-pointer">
@@ -189,7 +222,8 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
           </div>
           {run.outcome && <OutcomeBanner outcome={run.outcome} />}
           {run.reason && <div className="mt-1 text-[11px] text-amber-300/90">{run.reason}</div>}
-          {run.summary ? <ProviderRunSummaryCard response={run.response} /> : (
+          {/* Flexible Discovery counts by match tier; the provider card's "qualified" is the strict count, so it is not shown there. */}
+          {run.matches.length > 0 ? null : run.summary ? <ProviderRunSummaryCard response={run.response} /> : (
             <div className="mt-1 text-[11px] text-[#8B8F96]" data-testid="strategy-run-no-summary">This run returned no provider summary; no totals are shown.</div>
           )}
           {overlap && overlap.perProvider.length > 1 && (
@@ -197,7 +231,8 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
               {overlap.perProvider.map((p) => `${nameOf(p.provider)} ${p.discovered} (${p.onlyHere} only there)`).join(' · ')} · {overlap.combinedUnique} unique combined · {overlap.overlap} found by both
             </div>
           )}
-          {(['qualified', 'pending'] as const).map((group) => {
+          {run.matches.length > 0 && <FlexibleMatches matches={run.matches} originalRequest={run.originalRequest} />}
+          {run.matches.length === 0 && (['qualified', 'pending'] as const).map((group) => {
             const rows = run.companies.filter((c) => c.verdict === group);
             if (!rows.length) return null;
             return (
@@ -335,5 +370,57 @@ function CompanyCard({ c }: { c: CompanyRow }) {
         </div>
       ))}
     </li>
+  );
+}
+
+const TIER_TONE: Record<MatchTier, string> = {
+  strong: 'text-emerald-300/90 border-emerald-300/30', close: 'text-sky-300/90 border-sky-300/30',
+  exploratory: 'text-amber-200/80 border-amber-200/25', insufficient: 'text-[#8B8F96] border-white/10',
+};
+const STATUS_TONE = { verified: 'text-emerald-300/90', inferred: 'text-amber-200/80', unknown: 'text-[#6E7278]' } as const;
+
+/** Flexible Discovery's companies by tier, each attribute marked verified / inferred / unknown, with sources. */
+function FlexibleMatches({ matches, originalRequest }: { matches: FlexibleMatchView[]; originalRequest: string | null }) {
+  return (
+    <div className="mt-2 space-y-2" data-testid="strategy-flexible-matches">
+      {originalRequest && <div className="text-[11px] text-[#6E7278]" data-testid="strategy-original-request">Your request: “{originalRequest}”</div>}
+      {(['strong', 'close', 'exploratory', 'insufficient'] as const).map((tier) => {
+        const rows = matches.filter((m) => m.tier === tier);
+        if (!rows.length) return null;
+        return (
+          <section key={tier} aria-label={TIER_LABEL[tier]} data-testid={`strategy-tier-${tier}`}>
+            <h4 className="text-[11px] uppercase tracking-wide text-[#6E7278]">{TIER_LABEL[tier]} ({rows.length})</h4>
+            <ul className="mt-1 space-y-1.5">
+              {rows.map((m) => (
+                <li key={m.leadKey || m.name} className="rounded-md border border-white/[0.05] px-2.5 py-1.5" data-testid="strategy-match">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[#ECE9E4] font-medium truncate">{m.name}</span>
+                    {m.domain && <span className="text-[11px] text-[#6E7278] truncate">{m.domain}</span>}
+                    <span className={`ml-auto shrink-0 rounded border px-1 text-[10px] ${TIER_TONE[m.tier]}`}>{TIER_LABEL[m.tier]}</span>
+                  </div>
+                  {m.why.length > 0 && <div className="text-[11px] text-[#8B8F96]">{m.why.join('; ')}</div>}
+                  <ul className="mt-0.5 grid grid-cols-1 gap-x-3 text-[11px] sm:grid-cols-2">
+                    {m.attributes.map((a) => (
+                      <li key={a.name} className="truncate" title={a.value} data-testid="strategy-match-attribute" data-status={a.status}>
+                        <span className="text-[#6E7278]">{ATTRIBUTE_LABEL[a.name] ?? a.name}:</span> <span className={STATUS_TONE[a.status]}>{a.status}</span> <span className="text-[#A3A7AD]">{a.value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {m.sources.length > 0 && (
+                    <div className="mt-0.5 flex flex-wrap gap-x-2 text-[11px]">
+                      {m.sources.map((u) => (
+                        <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-[#8B8F96] hover:text-[#ECE9E4]">
+                          <ExternalLink className="h-3 w-3" aria-hidden />{(() => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return 'source'; } })()}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
   );
 }

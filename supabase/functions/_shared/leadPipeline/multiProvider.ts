@@ -455,7 +455,7 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   if (bmStep) {
     const required = String(spec.requirements.criteria.find((c) => c.kind === "hard" && c.dimension === "business_model")?.value ?? "B2B");
     const eligibleNow = leads.filter((l) => l.shared?.eligibility === "eligible").length;
-    const need = Math.max(0, spec.requestedCount - eligibleNow);
+    const need = spec.flexible ? spec.requestedCount : Math.max(0, spec.requestedCount - eligibleNow);
     // An industry gap never closes on any strategy (strategy.ts: "a taxonomy label proves no
     // industry"), so it must not hide a company from the one check that CAN still decide it:
     // pilot rehearsal 2026-11-09 — an industry-scoped request left every company open on
@@ -473,11 +473,15 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
       const unknown = (l.shared?.checks ?? []).filter((c) => c.result === "unknown").map((c) => c.criterion_id);
       return unknown.some((id) => siteDecides.has(id)) && unknown.every((id) => siteDecides.has(id) || neverCloses.has(id));
     };
-    const open = leads.filter((l) => {
-      const gaps = (l.shared?.gaps ?? []).filter(closable);
-      return l.shared?.eligibility === "pending" && ((gaps.length === 1 && gaps[0] === "business_model") || (gaps.length === 0 && openOnSite(l)))
-        && !(l.shared.disproven ?? []).length && l.company.domain.length;
-    });
+    // FLEXIBLE DISCOVERY ranks by the business model (flexibleDiscovery.ts), so it reads every
+    // company still in play — eligible ones too — within the same approved step and budget.
+    const open = spec.flexible
+      ? leads.filter((l) => l.shared?.eligibility !== "ineligible" && !(l.shared?.disproven ?? []).length && l.company.domain.length)
+      : leads.filter((l) => {
+        const gaps = (l.shared?.gaps ?? []).filter(closable);
+        return l.shared?.eligibility === "pending" && ((gaps.length === 1 && gaps[0] === "business_model") || (gaps.length === 0 && openOnSite(l)))
+          && !(l.shared.disproven ?? []).length && l.company.domain.length;
+      });
     // ONE SITE, ONE READ. Two records of one company (two LinkedIn pages, one domain) are merged
     // only after this step, so without this both were targeted: the same three pages were bought
     // twice and credited to one record, and the record that survived the merge read "no readable

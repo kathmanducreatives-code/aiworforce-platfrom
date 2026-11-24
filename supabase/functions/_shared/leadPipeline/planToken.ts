@@ -29,6 +29,8 @@ export interface PlanReplay {
   brain: { status: string; fields: string[]; context: unknown | null };
   /** The strategy advisor's pick (null: deterministic choice only, or the user named a strategy). */
   advice: { proposed: string | null; rationale: string; model: string | null; error: string | null } | null;
+  /** FLEXIBLE DISCOVERY: the related industries GPT named at plan time (re-validated on replay). */
+  flexible?: unknown;
 }
 
 export interface PlanTokenPayload {

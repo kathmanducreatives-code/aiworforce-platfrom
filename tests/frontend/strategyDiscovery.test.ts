@@ -10,7 +10,7 @@ import { summarizeProviderRun } from "../../supabase/functions/_shared/leadPipel
 import { parseStrategyRequest } from "../../supabase/functions/_shared/leadPipeline/service.ts";
 import {
   comparisonRow, overlapView, safeHref, planStrategy, readStrategyPlan, readStrategyRun, runStrategy, strategyDiscoveryUiEnabled,
-  walkIdFor, worstCaseLine, type Invoke,
+  walkIdFor, worstCaseLine, readFlexibleMatches, type Invoke,
 } from "../../src/lib/strategyDiscovery.ts";
 
 /** A strategy_run response body built the way service.ts builds it. */
@@ -204,4 +204,35 @@ Deno.test("PILOT 2026-11-23: a blocked plan's questions and requirement rows app
   } })!;
   assertEquals(v.questions, [q]);
   assertEquals(v.requirements.map((r) => `${r.label}:${r.route}`), ["Industry: a or b:not_checkable", "Excluding: consumer:checked"]);
+});
+
+
+Deno.test("FLEXIBLE UI: the mode is sent only when chosen, on its own walk; strict requests are unchanged", async () => {
+  const sent: Record<string, unknown>[] = [];
+  const invoke: Invoke = (_n, body) => { sent.push(body as Record<string, unknown>); return Promise.resolve({ data: null, error: null }); };
+  const r = { workspaceId: "w", messageId: "m1", query: "q", choice: "auto" as const };
+  await planStrategy(invoke, r);
+  await planStrategy(invoke, { ...r, mode: "flexible" });
+  assertEquals("discovery_mode" in sent[0], false);
+  assertEquals(sent[1].discovery_mode, "flexible");
+  assert(String(sent[1].walk_id).endsWith("-flex") && sent[1].walk_id !== sent[0].walk_id);
+});
+
+Deno.test("FLEXIBLE UI: relaxed criteria are read from the plan; tiers and statuses are read, unknown values dropped, links sanitised", () => {
+  const plan = readStrategyPlan({ plan: { status: "ready", planHash: "h", estimate: { apifyUsd: 0.07, leadoceanRecords: 0 }, steps: [] },
+    flexible: { relaxed: [{ label: "Industry: a or b", why: "w" }], industries: { requested: ["a"], related: ["c"], note: null } } })!;
+  assertEquals(plan.flexible, { relaxed: [{ label: "Industry: a or b", why: "w" }], industries: { requested: ["a"], related: ["c"], note: null } });
+  assertEquals(readStrategyPlan({ plan: { status: "ready", planHash: "h", estimate: { apifyUsd: 0, leadoceanRecords: 0 }, steps: [] } })!.flexible, null, "strict plan");
+  const bare = { plan: { status: "ready", planHash: "h", estimate: { apifyUsd: 0, leadoceanRecords: 0 }, steps: [] } };
+  assertEquals(readStrategyPlan(bare)!.discoveryMode, null, "a pre-Flexible backend says nothing: never read as flexible");
+  assertEquals(readStrategyPlan({ ...bare, discoveryMode: "flexible" })!.discoveryMode, "flexible");
+  assertEquals(readStrategyPlan({ ...bare, discoveryMode: "loose" })!.discoveryMode, null);
+  const m = readFlexibleMatches({ matches: [
+    { leadKey: "k", name: "Co", tier: "strong", why: ["x"], attributes: { headquarters: { status: "verified", value: "US" }, industry: { status: "proven!", value: "?" } },
+      sources: ["https://co.example/", "javascript:alert(1)"] },
+    { leadKey: "k2", name: "Bad", tier: "best" },
+  ] });
+  assertEquals(m.length, 1, "an unknown tier is dropped");
+  assertEquals(m[0].attributes, [{ name: "headquarters", status: "verified", value: "US" }], "an unknown status is dropped, never shown as verified");
+  assertEquals(m[0].sources, ["https://co.example/"]);
 });
