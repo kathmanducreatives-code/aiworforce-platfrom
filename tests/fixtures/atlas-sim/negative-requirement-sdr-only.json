@@ -1,0 +1,123 @@
+{
+ "name": "negative-requirement-sdr-only",
+ "description": "Excludes companies whose hiring is only SDR; one company posts only an SDR job.",
+ "covers": [
+  "negative requirements"
+ ],
+ "query": "Find 5 US companies that must be B2B and are actively hiring Account Executives, excluding SDR roles.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [
+    {
+     "span": "Account Executives",
+     "title": "account_executive",
+     "family": null,
+     "relation": "required"
+    },
+    {
+     "span": "SDR",
+     "title": "sales_development_representative",
+     "family": null,
+     "relation": "excluded"
+    }
+   ],
+   "role_match": "any",
+   "places": [
+    {
+     "span": "US",
+     "place": "united states",
+     "other_place": null,
+     "scope": "headquarters",
+     "necessity": "required"
+    }
+   ],
+   "industries": [
+    {
+     "span": "must be B2B",
+     "industry": "B2B",
+     "necessity": "required"
+    }
+   ],
+   "signals": [
+    {
+     "span": "actively hiring Account Executives",
+     "kind": "hiring",
+     "necessity": "required"
+    }
+   ],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": []
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": 5,
+   "count_span": "5",
+   "person_roles": []
+  },
+  "company_size": null,
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "northwind",
+   "name": "Northwind Ledger",
+   "site": "northwind.example",
+   "page": "Accounting software built for finance teams at mid-market companies. Close your books faster with Northwind Ledger.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "harbor",
+   "name": "Harbor Kids",
+   "site": "harborkids.example",
+   "page": "Harbor Kids sells toys and games to consumers through our online store. Free shipping for families.",
+   "model": "consumer"
+  },
+  {
+   "slug": "quartz",
+   "name": "Quartz Data",
+   "site": "quartz.example",
+   "page": "Welcome. Learn more about us.",
+   "model": "unknown"
+  },
+  {
+   "slug": "maple",
+   "name": "Maple Goods",
+   "site": "maple.example",
+   "page": "Maple Goods sells kitchenware to consumers in our online shop and supplies restaurants and other businesses wholesale.",
+   "model": "b2b_service"
+  },
+  {
+   "slug": "cobalt",
+   "name": "Cobalt Freight",
+   "site": "cobalt.example",
+   "page": "Cobalt Freight provides logistics services to manufacturers and retailers across North America.",
+   "model": "b2b_service",
+   "job": {
+    "title": "SDR"
+   }
+  }
+ ],
+ "expect": {
+  "planStatus": 200,
+  "planState": "ready",
+  "runStatuses": [
+   200
+  ],
+  "outcome": "completed_with_shortfall",
+  "qualified": [
+   "Northwind Ledger"
+  ],
+  "needsVerification": [
+   "Maple Goods",
+   "Quartz Data"
+  ],
+  "excluded": 1,
+  "leadsSaved": 3,
+  "actorCalls": 3,
+  "persistFailed": 0
+ }
+}

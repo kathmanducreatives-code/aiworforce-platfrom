@@ -12,14 +12,8 @@
  * That order is the order work flows, and every section renders them this way
  * so the cast stays recognisable from section to section.
  *
- * NAME DIVERGENCE — READ THIS BEFORE CHANGING IT. The canonical product
- * registry calls the content/outreach employee **Mira** (`AI Message
- * Strategist`), and the whole product surface — dock, chat, workbench — renders
- * that name. Marketing now calls the signals employee **Lisa**. To avoid
- * touching product identity, `id` stays `mira` (which is what keeps the
- * registry linkage and shared portraits working) while `name` is the public
- * one. If the product adopts Lisa too, rename in `@/config/agentRegistry` and
- * delete the `name` override here.
+ * NAMES: the product registry (`@/config/agentRegistry`) now uses the same four
+ * departments, so every id here is the real product id.
  *
  * PORTRAITS resolve through the canonical registry keyed on `id`, sharing
  * the same optimized assets as the product.
@@ -32,7 +26,7 @@ function portraitFor(id: PublicAgentId): string | null {
   return PUBLIC_AGENTS[id]?.avatar ?? null;
 }
 
-export type EmployeeId = Extract<PublicAgentId, 'lyra' | 'atlas' | 'mira' | 'orion' | 'pilot'>;
+export type EmployeeId = Extract<PublicAgentId, 'lyra' | 'atlas' | 'lisa' | 'orion' | 'pilot'>;
 
 /** The kind of work an employee owns. Drives accent colour and grouping. */
 export type EmployeeDiscipline = 'signals' | 'leads' | 'content' | 'executive' | 'coordination';
@@ -83,7 +77,7 @@ export const EMPLOYEES: Employee[] = [
     initial: 'P',
   },
   {
-    id: 'mira',
+    id: 'lisa',
     name: 'Lisa',
     discipline: 'signals',
     function: 'Signal Intelligence',
@@ -93,8 +87,8 @@ export const EMPLOYEES: Employee[] = [
     headlineClaim: 'Lisa found 4 changes worth knowing.',
     capabilities: ['PRICING', 'HIRING', 'FUNDING', 'PRODUCT', 'REVIEWS', 'WEBSITE CHANGES', 'MARKET MOVEMENT', 'BUYING SIGNALS'],
     handsOffTo: 'atlas',
-    accent: PUBLIC_AGENTS.mira.accentHex,
-    portrait: portraitFor('mira'),
+    accent: PUBLIC_AGENTS.lisa.accentHex,
+    portrait: portraitFor('lisa'),
     initial: 'L',
   },
   {

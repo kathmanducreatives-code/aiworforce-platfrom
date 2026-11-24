@@ -1,0 +1,167 @@
+{
+  "status": "PROPOSED \u2014 preparation only. Not authorized for purchase; live execution stays blocked.",
+  "live_execution": "blocked",
+  "scenario": "demo_funding \u2014 'Find 5 US companies hiring Account Executives that raised funding within the last six months.'",
+  "live_blockers": [
+    "READ CAP: authorize_discovery_smoke (supabase/migrations-held/20261015140000_discovery_smoke_admission.sql) refuses a read allocation summing to more than 5. Each Apify actor needs a status read and a dataset read (the job search also a receipt read), so jobs + details + Atomus + Pvalyou need about 9. The allocation below fits the 5 only because every actor is authorized for ZERO starts. A paid run needs a reviewed revision of that held migration raising the cap for this catalog.",
+    "DETAILS PER CALL: the details template allows one company per call (max_array_items.companies = 1) and the two-actor smoke authorizes one start. Five companies need up to five details starts or a reviewed batch bound.",
+    "WORKER CAPS: .github/workflows/discovery-test-worker.yml pins LEAD_V2_MISSION_PROVIDER_USD_CAP=0.20, LEAD_V2_MISSION_CREDIT_CAP=5 (paid calls) and a 300 s wall clock. Five companies with funding checks can exceed 5 paid calls; Pvalyou reads can take minutes. Expect a partial result unless these are revised by review.",
+    "PRICES: every maximum below is derived from the actor cards (supabase/functions/_shared/hiringActorCatalog.ts, BRONZE tier; last live settlements 2026-09-23: Atomus $0.0036, Pvalyou $0.0201). Each must be re-observed on the TEST Apify account within 24 h of authorization; observed_at and source are null until then.",
+    "ACCOUNT: the TEST Apify account's access to atomus/linkedin-company-scraper and pvalyou/company-record, its pricing tier, and maxTotalChargeUsd enforcement for both are not verified."
+  ],
+  "based_on": "docs/launch/proposals/smoke-catalog-two-actor.json \u2014 jobs, details and luna unchanged; atomus and pvalyou added; reads extended to all four actors.",
+  "approved_quotes": {
+    "jobs": {
+      "allowed_kinds": [
+        "provider"
+      ],
+      "allowed_actors": [
+        "apify:harvestapi~linkedin-job-search"
+      ],
+      "maximum_microusd": 5000,
+      "discovery_page": true,
+      "source": "<Apify actor pricing: job $0.001, start $0.001, tier <tier>>",
+      "liability_bound_ref": "maxTotalChargeUsd=0.005 (gate-pinned)",
+      "observed_at": "<ISO time>",
+      "request_limits": {
+        "max_request_bytes": 4096,
+        "pin_query": {
+          "timeout": "120",
+          "memory": "256"
+        },
+        "max_fields": {
+          "maxItems": 3
+        },
+        "max_array_items": {
+          "jobTitles": 1,
+          "locations": 1,
+          "geoIds": 0
+        }
+      }
+    },
+    "details": {
+      "allowed_kinds": [
+        "provider"
+      ],
+      "allowed_actors": [
+        "apify:harvestapi~linkedin-company"
+      ],
+      "maximum_microusd": null,
+      "source": null,
+      "liability_bound_ref": "maxTotalChargeUsd = the maximum once observed (gate-pinned)",
+      "observed_at": null,
+      "request_limits": {
+        "max_request_bytes": 1024,
+        "pin_query": {
+          "timeout": "120",
+          "memory": "256"
+        },
+        "max_array_items": {
+          "companies": 1,
+          "searches": 0
+        }
+      }
+    },
+    "atomus": {
+      "allowed_kinds": [
+        "provider"
+      ],
+      "allowed_actors": [
+        "apify:atomus~linkedin-company-scraper"
+      ],
+      "maximum_microusd": 17550,
+      "maximum_basis": "5 companies x $0.0035 per company found + $0.00005 start (card, BRONZE); not-found is free",
+      "source": null,
+      "observed_at": null,
+      "liability_bound_ref": "maxTotalChargeUsd = the maximum once observed (gate-pinned)",
+      "request_limits": {
+        "max_request_bytes": 2048,
+        "pin_query": {
+          "timeout": "120",
+          "memory": "256"
+        },
+        "max_array_items": {
+          "companies": 5
+        }
+      }
+    },
+    "pvalyou": {
+      "allowed_kinds": [
+        "provider"
+      ],
+      "allowed_actors": [
+        "apify:pvalyou~company-record"
+      ],
+      "maximum_microusd": 40050,
+      "maximum_basis": "2 companies per call (PVALYOU_BATCH) x $0.02 basic tier + $0.00005 start (card, BRONZE); asked only for companies Atomus left open",
+      "source": null,
+      "observed_at": null,
+      "liability_bound_ref": "maxTotalChargeUsd = the maximum once observed (gate-pinned)",
+      "request_limits": {
+        "max_request_bytes": 2048,
+        "pin_query": {
+          "timeout": "300",
+          "memory": "256"
+        },
+        "max_array_items": {
+          "companies": 2
+        },
+        "pin_body": {
+          "tier": "basic"
+        }
+      }
+    },
+    "reads": {
+      "allowed_kinds": [
+        "poll"
+      ],
+      "maximum_microusd": 0,
+      "source": "<Apify usage page: API reads not charged for these actors>",
+      "liability_bound_ref": "reads are not actor events",
+      "observed_at": "<ISO time>",
+      "allowed_actors": [
+        "apify:harvestapi~linkedin-job-search",
+        "apify:harvestapi~linkedin-company",
+        "apify:atomus~linkedin-company-scraper",
+        "apify:pvalyou~company-record"
+      ],
+      "request_limits": {
+        "max_reads_per_actor": {
+          "apify:harvestapi~linkedin-job-search": 2,
+          "apify:harvestapi~linkedin-company": 1,
+          "apify:atomus~linkedin-company-scraper": 1,
+          "apify:pvalyou~company-record": 1
+        }
+      }
+    },
+    "luna": {
+      "allowed_kinds": [
+        "model"
+      ],
+      "allowed_actors": [
+        "openai:gpt-5.6-luna"
+      ],
+      "maximum_microusd": 12480,
+      "source": "<OpenAI project pricing, Standard: $<in>/1M input, $<cache write>/1M cache writes, $<out>/1M output>",
+      "liability_bound_ref": "B=30720 bytes (tokens <= bytes) priced at the cache-write rate, the dearest input rate ($0.25/1M listed 2026-10-17); O=4000 at $1.20/1M. 0.25*30720 + 1.2*4000 = 12480; four attempts 49920 <= 50000",
+      "observed_at": "<ISO time>",
+      "request_limits": {
+        "max_request_bytes": 30720,
+        "max_output_tokens": 4000
+      }
+    }
+  },
+  "actor_limits_for_kickoff": {
+    "apify:harvestapi~linkedin-job-search": 0,
+    "apify:harvestapi~linkedin-company": 0,
+    "apify:atomus~linkedin-company-scraper": 0,
+    "apify:pvalyou~company-record": 0
+  },
+  "actor_limits_proposed_for_paid_run": {
+    "note": "NOT authorized. Set only by a separate reviewed SQL after the blockers above are resolved.",
+    "apify:harvestapi~linkedin-job-search": 1,
+    "apify:harvestapi~linkedin-company": 5,
+    "apify:atomus~linkedin-company-scraper": 1,
+    "apify:pvalyou~company-record": 2
+  }
+}

@@ -36,7 +36,19 @@ export interface CanonicalHardCheck {
   result: CanonicalCheckResult;
   reason: string;
   provenance: CanonicalCheckProvenance | null;
+  /**
+   * A requirement an earlier mission compiler recorded with NO evidence source
+   * (a hard `constraint` compiled as provable). Such a check could never close,
+   * so it is shown as unverifiable rather than as evidence still to come
+   * (canary session 2: "hiring: Account Executives", a restatement of the
+   * hiring requirement). Missions compiled since the repair disclose such a
+   * requirement at approval instead, with a different reason.
+   */
+  legacy_unverifiable: boolean;
 }
+
+/** The reason `candidateEligibility` gives ONLY for a hard `constraint` compiled as provable. */
+const LEGACY_UNVERIFIABLE_REASON = 'no evidence dimension answers constraint';
 
 /** One unknown hard check on a pending lead, and what could close it (`evidenceGapRouter`). */
 export interface CanonicalEvidenceGap {
@@ -109,6 +121,8 @@ function readCheck(v: unknown): CanonicalHardCheck | null {
     dimension: String(r.dimension ?? ''),
     result,
     reason: String(r.reason ?? ''),
+    legacy_unverifiable: r.result !== 'pass' && r.result !== 'fail' && String(r.dimension ?? '') === 'constraint' &&
+      String(r.reason ?? '') === LEGACY_UNVERIFIABLE_REASON,
     provenance: p
       ? {
         evidence_id: String(p.evidence_id ?? ''), dimension: String(p.dimension ?? ''),
@@ -193,6 +207,11 @@ export function canonicalSummary(c: CanonicalCounts): {
 
 /** A hard check, in one line a person can read, with where its evidence came from. */
 export function describeHardCheck(h: CanonicalHardCheck): string {
+  if (h.legacy_unverifiable) {
+    return 'NOT VERIFIABLE — an earlier mission compiler recorded this requirement with no evidence source, ' +
+      'so no evidence could ever settle it; it is not evidence still to come. Missions compiled now disclose ' +
+      'such a requirement before anything runs.';
+  }
   const verdict = h.result === 'pass' ? 'PASS' : h.result === 'fail' ? 'FAIL' : 'PENDING';
   const p = h.provenance;
   const source = p

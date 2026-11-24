@@ -313,7 +313,9 @@ function ownOfferingText(text: string): string {
 }
 
 const CONSUMER_CUSTOMER_RE =
-  /\b(?:for|serving|serves|helps?|used\s+by|built\s+for|designed\s+for)\b(?:\s+[\w&',-]+){0,4}?\s+(?:individuals|families|parents|shoppers|consumers|everyday\s+people|households)\b/;
+  // "sells … to homeowners" names its buyer as plainly as "for homeowners" (the BUSINESS
+  // buyer pattern already reads "sells to" / "sold to"; company-first rehearsal 2026-11-20).
+  /\b(?:for|serving|serves|helps?|used\s+by|built\s+for|designed\s+for|sells?|sold)\b(?:\s+[\w&',-]+){0,4}?\s+(?:individuals|families|parents|shoppers|consumers|everyday\s+people|households|home\s?owners|home\s?buyers|renters|diyers)\b/;
 const SOFTWARE_WORDS = new Set([
   "software", "saas", "app", "apps", "application", "applications", "api", "apis", "sdk", "sdks",
   "erp", "crm", "ehr", "emr", "plugin", "plugins", "dashboard", "dashboards",

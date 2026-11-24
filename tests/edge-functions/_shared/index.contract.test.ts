@@ -43,7 +43,8 @@ Deno.test("only real company_brain columns are assigned onto the upsert row", as
 Deno.test("the handler still persists the profile and completes onboarding", async () => {
   const src = await Deno.readTextFile(SRC);
   assert(/profile:\s*result\.profile/.test(src), "profile must be persisted");
-  assert(/row\.onboarding_completed\s*=\s*true/.test(src), "activation must set onboarding_completed");
+  // Through the authorized writer (AUTH-06), which sets onboarding_completed.
+  assert(/activate: result\.onboarding_completed === true/.test(src), "activation must set onboarding_completed");
 });
 
 Deno.test("no provider is called from the save/activate path", async () => {

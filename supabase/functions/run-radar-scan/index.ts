@@ -8,6 +8,7 @@ import { isSignalsV2Enabled } from "../_shared/signalsV2Flag.ts";
 import { writeSignalEventV2 } from "../_shared/signalsV2Writer.ts";
 import { mapRadarSignalToV2, type RadarLegacyRow } from "../_shared/radarSignalToV2.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
+import { loadCompanyBrainContext, type LoaderDb } from "../_shared/companyBrainContextLoader.ts";
 import { buildRadarScanPlan } from "../_shared/radarScanPlanner.ts";
 import { scoreCandidates, type RadarPlanSource, type ScoredCandidate } from "../_shared/radarCandidatePipeline.ts";
 import { runFirecrawlSource, type FirecrawlSearchResult } from "../_shared/radarSourceExecution.ts";
@@ -29,6 +30,7 @@ import { enrichAndGateRows, type EnrichableRow } from "../_shared/radarIntel/rad
 import { postsAdapterStatus, commentsAdapterStatus, peopleAdapterStatus, normalizePostRow, normalizeCommentRow, runApifyActor } from "../_shared/radarIntel/radarProviderAdapters.ts";
 import { postsToSignalRows, commentsToSignalRows, type BuildResult } from "../_shared/radarIntel/linkedInSourceExecution.ts";
 import { buildSourceDiagnostics, type SourceDiagnostics } from "../_shared/radarIntel/radarDiagnostics.ts";
+import { canRunPaidOperation, paidRoleRefusal } from "../_shared/paidOperationRole.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -237,15 +239,30 @@ Deno.serve(async (req) => {
 
   // Workspace membership check
   const { data: member } = await admin
-    .from("workspace_members").select("workspace_id")
+    .from("workspace_members").select("workspace_id, role")
     .eq("workspace_id", workspace_id).eq("user_id", userId).maybeSingle();
   if (!member) return json({ error: "Forbidden" }, 403);
+  // A paid scan needs a role that may spend (owner/admin/editor).
+  if (!canRunPaidOperation((member as { role?: unknown }).role)) return json(paidRoleRefusal((member as { role?: unknown }).role), 403);
 
-  // Load brain + prefs
-  const { data: brainRow } = await admin
-    .from("company_brain").select("profile").eq("workspace_id", workspace_id).maybeSingle();
-  const profile = (brainRow?.profile as any) ?? {};
+  // Load brain + prefs — through the SHARED loader (membership was checked above).
+  // The radar's own preference reader speaks the legacy profile shape, so the
+  // approved memory it cannot see there is merged in explicitly below.
+  const loaded = await loadCompanyBrainContext(admin as unknown as LoaderDb, workspace_id, { skipMembershipCheck: true });
+  const shared = loaded.ok ? loaded.context : null;
+  const profile = (shared?.effective_profile as any) ?? {};
   const prefs = readPrefs(profile);
+  if (shared) {
+    const lc = (x: string) => x.trim().toLowerCase();
+    const retracted = new Set(shared.retracted_competitors);
+    prefs.competitors = [...new Map([...prefs.competitors, ...shared.competitors.map((c) => c.name)]
+      .filter((c) => !retracted.has(lc(c))).map((c) => [lc(c), c])).values()];
+    prefs.disqualifiers = [...new Map([...prefs.disqualifiers, ...shared.exclusions.industries,
+      ...shared.exclusions.companies, ...shared.exclusions.keywords].map((c) => [lc(c), c])).values()];
+    const applied = new Set(shared.applied.map((a) => a.effect));
+    if (applied.has("target industries")) prefs.industries = shared.canonical.target_customer.industries;
+    if (applied.has("target geography")) prefs.geographies = shared.canonical.target_customer.geography;
+  }
 
   // Capabilities
   const apifyToken = present("APIFY_API_TOKEN");

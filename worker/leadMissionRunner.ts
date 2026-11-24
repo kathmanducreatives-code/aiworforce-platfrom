@@ -26,6 +26,7 @@ import {
   type LineageOutcomeRow, prepareV2LeadCount, mapRefusal, mapTaskOutcome, withResume, type TaskOutcomeRow,
 } from "../supabase/functions/_shared/leadMissionV2Request.ts";
 import { missionAdmission, type MissionAdmissionContext } from "../supabase/functions/_shared/smokeAdmission.ts";
+import type { GuardResult } from "../supabase/functions/_shared/legacyExecutionGuard.ts";
 
 export interface LeadMissionRunner {
   /** The worker claims nothing unless this is true. */
@@ -58,12 +59,27 @@ export interface LeadMissionRunnerDeps {
    * task and generation. Absent: no context is bound, exactly as before.
    */
   admission?: { workerId: string };
+  /**
+   * The legacy pre-effect guard for this claim (legacyExecutionGuard.ts), asked
+   * before the handler is called: a pilot or client-scoped mission, a stored
+   * task with those markers, or a requester who is no longer a member ends the
+   * mission here, terminally, with nothing started. worker/main.ts always
+   * wires it; run-agent's own guard still runs inside the handler.
+   */
+  guard?: (mission: ClaimedMission) => Promise<GuardResult>;
 }
 
 export function createLeadMissionRunner(d: LeadMissionRunnerDeps): LeadMissionRunner {
   return {
     ready: true,
     async run(mission, ctl) {
+      if (d.guard) {
+        const g = await d.guard(mission);
+        if (!g.ok) {
+          d.log?.("[worker][runner] pre-effect guard refused the mission", { queue: mission.queueId, code: g.code, detail: g.detail });
+          return { status: "failed", terminal: true, taskId: mission.taskId, error: `pre_effect_guard:${g.code}` };
+        }
+      }
       const body = withResume(prepareV2LeadCount(mission.request), mission.taskId);
       const now = d.now ?? Date.now;
       const expiry = d.enforceMissionWallClock ? missionExpiry(mission.enqueuedAt, now()) : null;

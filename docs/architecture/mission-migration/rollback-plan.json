@@ -1,0 +1,4405 @@
+{
+ "option": "A",
+ "rollback": [
+  {
+   "key": "persisted:docs/audits/live-validation-2026-09-21/task-3bc526e2-result.json#$.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "hard",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "b2b saas"
+     },
+     {
+      "id": "industry:saas",
+      "kind": "hard",
+      "label": "Industry: saas",
+      "value": "saas",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "saas"
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_market",
+      "kind": "target",
+      "label": "Hiring: growth marketer",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "growth marketer"
+        ],
+        "role_families": [
+         "marketing_growth"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find 1 B2B SaaS company hiring growth marketers."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/edge-functions/_shared/fixtures/missionHiringSalesRoles.json#$",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/edge-functions/_shared/fixtures/providers-off-evidence.json#$.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_software",
+      "kind": "hard",
+      "label": "Industry: B2B software",
+      "value": "B2B software",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "B2B software"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Headquarters: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": "",
+      "geography_scope": "headquarters"
+     },
+     {
+      "id": "company_size:_min_11_max_50_",
+      "kind": "hard",
+      "label": "Company size: 11–50 employees",
+      "value": {
+       "max": 50,
+       "min": 11
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "hard",
+      "label": "Hiring: account executive",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "account executive"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "a signal the request states as a present fact the company must have",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "user_inferred",
+       "enforced": false
+      },
+      "user_phrase": "an open Account Executive posting dated within 30 days."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/canary-1156c062/result.json#$.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "hard",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "b2b saas"
+     },
+     {
+      "id": "industry:saas",
+      "kind": "hard",
+      "label": "Industry: saas",
+      "value": "saas",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "saas"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_11_max_50_",
+      "kind": "hard",
+      "label": "Company size: 11–50 employees",
+      "value": {
+       "max": 50,
+       "min": 11
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "an observable signal the request asks for",
+      "elevated_by": "must",
+      "time_window": {
+       "days": 365,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "Find 1 company that must be based in the US, must have a LinkedIn-declared company size of 11–50, must be B2B SaaS, must have raised funding within the last 12 months,"
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_growth",
+      "kind": "hard",
+      "label": "Hiring: growth role",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "growth role"
+        ],
+        "role_families": [
+         "growth"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "elevated_by": "must",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "must currently be hiring a growth role."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/canary-62c8b188-mission.json#$",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas_founder_led_or_small_teams_",
+      "kind": "hard",
+      "label": "Industry: b2b saas (founder-led or small teams)",
+      "value": "b2b saas (founder-led or small teams)",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:startup",
+      "kind": "hard",
+      "label": "Company kind: startup",
+      "value": "startup",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "the company kind in the request",
+      "user_phrase": "startup"
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Stage: seed",
+      "value": "seed",
+      "source": "user_explicit",
+      "status": "unprovable_today",
+      "dimension": "company_stage",
+      "rationale": "stated without only/must, so a target",
+      "elevated_by": null,
+      "user_phrase": "seed-stage"
+     },
+     {
+      "id": "company_size:_min_1_max_150_",
+      "kind": "hard",
+      "label": "Company size: 1–150 employees",
+      "value": {
+       "max": 150,
+       "min": 1
+      },
+      "source": "company_brain_policy",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "your Company Brain's size rule, enforced on every mission",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_market",
+      "kind": "target",
+      "label": "Hiring: growth marketer · first hire in the function",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "growth marketer"
+        ],
+        "role_families": [
+         "marketing_growth"
+        ],
+        "first_in_function": {
+         "phrase": "first growth marketer",
+         "source": "user_explicit"
+        }
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find 1 seed-stage B2B SaaS startup in the US hiring its first growth marketer."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/canary-98ce374b-mission.json#$",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai_saas",
+      "kind": "hard",
+      "label": "Industry: ai saas",
+      "value": "ai saas",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "ai saas"
+     },
+     {
+      "id": "industry:saas",
+      "kind": "hard",
+      "label": "Industry: saas",
+      "value": "saas",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "saas"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:b2b_founder_led_or_small_teams",
+      "kind": "target",
+      "label": "Industry preference: b2b founder-led or small teams",
+      "value": "b2b founder-led or small teams",
+      "source": "company_brain_preference",
+      "status": "unprovable_today",
+      "dimension": "industry",
+      "rationale": "your Company Brain narrows \"saas\"; a preference that can rank, never reject",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_11_max_50_",
+      "kind": "hard",
+      "label": "Company size: 11–50 employees",
+      "value": {
+       "max": 50,
+       "min": 11
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "a funding window the request states, which the funding pair can verify",
+      "time_window": {
+       "days": 730,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "Find 5 US AI SaaS companies with 11–50 employees, funding in the last 2 years,"
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "hard",
+      "label": "Hiring: sales role",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales role"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "a signal the request states as a present fact the company must have",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "hiring sales role"
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[0].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[1].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[2].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[3].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[4].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[5].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[6].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[7].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[8].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[10].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[11].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[12].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[13].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[14].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[15].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[16].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[17].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[18].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[19].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[20].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[21].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[22].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-graph-snapshots.json#$.cases[23].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[0].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[2].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[4].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[6].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[8].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[10].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[12].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[14].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[16].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/p0-legacy-monitoring-snapshots.json#$.cases[18].mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/run-1e52d43c/plan.json#$.steps[0].metadata.tool_input.lead_mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/run-4250f181/plan.json#$.steps[0].metadata.tool_input.lead_mission",
+   "restore": {
+    "criteria": null,
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/salvo-0b7baab9/mission.json#$",
+   "restore": {
+    "criteria": [
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "an observable signal the request asks for",
+      "elevated_by": "must",
+      "time_window": {
+       "days": 1095,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "Has Salvo Software (https://www.linkedin.com/company/salvosoftware) raised funding in the last 3 years?"
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/fixtures/lead-v2/size-semantics-replay-2026-09-24/canary_companies.json#$.mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_11_max_50_",
+      "kind": "hard",
+      "label": "Company size: 11–50 employees",
+      "value": {
+       "max": 50,
+       "min": 11
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "a funding window the request states, which the funding pair can verify",
+      "time_window": {
+       "days": 730,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "Find 1 US company with 11–50 employees that raised funding in the last 2 years."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H04.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_0_max_49_",
+      "kind": "hard",
+      "label": "Company size: 0–49 employees",
+      "value": {
+       "max": 49,
+       "min": 0
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H05.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_100_max_0_",
+      "kind": "hard",
+      "label": "Company size: 100–0 employees",
+      "value": {
+       "max": 0,
+       "min": 100
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H06.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_20_max_100_",
+      "kind": "hard",
+      "label": "Company size: 20–100 employees",
+      "value": {
+       "max": 100,
+       "min": 20
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H07.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_0_max_0_",
+      "kind": "hard",
+      "label": "Company size: exactly 0 employees",
+      "value": {
+       "max": 0,
+       "min": 0
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "an exact staff count is not provable today: LinkedIn gives a declared size band and an associated-member count, and neither is a staff headcount — candidates stay pending on it",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.H08.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai",
+      "kind": "hard",
+      "label": "Industry: AI",
+      "value": "AI",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_25_max_75_",
+      "kind": "hard",
+      "label": "Company size: 25–75 employees",
+      "value": {
+       "max": 75,
+       "min": 25
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.P01.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai",
+      "kind": "hard",
+      "label": "Industry: AI",
+      "value": "AI",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_17_max_17_",
+      "kind": "hard",
+      "label": "Company size: exactly 17 employees",
+      "value": {
+       "max": 17,
+       "min": 17
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "an exact staff count is not provable today: LinkedIn gives a declared size band and an associated-member count, and neither is a staff headcount — candidates stay pending on it",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.P04.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:recruiting_agencies",
+      "kind": "hard",
+      "label": "Industry: recruiting agencies",
+      "value": "recruiting agencies",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "recruiting agencies"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_42_max_42_",
+      "kind": "hard",
+      "label": "Company size: exactly 42 employees",
+      "value": {
+       "max": 42,
+       "min": 42
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "an exact staff count is not provable today: LinkedIn gives a declared size band and an associated-member count, and neither is a staff headcount — candidates stay pending on it",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K01.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai",
+      "kind": "hard",
+      "label": "Industry: AI",
+      "value": "AI",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "target",
+      "label": "Hiring: sales",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find AI companies that are NOT hiring sales."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K02.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai",
+      "kind": "hard",
+      "label": "Industry: AI",
+      "value": "AI",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "target",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "an observable signal the request asks for",
+      "user_phrase": "Find AI companies that have NOT raised venture funding."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K03.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": "United States"
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.K05.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai",
+      "kind": "hard",
+      "label": "Industry: AI",
+      "value": "AI",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:startup",
+      "kind": "hard",
+      "label": "Company kind: startup",
+      "value": "startup",
+      "source": "user_explicit",
+      "status": "unprovable_today",
+      "dimension": "company_stage",
+      "rationale": "the company kind in the request",
+      "user_phrase": "startup"
+     },
+     {
+      "id": "company_stage:_field_stage_value_startup_",
+      "kind": "target",
+      "label": "stage: startup (preference)",
+      "value": {
+       "field": "stage",
+       "value": "startup"
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "a preference, which can rank but never reject",
+      "user_phrase": "startup"
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "a funding recency the request requires; no window was stated, so the canonical \"recently funded / raised\" default (180 days) applies",
+      "time_window": {
+       "days": 180,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find recently funded AI startups that are not currently hiring sales."
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "hard",
+      "label": "Hiring: sales",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "a signal the request states as a present fact the company must have",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find recently funded AI startups that are not currently hiring sales."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E07.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "target",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "an observable signal the request asks for",
+      "user_phrase": "Find companies that received grants but have not raised venture funding."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E08.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "target",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_inferred",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "added by the model's reading; the request's words do not state it",
+      "confidence": 0.98,
+      "time_window": {
+       "days": 180,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.G08.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.F12.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "target",
+      "label": "Hiring: sales roles",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales roles"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find companies hiring sales roles but not engineering roles."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L03.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:new_york",
+      "kind": "hard",
+      "label": "Geography: New York",
+      "value": "New York",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": "New York"
+     },
+     {
+      "id": "geography:california",
+      "kind": "hard",
+      "label": "Geography: California",
+      "value": "California",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": "California"
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L04.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai",
+      "kind": "hard",
+      "label": "Industry: AI",
+      "value": "AI",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI"
+     },
+     {
+      "id": "industry:developer_tools",
+      "kind": "hard",
+      "label": "Industry: developer-tools",
+      "value": "developer-tools",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "developer-tools"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.L05.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "a funding recency the request requires; no window was stated, so the canonical \"recently funded / raised\" default (180 days) applies",
+      "time_window": {
+       "days": 180,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find US companies that either raised funding recently or are hiring sales."
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "hard",
+      "label": "Hiring: sales",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "a signal the request states as a present fact the company must have",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find US companies that either raised funding recently or are hiring sales."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E05.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai",
+      "kind": "hard",
+      "label": "Industry: AI",
+      "value": "AI",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:startup",
+      "kind": "hard",
+      "label": "Company kind: startup",
+      "value": "startup",
+      "source": "user_explicit",
+      "status": "unprovable_today",
+      "dimension": "company_stage",
+      "rationale": "the company kind in the request",
+      "user_phrase": "startup"
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "hard",
+      "label": "Stage: series a (\"I companies that raised Series A\")",
+      "value": "series_a",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "\"I companies that raised Series A\" makes it a requirement",
+      "elevated_by": null,
+      "user_phrase": "I companies that raised Series A"
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "target",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "an observable signal the request asks for",
+      "user_phrase": "Find 5 AI companies that raised Series A or Series B."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.J06.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:recruiting_tech",
+      "kind": "hard",
+      "label": "Industry: recruiting-tech",
+      "value": "recruiting-tech",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "recruiting-tech"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:startup",
+      "kind": "hard",
+      "label": "Company kind: startup",
+      "value": "startup",
+      "source": "user_explicit",
+      "status": "unprovable_today",
+      "dimension": "company_stage",
+      "rationale": "the company kind in the request",
+      "user_phrase": "startup"
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "hard",
+      "label": "Stage: seed (\"0 employees that raised Seed\")",
+      "value": "seed",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "\"0 employees that raised Seed\" makes it a requirement",
+      "elevated_by": null,
+      "user_phrase": "0 employees that raised Seed"
+     },
+     {
+      "id": "company_size:_min_11_max_50_",
+      "kind": "hard",
+      "label": "Company size: 11–50 employees",
+      "value": {
+       "max": 50,
+       "min": 11
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "target",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "an observable signal the request asks for",
+      "user_phrase": "Find 10 US recruiting-tech companies with 11–50 employees that raised Seed or Series A funding"
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "hard",
+      "label": "Hiring: sales",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "a signal the request states as a present fact the company must have",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find 10 US recruiting-tech companies with 11–50 employees that raised Seed or Series A funding"
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A08.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "known_companies:_delta_lake_",
+      "kind": "hard",
+      "label": "Companies you supplied: Delta Lake",
+      "value": [
+       "Delta Lake"
+      ],
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "known_companies",
+      "rationale": "the request names these companies",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "target",
+      "label": "Hiring: sales positions",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales positions"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "hiring sales positions"
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A09.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "known_companies:_anthropic_",
+      "kind": "hard",
+      "label": "Companies you supplied: Anthropic",
+      "value": [
+       "Anthropic"
+      ],
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "known_companies",
+      "rationale": "the request names these companies",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "target",
+      "label": "Hiring: account executives",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "account executives"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Is Anthropic hiring account executives?"
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A10.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "known_companies:_openai_",
+      "kind": "hard",
+      "label": "Companies you supplied: OpenAI",
+      "value": [
+       "OpenAI"
+      ],
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "known_companies",
+      "rationale": "the request names these companies",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "target",
+      "label": "Hiring: sales",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "hiring sales"
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.F01.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "target",
+      "label": "Hiring: salespeople",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "salespeople"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find 5 companies hiring salespeople."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.N03.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai",
+      "kind": "hard",
+      "label": "Industry: AI",
+      "value": "AI",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "target",
+      "label": "Hiring: sales",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find me some AI companies that are actually hiring sales rn."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.S04.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "target",
+      "label": "Hiring: sales",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find companies hiring sales right now."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.S01.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "target",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 279,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_inferred",
+       "enforced": false
+      },
+      "user_phrase": "Find companies funded this year."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.E01.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai",
+      "kind": "hard",
+      "label": "Industry: AI",
+      "value": "AI",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:startup",
+      "kind": "hard",
+      "label": "Company kind: startup",
+      "value": "startup",
+      "source": "user_explicit",
+      "status": "unprovable_today",
+      "dimension": "company_stage",
+      "rationale": "the company kind in the request",
+      "user_phrase": "startup"
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "target",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "an observable signal the request asks for",
+      "user_phrase": "Find 5 AI startups that have raised venture funding."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.RND39.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:developer_tools",
+      "kind": "hard",
+      "label": "Industry: developer tools",
+      "value": "developer tools",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "developer tools"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "a funding window the request states, which the funding pair can verify",
+      "time_window": {
+       "days": 730,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "Find 10 developer tools companies funded in the last 24 months hiring sales."
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "target",
+      "label": "Hiring: sales",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 730,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "Find 10 developer tools companies funded in the last 24 months hiring sales."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.J07.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai_infrastructure",
+      "kind": "hard",
+      "label": "Industry: AI infrastructure",
+      "value": "AI infrastructure",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI infrastructure"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_11_max_200_",
+      "kind": "hard",
+      "label": "Company size: 11–200 employees",
+      "value": {
+       "max": 200,
+       "min": 11
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "target",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "an observable signal the request asks for",
+      "time_window": {
+       "days": 730,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_inferred",
+       "enforced": false
+      },
+      "user_phrase": "Find 20 US AI infrastructure companies with 11–200 employees that have raised institutional funding in the last two years"
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "target",
+      "label": "Hiring: revenue-related",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "revenue-related"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_inferred",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "added by the model's reading; the request's words do not state it",
+      "confidence": 0.99,
+      "time_window": {
+       "days": 730,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "user_inferred",
+       "enforced": false
+      },
+      "user_phrase": ""
+     },
+     {
+      "id": "unrepresentable_evidence:financial_performance_such_as_revenue_arr_or_churn_no_regist",
+      "kind": "target",
+      "label": "financial performance such as revenue, ARR or churn — no registered source returns company financials",
+      "value": "financial performance such as revenue, ARR or churn — no registered source returns company financials",
+      "source": "user_explicit",
+      "status": "unrepresentable",
+      "dimension": "unrepresentable_evidence",
+      "rationale": "evidence the system has no vocabulary or source for",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.Z08.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai_companies",
+      "kind": "hard",
+      "label": "Industry: AI companies",
+      "value": "AI companies",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI companies"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": "United States"
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_11_max_50_",
+      "kind": "hard",
+      "label": "Company size: 11–50 employees",
+      "value": {
+       "max": 50,
+       "min": 11
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "a funding window the request states, which the funding pair can verify",
+      "time_window": {
+       "days": 730,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "at least 11, that have raised venture funding (VC money, venture capital, institutional investment) recently, within the last 24 months, in the past two years,"
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "hard",
+      "label": "Hiring: aes",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "aes"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "a signal the request states as a present fact the company must have",
+      "time_window": {
+       "days": 730,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "are hiring salespeople, sales reps, account executives, AEs, for their sales team right now, currently, at the moment. Find 5 of them, five companies, 5 results."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.C07.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai_infrastructure",
+      "kind": "hard",
+      "label": "Industry: AI infrastructure",
+      "value": "AI infrastructure",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "AI infrastructure"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A01.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "known_companies:_llamaindex_",
+      "kind": "hard",
+      "label": "Companies you supplied: LlamaIndex",
+      "value": [
+       "LlamaIndex"
+      ],
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "known_companies",
+      "rationale": "the request names these companies",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "hard",
+      "label": "Hiring: sales role",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales role"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "a signal the request states as a present fact the company must have",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "hiring sales role"
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.A06.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "known_companies:_llamaindex_",
+      "kind": "hard",
+      "label": "Companies you supplied: LlamaIndex",
+      "value": [
+       "LlamaIndex"
+      ],
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "known_companies",
+      "rationale": "the request names these companies",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "a funding recency the request requires; no window was stated, so the canonical \"recently funded / raised\" default (180 days) applies",
+      "time_window": {
+       "days": 180,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Has LlamaIndex raised funding recently?"
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/lead-v2-quality/fixtures/quality-run-2026-10-06.json#$.cases.R01.lead_mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "known_companies:_llamaindex_llama_index_",
+      "kind": "hard",
+      "label": "Companies you supplied: LlamaIndex, Llama Index",
+      "value": [
+       "LlamaIndex",
+       "Llama Index"
+      ],
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "known_companies",
+      "rationale": "the request names these companies",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:b2b_saas",
+      "kind": "target",
+      "label": "Industry: b2b saas",
+      "value": "b2b saas",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:fintech",
+      "kind": "target",
+      "label": "Industry: fintech",
+      "value": "fintech",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "target",
+      "label": "Geography: united states",
+      "value": "united states",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "your Company Brain's ICP; you did not state it in this request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/replay/fixtures/canary8.hiring-affordability.json#$.mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:ai_saas",
+      "kind": "hard",
+      "label": "Industry: ai saas",
+      "value": "ai saas",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "ai saas"
+     },
+     {
+      "id": "industry:saas",
+      "kind": "hard",
+      "label": "Industry: saas",
+      "value": "saas",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "saas"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "industry:b2b_founder_led_or_small_teams",
+      "kind": "target",
+      "label": "Industry preference: b2b founder-led or small teams",
+      "value": "b2b founder-led or small teams",
+      "source": "company_brain_preference",
+      "status": "unprovable_today",
+      "dimension": "industry",
+      "rationale": "your Company Brain narrows \"saas\"; a preference that can rank, never reject",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_11_max_50_",
+      "kind": "hard",
+      "label": "Company size: 11–50 employees",
+      "value": {
+       "max": 50,
+       "min": 11
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "a funding window the request states, which the funding pair can verify",
+      "time_window": {
+       "days": 730,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "Find 5 US AI SaaS companies with 11–50 employees, funding in the last 2 years,"
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "hard",
+      "label": "Hiring: sales",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "a signal the request states as a present fact the company must have",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "hiring sales"
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/replay/fixtures/canarySession2.contract2.json#$.mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Headquarters: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": "",
+      "geography_scope": "headquarters"
+     },
+     {
+      "id": "constraint:_field_hiring_value_account_executives_",
+      "kind": "hard",
+      "label": "hiring: Account Executives",
+      "value": {
+       "field": "hiring",
+       "value": "Account Executives"
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "constraint",
+      "rationale": "stated in the request",
+      "elevated_by": null,
+      "user_phrase": "Account Executives"
+     },
+     {
+      "id": "constraint:_field_funding_event_value_180_",
+      "kind": "target",
+      "label": "funding event: 180",
+      "value": {
+       "field": "funding_event",
+       "value": 180
+      },
+      "source": "user_inferred",
+      "status": "ok",
+      "dimension": "constraint",
+      "rationale": "proposed by the model without the request's words; never a hard requirement",
+      "confidence": 0.98,
+      "elevated_by": null,
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_terms_account_e",
+      "kind": "hard",
+      "label": "Hiring: account executives",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "account executives"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "a signal the request states as a present fact the company must have",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find one US company hiring Account Executives that raised funding within the last six months."
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "a funding window the request states, which the funding pair can verify",
+      "time_window": {
+       "days": 180,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "Find one US company hiring Account Executives that raised funding within the last six months."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/replay/fixtures/g5.funding-screen.json#$.mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_11_max_50_",
+      "kind": "hard",
+      "label": "Company size: 11–50 employees",
+      "value": {
+       "max": 50,
+       "min": 11
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "funding:_event_funding_subject_company_qualifier_",
+      "kind": "hard",
+      "label": "Funding",
+      "value": {
+       "event": "funding",
+       "subject": "company",
+       "qualifier": {}
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "funding",
+      "rationale": "an observable signal the request asks for",
+      "elevated_by": "must",
+      "time_window": {
+       "days": 365,
+       "rule": "recently funded / raised",
+       "basis": "announced",
+       "source": "user_explicit",
+       "enforced": false
+      },
+      "user_phrase": "Find 1 company that must be based in the US, must have a LinkedIn-declared company size of 11–50, must be B2B SaaS, must have raised funding within the last 12 months,"
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_growth",
+      "kind": "hard",
+      "label": "Hiring: growth role",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "growth role"
+        ],
+        "role_families": [
+         "growth"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "an observable signal the request asks for",
+      "elevated_by": "must",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "must currently be hiring a growth role."
+     },
+     {
+      "id": "company_stage:seed",
+      "kind": "target",
+      "label": "Company kind: seed",
+      "value": "seed",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_stage:series_a",
+      "kind": "target",
+      "label": "Company kind: series_a",
+      "value": "series_a",
+      "source": "company_brain_preference",
+      "status": "ok",
+      "dimension": "company_stage",
+      "rationale": "your Company Brain's ICP",
+      "user_phrase": ""
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  },
+  {
+   "key": "persisted:tests/replay/fixtures/queryBa9a6791a.job-first.json#$.mission",
+   "restore": {
+    "criteria": [
+     {
+      "id": "industry:software",
+      "kind": "hard",
+      "label": "Industry: software",
+      "value": "software",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "industry",
+      "rationale": "stated in the request",
+      "user_phrase": "software"
+     },
+     {
+      "id": "geography:united_states",
+      "kind": "hard",
+      "label": "Geography: United States",
+      "value": "United States",
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "geography",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "company_size:_min_11_max_50_",
+      "kind": "hard",
+      "label": "Company size: 11–50 employees",
+      "value": {
+       "max": 50,
+       "min": 11
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "company_size",
+      "rationale": "stated in the request",
+      "user_phrase": ""
+     },
+     {
+      "id": "hiring:_event_hiring_subject_company_qualifier_role_families_gtm_sa",
+      "kind": "hard",
+      "label": "Hiring: sales",
+      "value": {
+       "event": "hiring",
+       "subject": "company",
+       "qualifier": {
+        "role_terms": [
+         "sales"
+        ],
+        "role_families": [
+         "gtm_sales"
+        ]
+       }
+      },
+      "source": "user_explicit",
+      "status": "ok",
+      "dimension": "hiring",
+      "rationale": "a signal the request states as a present fact the company must have",
+      "time_window": {
+       "days": 30,
+       "rule": "currently / actively hiring",
+       "basis": "posted",
+       "source": "system_default",
+       "enforced": false
+      },
+      "user_phrase": "Find 3 US software companies with 11–50 employees that are currently hiring sales."
+     }
+    ],
+    "criteria_contract_version": null,
+    "criteria_fingerprint": null,
+    "criteria_freeze_origin": null
+   }
+  }
+ ]
+}

@@ -27,6 +27,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { allowedScrapeUrl, boundedPrompt } from "../_shared/firecrawlRequestGuard.ts";
 import { authenticateUser, defaultAuthDeps, type AuthDeps } from "../_shared/requestAuth.ts";
 import { authorizeProviderCall, settleProviderCall, type CreditDb } from "../_shared/creditAuthorization.ts";
+import { canRunPaidOperation, paidRoleRefusal } from "../_shared/paidOperationRole.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -83,9 +84,11 @@ export async function handleFirecrawlScrape(req: Request, deps: ScrapeDeps = def
   });
 
   // 2. The workspace that pays must be the caller's.
-  const { data: member } = await admin.from("workspace_members").select("workspace_id")
+  const { data: member } = await admin.from("workspace_members").select("workspace_id, role")
     .eq("workspace_id", workspaceId).eq("user_id", userId).maybeSingle();
   if (!member) return json({ ok: false, error: "forbidden_workspace" }, 403);
+  // A paid scrape needs a role that may spend (owner/admin/editor), not mere membership.
+  if (!canRunPaidOperation((member as { role?: unknown }).role)) return json({ ok: false, ...paidRoleRefusal((member as { role?: unknown }).role) }, 403);
 
   // 3. The daily caps, from the ledger itself.
   const since = utcDayStart((deps.now ?? (() => new Date()))());

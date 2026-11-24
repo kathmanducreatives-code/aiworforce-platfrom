@@ -33,8 +33,8 @@ const build = (p: Partial<Parameters<typeof buildActivityFeed>[0]>) =>
 
 Deno.test("a completed workflow speaks with the public name, the request and the real outcome", () => {
   const item = fromActivity(act({ event_type: "plan_complete", agent_id: "agent-scout", plan_id: "plan-1", title: "Plan complete", metadata: { task_id: "task-1", workflow_status: "complete" } }), enr)!;
-  assertEquals(item.agent, "lyra");
-  assertEquals(item.action, "Lyra completed a search");
+  assertEquals(item.agent, "atlas");
+  assertEquals(item.action, "Atlas completed a search");
   assertEquals(item.detail, "Find 5 US AI SaaS companies with 11–50 employees");
   assertEquals(item.outcome, "48 companies found · 9 relevant · Stopped at the run budget");
   assertEquals(item.route, "/plans/plan-1");
@@ -48,8 +48,8 @@ Deno.test("legacy names and raw titles never reach the screen", () => {
   ];
   const text = JSON.stringify(build({ activity: rows }));
   for (const legacy of ["Scout", "Scribe", "Aria", "Penn", "Hawk"]) assertFalse(text.includes(legacy), legacy);
-  assert(text.includes("Lyra finished a round"));
-  assert(text.includes("Orion finished a draft"));
+  assert(text.includes("Atlas finished a round"));
+  assert(text.includes("Lyra finished a draft"));
 });
 
 Deno.test("each supported event type maps to the right kind", () => {
@@ -80,10 +80,10 @@ Deno.test("plumbing is not activity: tool_used, agent_started and in-plan tool e
   assertEquals(build({ activity: rows }), []);
 });
 
-Deno.test("the scheduled signal monitor is Lyra's — the one documented attribution", () => {
+Deno.test("the scheduled signal monitor is Lisa's — the one documented attribution", () => {
   const [item] = build({ activity: [act({ event_type: "tool_failed", title: "Signals Monitor could not use source_with_apify", body: "apify is not configured. apify_unauthorized" })] });
-  assertEquals(item.agent, "lyra");
-  assertEquals(item.action, "Lyra's signal monitor couldn't run");
+  assertEquals(item.agent, "lisa");
+  assertEquals(item.action, "Lisa's signal monitor couldn't run");
   // The provider name and the error code never reach the screen; the cause does.
   assertEquals(item.outcome, "A connected tool needs attention in Integrations");
   // Any other agent-less tool error has no honest owner and is dropped.
@@ -145,7 +145,7 @@ Deno.test("dedupe: the same row twice is one line; a failed task an activity row
   const failed: FailedTaskRow = { id: "task-9", workspace_id: WS, agent_slug: "scout", status: "failed", updated_at: t(0), error_message: "x", plan_id: null, task_plan_id: null, terminal: null };
   const items = build({ activity: [row, row], failedTasks: [failed] });
   assertEquals(items.length, 1);
-  assertEquals(items[0].action, "Lyra's workflow didn't finish");
+  assertEquals(items[0].action, "Atlas's workflow didn't finish");
   assertEquals(mergeRows([{ id: "1" }, { id: "2" }], [{ id: "2" }, { id: "3" }]).map((r) => r.id), ["2", "3", "1"]);
 });
 

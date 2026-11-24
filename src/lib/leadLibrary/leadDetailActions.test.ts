@@ -71,8 +71,9 @@ describe("planLeadDetailAction — payload", () => {
   });
 
   it("10. plan id is included only when the representative row has one", () => {
-    expect(planLeadDetailAction({ lead: row({ selectedPlanId: null }), ...OK }, "find_decision_makers"))
-      .toMatchObject({ ok: true, args: { planId: undefined } });
+    const noPlan = planLeadDetailAction({ lead: row({ selectedPlanId: null }), ...OK }, "find_decision_makers");
+    expect(noPlan.ok).toBe(true);
+    expect(noPlan.ok && noPlan.args.planId).toBeUndefined(); // omitted, never a stray value
     const withPlan = planLeadDetailAction({ lead: row({ selectedPlanId: "plan-7" }), ...OK }, "find_decision_makers");
     expect(withPlan.ok && withPlan.args.planId).toBe("plan-7");
   });
