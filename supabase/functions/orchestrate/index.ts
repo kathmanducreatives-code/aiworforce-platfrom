@@ -48,6 +48,7 @@ import {
   getLeadIntelligenceCapabilities,
 } from "../_shared/leadIntelligencePolicy.ts";
 import { functionUrl } from "../_shared/functionEndpoints.ts";
+import { plannerBrainContext } from "../_shared/plannerBrainContext.ts";
 import { parseRunBudget } from "../_shared/runBudget.ts";
 import { resolveCreditEnforcement } from "../_shared/creditAuthorization.ts";
 import {
@@ -868,6 +869,13 @@ async function handleOrchestrate(req: Request): Promise<Response> {
     const { data: brainRow } = await admin
       .from("company_brain").select("profile").eq("workspace_id", workspace_id).maybeSingle();
     const companyBrain = (brainRow?.profile ?? {}) as Record<string, unknown>;
+    // The planner sees a bounded, secret-stripped projection — never the raw row
+    // (research blobs, stored integration status, pasted text). Roadmap 1.3.
+    const plannerBrain = plannerBrainContext(workspace_id, companyBrain);
+    console.log("[orchestrate][planner-brain]", {
+      workspace_id, chars: plannerBrain.serialized.length, list_limit: plannerBrain.listLimit,
+      present: plannerBrain.context !== null,
+    });
 
     const intent = detectIntent(user_instruction);
     const executionMode = tool_input?.execution_mode ?? "fast";
@@ -1415,7 +1423,7 @@ F. Screening -> aria(extract_structured)
 
 
 COMPANY CONTEXT (may be empty):
-${JSON.stringify(companyBrain)}
+${plannerBrain.serialized}
 
 USER INSTRUCTION:
 "${user_instruction}"
@@ -1455,7 +1463,7 @@ Return ONLY valid JSON, no prose, no markdown:
       systemPrompt: getAgentorySystemPrompt({
         taskType: "planning",
         currentAgent: "pilot",
-        companyBrain: companyBrain as Record<string, unknown> | null,
+        companyBrain: (plannerBrain.context ?? {}) as unknown as Record<string, unknown>,
         actorRegistrySummary: summarizeRegistryForPrompt(),
       }),
       messages: [{ role: "user", content: orchestratorPrompt }],
