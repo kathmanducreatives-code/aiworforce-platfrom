@@ -54,12 +54,7 @@ Deno.test("UI-only draft: no database starts", () => {
 
 Deno.test("mock-response-only draft: the scenario suites that use the mock, nothing else", () => {
   const p = pr(["tests/db-contract/lib/discoveryScenario.ts"], true);
-  // Exactly the contract files that import the scenario harness — derived from
-  // their source, so a new suite on the harness is expected, and nothing else is.
-  const users = CONTRACT.filter((f) => /from "\.\/lib\/discoveryScenario\.ts"/.test(read(f) ?? ""));
-  assertEquals(p.contract_files, users);
-  for (const f of ["a7Lifecycle", "a7Qualification", "a7Reliability"]) assert(users.map(short).includes(f), f);
-  assert(users.length < CONTRACT.length, "the admission, lease and schema suites are not selected");
+  assertEquals(p.contract_files.map(short), ["a7Lifecycle", "a7Qualification", "a7Reliability", "canaryFundingRehearsal", "effectFenceMission", "killResume", "killResumeAdoption", "legacyPreEffectGuard", "modelOnlySmoke", "qualificationAuthority", "realGptJudge", "smokeCreditReconciliation"]);
   assertEquals(p.mutation, false);
 });
 

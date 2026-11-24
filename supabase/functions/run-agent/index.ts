@@ -4,11 +4,18 @@
 // Input:  { plan_id | task_plan_id, step_index, agent_slug | agent_id,
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
+import { brainReadinessV2Enabled } from "../_shared/companyBrainGate.ts";
+import { contractMissionIntegrity } from "../_shared/missionContract/chatMission.ts";
+import { contractOf, runtimeBrainGatesFromContract } from "../_shared/missionContract/authority.ts";
+import { companyBrainReadiness } from "../_shared/companyBrainReadiness.ts";
+import { normalizeCompanyBrain } from "../_shared/normalizeCompanyBrain.ts";
 import { withBuildStamp } from "../_shared/buildStamp.ts";
+import { type GuardDb, legacyExecutionGuard, referencedPlanId, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
+import { bindEffectPrincipal, type EffectPrincipalDb, installEffectFence, withEffectScope } from "../_shared/effectFence.ts";
 import { buildQualificationContext } from "../_shared/missionQualificationContext.ts";
 import { hiringClaimVerifier } from "../_shared/hiringClaimVerifier.ts";
 import { hiringSearchTitles } from "../_shared/hiringSearchVocabulary.ts";
-import { roleMatchesFamily, type RoleFamily } from "../_shared/roleFamilies.ts";
+import { criteriaFreezeState, criteriaOf, hiringRequirementOf, hiringTitleMatcher } from "../_shared/missionCriteriaReader.ts";
 import { sizeBandLabel } from "../_shared/companySize.ts";
 import { PendingModelDrain } from "../_shared/executionLedger.ts";
 import { leadQuotaProvenance } from "../_shared/leadMissionV2Request.ts";
@@ -27,14 +34,21 @@ import {
   writeTaskResult, type TaskResultDb,
 } from "../_shared/taskResultMerge.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
+import { createTerraRunLimiter } from "../_shared/terraPolicy.ts";
+import { departmentOf } from "../_shared/departments.ts";
+import { lyraTaskFor } from "../_shared/departmentRouting.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
+import { buildIntegrationStatus } from "../_shared/integrationReadiness.ts";
 import { renderContentBrain, type RecentContent } from "../_shared/contentBrainContext.ts";
+import { loadCompanyBrainContext, type LoaderDb } from "../_shared/companyBrainContextLoader.ts";
+import { renderBrainMemoryBlock } from "../_shared/companyBrainAgentViews.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import { isServiceRoleBearer } from "../_shared/serviceRoleAuth.ts";
-import { loadV2OwnedTaskIds } from "../_shared/leadMissionV2Request.ts";
+import { loadV2OwnedTaskIds, loadV2OwnedTaskIdsStrict } from "../_shared/leadMissionV2Request.ts";
+import { decideFirstSliceReentry, type ReentryRow, takeReentryGeneration } from "../_shared/firstSliceReentry.ts";
 import {
   isDirectLeadActionAttempt,
   validateDirectLeadActionRequest,
@@ -105,13 +119,13 @@ import { makeGptDiscoveryPlanner } from "../_shared/gptDiscoveryPlanner.ts";
 import { DiscoveryStrategyBlockedError } from "../_shared/leadDiscoveryStrategy.ts";
 import { makeGptExecutionPlanner } from "../_shared/gptExecutionPlanner.ts";
 import { makeGptRouteController } from "../_shared/gptRouteController.ts";
-import { canonicalDecisions, canonicalQualifiedKeys, projectResearchFabric, researchFabricSummary } from "../_shared/leadCapabilityEngine.ts";
+import { canonicalDecisions, canonicalHardEvidence, canonicalQualifiedKeys, projectResearchFabric, researchFabricSummary } from "../_shared/leadCapabilityEngine.ts";
 import { requiredEvidenceDimensions } from "../_shared/evidenceGraph.ts";
-import { criteriaSections, deriveMissionCriteria } from "../_shared/missionCriteria.ts";
+import { criteriaSections } from "../_shared/missionCriteria.ts";
 import { effectiveRequestedCount as p5RequestedCount } from "../_shared/leadMission.ts";
 import { buildWorkbenchMissionView, decisionSummary, missionCostFromLedgers } from "../_shared/workbenchMissionView.ts";
 import { makeGptOpportunityReasoner, reasonForCandidates } from "../_shared/opportunityReasoningRun.ts";
-import { missionCandidatesFrom } from "../_shared/leadCapabilityEngine.ts";
+import { missionCandidatesFrom, verifiableCandidatesFrom } from "../_shared/leadCapabilityEngine.ts";
 import { anchorForCapability } from "../_shared/retrievalPlan.ts";
 import { criteriaExecutionPolicy } from "../_shared/criteriaExecutionPolicy.ts";
 import { ModelRoutingLedger } from "../_shared/gptModelRouter.ts";
@@ -177,7 +191,7 @@ import {
 import { emptyEvidenceRegistry } from "../_shared/leadEvidenceRegistry.ts";
 import { toResumeRecord } from "../_shared/leadCapabilityEngine.ts";
 import { applyVerifierFinding, markRouteUnaffordable } from "../_shared/leadCapabilityEngine.ts";
-import { attemptedRoutes, ledgerAffordability, ledgerBoundCall } from "../_shared/claimVerifier.ts";
+import { attemptedRoutes, ledgerAffordability, ledgerBoundCall, verificationDecisions } from "../_shared/claimVerifier.ts";
 import { verifierSpecCompiler } from "../_shared/verifierCallSpec.ts";
 import { runClaimVerificationPhase } from "../_shared/claimVerificationPhase.ts";
 import { verificationStopGate, type VerificationStop } from "../_shared/verificationStop.ts";
@@ -371,7 +385,7 @@ import {
 import {
   buildMissionTriageBinding, triageTaskDiagnostics,
 } from "../_shared/missionTriageBinding.ts";
-import { evaluationCriteria, parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
+import { evaluationCriteria, evaluatorAnswered, parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
 // The SAME sizing function the engine shortlists with, so the evaluation budget
 // and the set of companies that can be evaluated are derived from one rule
 // rather than two that may drift.
@@ -521,7 +535,8 @@ type CompanyBrain = Record<string, unknown> | null;
 // hardcoded null here silently suppressed the entire brain block for every
 // agent (Scout/Aria/Penn/Hawk/Scribe) — the active brain never reached them.
 function renderBrainForAgent(brain: CompanyBrain, onboardingCompleted?: boolean | null): string {
-  return renderCompanyBrainBlock(brain as Record<string, unknown>, onboardingCompleted);
+  // Provider readiness is read live — it is no longer stored in the Brain.
+  return renderCompanyBrainBlock(brain as Record<string, unknown>, onboardingCompleted, { integrationStatus: buildIntegrationStatus() });
 }
 
 
@@ -925,7 +940,14 @@ export interface RunAgentRunOptions {
     void | Promise<void>;
 }
 
+// Every new model/provider operation re-checks the run's principal at the
+// transport (effectFence.ts, Codex EXEC-EFFECT); outside a bound run it is inert.
+installEffectFence();
+
 async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}): Promise<Response> {
+  // One effect scope per request (effectFence.ts); the guard below binds its principal.
+  const scoped = withEffectScope(req, () => handleRunAgent(req, inProcess));
+  if (scoped) return scoped;
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   // Invocation start — anchors the LATENCY-BOUNDED company-enrichment deadline so
   // the workflow always reserves wall-clock to finish qualification/persistence/
@@ -1169,6 +1191,36 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     if (!access.ok) return json({ error: access.error }, access.status);
   }
 
+  // ---- The legacy pre-effect guard (legacyExecutionGuard.ts) ----------------
+  // Before ANY effect: no task row, message, ledger row, credit, model call or
+  // purchase exists yet. Pilot and client-scoped work is refused (disabled),
+  // decided by the stored task rows the request points at as well as the
+  // request; a service caller's forwarded `user_id` must still be a member,
+  // and a resumed task keeps its original principal.
+  {
+    const guard = await legacyExecutionGuard({
+      db: supabase as unknown as GuardDb,
+      workspaceId: workspace_id as string,
+      principalUserId: bearerIsServiceRole ? (typeof user_id === "string" && user_id ? user_id : null) : authenticatedUserId,
+      principalMembershipVerified: !bearerIsServiceRole,
+      body,
+      taskIds: referencedTaskIds(body),
+      planId: referencedPlanId(body),
+    });
+    if (!guard.ok) {
+      console.error("[run-agent][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });
+      return json({ success: false, error: guard.code, detail: guard.detail }, guard.status);
+    }
+    // From here on, every NEW external operation re-checks this principal is
+    // still a member (EXEC-EFFECT): a removal committed after the task exists
+    // stops the next model call or purchase; settlement reads still pass.
+    bindEffectPrincipal({
+      db: supabase as unknown as EffectPrincipalDb,
+      workspaceId: workspace_id as string,
+      userId: (bearerIsServiceRole ? user_id : authenticatedUserId) as string,
+    });
+  }
+
   // ---- Workspace model spend ceiling -----------------------------------------
   //
   // ── THE HALF THE CEILING DID NOT COVER ─────────────────────────────────────
@@ -1339,7 +1391,32 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
       }, 409);
     }
   }
-  if (resume_task_id) {
+  // ── THE QUEUE'S FIRST SLICE DIED BEFORE ITS FIRST CHECKPOINT ─────────────
+  //
+  // The queue bound this task before any paid boundary and resumes nothing
+  // else, so the refusal below (`no_checkpoint`) would be final: the mission
+  // could never run again. It runs as a first slice on the same task, under a
+  // new generation; see firstSliceReentry.ts for why that buys nothing twice.
+  let reentryGeneration: number | null = null;
+  if (resume_task_id && inProcess.continuationOwner === "v2_queue") {
+    const { data: row } = await supabase
+      .from("tasks").select("id, workspace_id, status, result, payload, checkpoint_version")
+      .eq("id", resume_task_id).maybeSingle();
+    const owned = row ? await loadV2OwnedTaskIdsStrict(supabase as never, [resume_task_id]) : null;
+    const reentry = decideFirstSliceReentry(row as ReentryRow | null, workspace_id, resume_task_id, owned?.has(resume_task_id) ?? false);
+    if (reentry.ok) {
+      reentryGeneration = await takeReentryGeneration(supabase as never, resume_task_id, workspace_id, reentry.from);
+      console.log("[run-agent][first-slice-reentry]", {
+        task_id: resume_task_id, from_generation: reentry.from, generation: reentryGeneration,
+        taken: reentryGeneration !== null,
+      });
+      if (reentryGeneration !== null) {
+        task = { id: resume_task_id };
+        resumedTaskResult = ((row as { result?: Record<string, unknown> | null }).result ?? {}) as Record<string, unknown>;
+      }
+    }
+  }
+  if (resume_task_id && reentryGeneration === null) {
     const { data: existing } = await supabase
       .from("tasks").select("id, workspace_id, status, result, payload")
       .eq("id", resume_task_id).maybeSingle();
@@ -1558,7 +1635,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   // it in SQL (`fencedTaskUpdate`): a newer claim bumps it, so a stale
   // generation's writes change zero rows.
   const sliceFence: SliceFence = {
-    generation: await resolveSliceGeneration(supabase as never, task.id, heldClaim?.checkpointVersion ?? null),
+    generation: await resolveSliceGeneration(supabase as never, task.id, heldClaim?.checkpointVersion ?? reentryGeneration),
   };
   guardFence = sliceFence;
   // ── A SUPERSEDED SLICE STOPS BUYING ──────────────────────────────────────
@@ -1650,6 +1727,19 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
   // narrows for the rest of the function.
   if (instruction === undefined) return json({ error: "missing_required_fields" }, 400);
 
+  // ── A v4 MISSION RUNS ONLY AS APPROVED (ADR-001 I1/I3) ─────────────────────
+  // Before any read, model call or provider spend: a mission carrying a Mission
+  // Contract must still be exactly that contract, under the hash it was approved
+  // with. A v1 mission (no contract) is not affected.
+  {
+    const persisted = readPersistedLeadMission(tool_input_body, (body as Record<string, unknown>).lead_mission);
+    const integrity = await contractMissionIntegrity(persisted);
+    if (integrity.status === "invalid") {
+      console.error("[run-agent][mission-contract-invalid]", { workspace_id, detail: integrity.detail });
+      return json({ error: "mission_contract_invalid", problems: integrity.detail }, 409);
+    }
+  }
+
   // Load company_brain. `onboarding_completed` gates whether the ACTIVE brain
   // is injected into the agent prompt (see renderBrainForAgent).
   const { data: brainRow } = await supabase
@@ -1659,6 +1749,12 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     .maybeSingle();
   const brain = (brainRow?.profile ?? null) as CompanyBrain;
   const brainOnboardingCompleted = (brainRow as { onboarding_completed?: boolean } | null)?.onboarding_completed === true;
+  // Roadmap Phase 2 (BRAIN_READINESS_V2): chat now admits the work a usable,
+  // not-yet-activated Brain supports, so such a run must get that Brain as
+  // context. Off: only an activated Brain is injected, as before.
+  const brainContextAllowed = brainReadinessV2Enabled((k) => { try { return Deno.env.get(k); } catch { return undefined; } })
+    ? companyBrainReadiness(normalizeCompanyBrain(brain ?? {}), brainOnboardingCompleted).state !== "draft"
+    : brainOnboardingCompleted;
 
   // Inject a compact, labeled brain summary (not the raw JSON). We omit
   // companyBrain from getAgentorySystemPrompt so it doesn't add its own
@@ -1676,7 +1772,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     && typeof tool_input_body.content_loop === "object")
     ? tool_input_body.content_loop as { content_item_id?: string; use_company_brain?: boolean }
     : null;
-  let brainBlock = renderBrainForAgent(brain, brainOnboardingCompleted);
+  let brainBlock = renderBrainForAgent(brain, brainContextAllowed);
   if (contentLoop) {
     let recent: RecentContent[] = [];
     try {
@@ -1699,11 +1795,26 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
           };
         });
     } catch { /* recent content is context, never a reason to fail the draft */ }
-    brainBlock = renderContentBrain(brainOnboardingCompleted ? brain : null, {
-      onboardingCompleted: brainOnboardingCompleted,
-      useCompanyBrain: contentLoop.use_company_brain !== false,
+    // LYRA reads the SHARED context: the profile with approved memory folded in
+    // (content tone and restrictions, approved products/facts), plus a memory
+    // block that lists the only extra claims content may make. The workspace
+    // guard above has already authorized this request. Lead paths keep reading
+    // `brain` exactly as before — this changes the content branch only.
+    let contentProfile: CompanyBrain = brain;
+    let memoryBlock = "";
+    try {
+      const loaded = await loadCompanyBrainContext(supabase as unknown as LoaderDb, workspace_id, { skipMembershipCheck: true });
+      if (loaded.ok && loaded.context.status !== "missing") {
+        contentProfile = loaded.context.effective_profile;
+        memoryBlock = renderBrainMemoryBlock(loaded.context, "lyra");
+      }
+    } catch { /* the stored profile still drafts; memory is additive context */ }
+    const useBrain = contentLoop.use_company_brain !== false;
+    brainBlock = renderContentBrain(brainContextAllowed ? contentProfile : null, {
+      onboardingCompleted: brainContextAllowed,
+      useCompanyBrain: useBrain,
       recent,
-    });
+    }) + (brainContextAllowed && useBrain && memoryBlock ? `\n\n${memoryBlock}` : "");
   }
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${getAgentorySystemPrompt({
     taskType: "agent_execution",
@@ -2544,7 +2655,9 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
             missionPlan?.entry_capability !== "general_company_discovery") {
             return { plan: null, reason: "not_lead_v2_general_discovery", priced: [] };
           }
-          const criteria = deriveMissionCriteria(persistedMission, leadReadiness);
+          const criteria = criteriaOf(persistedMission, { readiness: leadReadiness, legacy: "rederive" });
+          // S3: which meaning this run executes — frozen (approved), legacy (re-derived) or void.
+          console.log("[run-agent][criteria]", { task_id: task.id, freeze: criteriaFreezeState(persistedMission), criteria: criteria.length });
           // THE SAME downstream estimate orchestrate priced the default budget with.
           return fundingScreenPlan({
             criteria, runBudget, requestedCount: quota.requestedLeadCount,
@@ -2833,6 +2946,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
         // spend, which is the number the diagnostics report.
         let evaluationCallsMade = 0;
         let evaluationCompaniesEvaluated = 0;
+        let evaluationCallsFailed = 0;
         let evaluationBudgetExhausted = false;
 
         // ── STAGE 2: GPT MISSION INTELLIGENCE ────────────────────────────────
@@ -3506,7 +3620,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 onModelCall: modelCalls.sink,
                 log: (m, meta) => console.log(`[gpt-discovery] ${m}`, meta ?? ""),
               }, {
-                brain: {
+                brain: contractOf(persistedMission)
+                  ? (({ disqualifier_keywords, hard_constraints: _h, ...g }) => ({ ...g, disqualifiers: disqualifier_keywords, business_models: brainIcpCtx.icp.business_models ?? [] }))(
+                    runtimeBrainGatesFromContract(contractOf(persistedMission)!))
+                  : {
                   positive_industries: brainIcpCtx.icp.industries ?? [],
                   excluded_industries:
                     effectivePolicy.constraints.negative_industries ?? [],
@@ -3552,7 +3669,10 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 onModelCall: modelCalls.sink,
                 log: (m, meta) => console.log(`[gpt-execution-plan] ${m}`, meta ?? ""),
               }, {
-                brain: {
+                brain: contractOf(persistedMission)
+                  ? (({ disqualifier_keywords, hard_constraints: _h, ...g }) => ({ ...g, disqualifiers: disqualifier_keywords, business_models: brainIcpCtx.icp.business_models ?? [] }))(
+                    runtimeBrainGatesFromContract(contractOf(persistedMission)!))
+                  : {
                   positive_industries: brainIcpCtx.icp.industries ?? [],
                   excluded_industries:
                     effectivePolicy.constraints.negative_industries ?? [],
@@ -3626,7 +3746,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   // the parser refuses any citation that is not in it, which is
                   // what stops the evaluator inventing evidence.
                   const parsed = parseMissionEvaluationStrict(raw, registry, evaluationCriteria(input));
-                  evaluationCompaniesEvaluated++;
+                  // A call that produced no answer is counted as FAILED, never as
+                  // an evaluated company; the engine holds the company as never
+                  // evaluated (`evaluatorAnswered`).
+                  if (evaluatorAnswered(parsed.evaluation)) evaluationCompaniesEvaluated++;
+                  else evaluationCallsFailed++;
                   console.log("[run-agent][mission-evaluation]", {
                     task_id: task.id, company_key,
                     parse_status: parsed.parse_status,
@@ -4272,7 +4396,30 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 const restored =
                   readCapabilityExecutionState(body as Record<string, unknown>) ??
                   readCapabilityExecutionState(resumedTaskResult);
-                if (!restored) return restored;
+                // ── A RE-ENTERED FIRST SLICE ADOPTS WHAT THE DEAD ONE BOUGHT ──
+                //
+                // A first slice killed before its first checkpoint left no
+                // state, so the runs the ledger recovered above were dropped
+                // here and the engine asked for the same purchase again. The
+                // gate answered `adopt` as 503 (never sent, rightly), and the
+                // mission ended `budget_exhausted` beside a dataset it had paid
+                // for (killResume.contract, 2026-10-22).
+                //
+                // Only the recovered runs are offered. The seed carries no
+                // `mission_hash`, so `stateMatchesMission` rejects it and the
+                // engine starts a fresh state — nothing else is restored — while
+                // adoption, which reads `opts.state`, matches by exact provider +
+                // input fingerprint as on any resume. Same task + workspace gate.
+                if (!restored) {
+                  if (reentryGeneration === null) return restored;
+                  const pendingSeed = mergePendingRuns([], recoveredPendingRuns, resolvedRunIds);
+                  if (pendingSeed.length === 0 && recoveredCompletedRuns.length === 0) return restored;
+                  return {
+                    version: CAPABILITY_EXECUTION_STATE_VERSION,
+                    completed_capabilities: [], pending_capabilities: [], failed_capabilities: [],
+                    provider_attempts: [], pending_runs: pendingSeed, completed_runs: recoveredCompletedRuns,
+                  } as unknown as NonNullable<typeof restored>;
+                }
                 // ── NOTHING TO ADD IS NOT NOTHING TO DO ──────────────────
                 //
                 // This short-circuited on `recoveredPendingRuns.length === 0`
@@ -4345,7 +4492,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
               // them only meant the evaluator judged a company without knowing
               // who the workspace actually sells to.
               brain: {
-                ...(brainEnforced
+                // A v4 mission: the Brain's rejecting fields are exactly what the user
+                // approved in the contract (missionContract/authority.ts). Otherwise, v1.
+                ...(contractOf(persistedMission)
+                  ? runtimeBrainGatesFromContract(contractOf(persistedMission)!)
+                  : brainEnforced
                   ? {
                     employee_min: effectivePolicy.constraints.min_employees ?? null,
                     employee_max: effectivePolicy.constraints.max_employees ?? null,
@@ -5236,7 +5387,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   // saas delivery", because nothing ever re-read them.
                   let regroundReport: Awaited<ReturnType<typeof regroundPendingClaims>> | null = null;
                   try {
-                    const phaseCCriteria = deriveMissionCriteria(persistedMission!, leadReadiness);
+                    const phaseCCriteria = criteriaOf(persistedMission!, { readiness: leadReadiness, legacy: "rederive" });
                     const phaseCCandidates = missionCandidatesFrom(engineRun, { missionId: String(task.id) });
                     const pendingByKey = new Map(phaseCCandidates.map((cand) => {
                       const e = evaluateEligibility(phaseCCriteria, cand.graph, cand.criterion_verdicts, cand.holds);
@@ -5395,21 +5546,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // Under the mission's readiness, as at the compile site and in
                 // the engine: a round stage is hard exactly when a verifier this
                 // mission may run can prove it.
-                const vCriteria = deriveMissionCriteria(vMission, leadReadiness);
-                const vCandidates = () => missionCandidatesFrom(engineRun, { missionId: String(task.id) }).map((cand) => {
-                  // The canonical decision (Q1): a held or vetoed candidate is
-                  // not a verification target, and the same verdicts decide.
-                  const e = evaluateEligibility(vCriteria, cand.graph, cand.criterion_verdicts, cand.holds);
-                  return {
-                    company_key: cand.company_key, name: cand.name, domain: cand.domain, linkedin_url: cand.linkedin_url,
-                    graph: cand.graph, eligibility: e.eligibility,
-                    hard_checks: e.checks.filter((x) => x.kind === "hard"),
-                    attempted_routes: cand.attempted_routes ?? [],
-                    unaffordable_routes: cand.unaffordable_routes ?? [],
-                    // Triage withheld paid verification: `verificationTargets` skips it.
-                    paid_verification_blocked: cand.paid_verification_blocked ?? null,
-                  };
-                });
+                const vCriteria = criteriaOf(vMission, { readiness: leadReadiness, legacy: "rederive" });
+                // The canonical decision (Q1): a held or vetoed candidate is not a
+                // verification target, and the same verdicts decide. Shared with
+                // the Replay Lab so the two cannot drift (`verifiableCandidatesFrom`).
+                const vCandidates = () => verifiableCandidatesFrom(engineRun, vCriteria, String(task.id));
                 const verifierLog = (event: string, meta?: Record<string, unknown>) =>
                   console.log(`[run-agent][claim-verifier][${event}]`, { task_id: task.id, ...(meta ?? {}) });
                 {
@@ -5571,13 +5712,14 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                     ?.qualifier?.role_families ?? []) as unknown[]).map(String);
                   const vocab = buildQualificationContext(vMission, { criteriaAuthority: true }).role_vocabulary;
                   const titles = hiringSearchTitles(vocab);
-                  const lowered = vocab.required_titles.map((t) => String(t).toLowerCase());
+                  // ONE posting test (S2), shared with qualification and the replay mirror: a
+                  // named title as that title (ATLAS review D1), else the families, else the
+                  // vocabulary — and an EXCLUDED role never satisfies, on every branch.
+                  const req = hiringRequirementOf([hiringCriterion])!;
                   return hiringClaimVerifier({
                     titles, role_families: families,
                     window_days: hiringCriterion.time_window?.days ?? null,
-                    matchesRole: (title) => families.length > 0
-                      ? families.some((f) => roleMatchesFamily(title, f as RoleFamily))
-                      : lowered.some((t) => title.toLowerCase().includes(t)),
+                    matchesRole: hiringTitleMatcher({ ...req, roleFamilies: families }, vocab.required_titles),
                   });
                 })();
                 // THE CLAIM PLAN: which HARD claims the mission needs, which the
@@ -5589,6 +5731,14 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                   hard: claimPlan.hard.map((h) => ({ claim: h.claim, dimension: h.dimension, status: h.status, routes: h.routes.map((r) => r.actor) })),
                   targets: claimPlan.targets.map((t) => t.dimension), unprovable: claimPlan.unprovable.map((u) => u.label),
                 });
+                // THE DECISION TRACE: every candidate, every verifier, and why it
+                // was or was not taken — persisted on the checkpointed state.
+                {
+                  const traced = vCandidates();
+                  vState.verification_decisions = [fundingStageVerifier(), businessModel, ...(hiringVerifier ? [hiringVerifier] : [])]
+                    .flatMap((v) => verificationDecisions(v, traced, (id) => vCriteria.find((c) => c.id === id)?.value ?? null,
+                      undefined, leadReadiness, (id) => vCriteria.find((c) => c.id === id)?.time_window?.days ?? null).decisions);
+                }
                 // ONE compiler for the purchase AND the affordability gate.
                 const vSpec = await verifierSpecFor(vState);
                 verificationWaitStop = () => verificationGate.check() !== null;
@@ -5733,6 +5883,13 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // Lead V2: leads are exactly the canonical P5 qualified set.
                 (p2Specs && missionPlan)
                   ? canonicalDecisions(capabilityRun.companies, {
+                    mission: persistedMission, plan: missionPlan, identity: { task_id: String(task.id) },
+                    readiness: leadReadiness,
+                  })
+                  : undefined,
+                // What each hard answer rests on, for the Leads page's sources.
+                (p2Specs && missionPlan)
+                  ? canonicalHardEvidence(capabilityRun.companies, {
                     mission: persistedMission, plan: missionPlan, identity: { task_id: String(task.id) },
                     readiness: leadReadiness,
                   })
@@ -6042,6 +6199,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                         calls_remaining: Math.max(
                           0, missionEvaluationBinding.callsRemaining - evaluationCallsMade),
                         companies_evaluated: evaluationCompaniesEvaluated,
+                        calls_failed: evaluationCallsFailed,
                         budget_exhausted: evaluationBudgetExhausted,
                       }),
                     // USER-FACING, AND VALIDATED-ONLY. A rejected claim cannot
@@ -6756,7 +6914,7 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
                 // from a card compiled before P5.2 said it was not.
                 // Q1 — under the run's readiness, as the engine's canonical
                 // decision derives them, so the view and the count agree.
-                const criteria = deriveMissionCriteria(persistedMission, leadReadiness);
+                const criteria = criteriaOf(persistedMission, { readiness: leadReadiness, legacy: "rederive" });
                 const anchor = anchorForCapability(String(missionPlan?.entry_capability ?? "")) ?? null;
                 const candidates = missionCandidatesFrom(capabilityRun, {
                   missionId: String(task.id),
@@ -8524,6 +8682,11 @@ async function handleRunAgent(req: Request, inProcess: RunAgentRunOptions = {}):
     agentSlug: agent_slug ?? undefined,
     workspaceId: workspace_id,
     onModelCall: genericModelCalls.sink,
+    // LYRA drafts may opt into Terra (benchmark first; off by default).
+    // LYRA: content STRATEGY may route to a Terra-class model; routine drafts stay cheap.
+    ...(departmentOf(agent_slug) === "lyra"
+      ? { workforceTask: lyraTaskFor(userMessage), terraLimiter: createTerraRunLimiter() }
+      : {}),
     // LAYER 2, for models with no price. `check()` counts only unpriced calls —
     // priced spend is money and belongs to the ceiling above — so this is what
     // bounds a gateway model that cannot be costed. Checked before EVERY attempt

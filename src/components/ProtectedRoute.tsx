@@ -2,6 +2,12 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 import { decideRouteGuard } from '@/lib/routeGuard';
+import { brainUsableForRoutes } from '@/lib/brainReadinessFlag';
+import { allowDashboardWithoutBrain } from '@/lib/env/testOnboardingBypass';
+
+// TEST only (see testOnboardingBypass.ts): the isolated TEST project forbids a
+// Company Brain, so onboarding can never complete there.
+const TEST_WITHOUT_BRAIN = allowDashboardWithoutBrain(import.meta.env);
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -20,9 +26,10 @@ const ProtectedRoute = ({ children, requireOnboarding = true }: ProtectedRoutePr
   const decision = decideRouteGuard({
     authLoading,
     user,
-    requireOnboarding,
+    requireOnboarding: requireOnboarding && !TEST_WITHOUT_BRAIN,
     onboardingLoading,
     onboardingCompleted: companyBrain ? companyBrain.onboarding_completed : null,
+    brainUsable: brainUsableForRoutes(companyBrain),
     pathname: location.pathname,
     search: location.search,
   });

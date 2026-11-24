@@ -62,12 +62,15 @@ Deno.test("T01: retry, cancellation and a resumed generation retain admitted att
   revoke = new AbortController();
   const cancelled = await run(3, revoke.signal);
   assert(!cancelled.ok);
-  assertEquals([cancelled.code, cancelled.attempts], ["http_error", 1]);
+  // The GATE stopped it, not OpenAI: named `admission_refused` since canary
+  // session 2 (it was reported as an OpenAI HTTP error), and never retried.
+  assertEquals([cancelled.code, cancelled.attempts], ["admission_refused", 1]);
   assertEquals([attempts, sent], [4, 3], "cancellation after admission retains the slot but sends nothing");
   revoke = null;
   const afterCheckpoint = await run(4);
   assert(!afterCheckpoint.ok);
-  assertEquals([afterCheckpoint.code, afterCheckpoint.attempts], ["http_error", 1]);
+  // Canary session 2's fifth worker call exactly: the attempt cap refuses it.
+  assertEquals([afterCheckpoint.code, afterCheckpoint.attempts], ["admission_refused", 1]);
   assertEquals([attempts, sent, committed], [attemptCap, 3, modelCap], "resume cannot replenish attempts or committed money");
   assertEquals(generations, [1, 1, 2, 3, 4]);
 });

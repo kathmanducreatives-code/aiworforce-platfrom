@@ -11,10 +11,11 @@
 
 import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  resolveTarget, configuredRef, environmentOf, refusalFor,
+  resolveTarget, configuredRef, environmentOf, refusalFor, testIsProduction, testTargetRefusal,
 } from "../../scripts/supabase-target.mjs";
 
-const TEST_REF = "ohsdatpvfdjdemstoiuj";
+// TEST is the isolated `agentory-discovery-test` project; it must never be production.
+const TEST_REF = "tlvnfrxzjhsjgdofwehb";
 const PROD_REF = "ohsdatpvfdjdemstoiuj";
 const CONFIG = new URL("../../supabase/config.toml", import.meta.url).pathname;
 
@@ -39,6 +40,7 @@ Deno.test("an unrecognised ref still fails closed", () => {
   // model does not recognise must classify as `unknown`, never fall through to
   // a default, so every caller can refuse it.
   assertEquals(environmentOf(PROD_REF), "production", "the live project resolves");
+  assertEquals(environmentOf(TEST_REF), "test", "the isolated TEST project resolves as test");
   assertEquals(environmentOf("something-else"), "unknown");
   for (const retired of ["zbwsbnqqpkvdhqwavjke", "wqnigjhcwjxtmordrwno"]) {
     assertEquals(environmentOf(retired), "unknown",
@@ -148,11 +150,13 @@ Deno.test("verify-deploy-target refuses a RETIRED ref for either environment", a
   }
 });
 
-Deno.test("verify-deploy-target accepts the live project under either name", async () => {
-  // Both role names resolve to the same project, so both must be accepted — a
-  // script still saying `--production` must not break after consolidation.
-  assertEquals(await verifyDeployTarget("test", PROD_REF), 0);
+Deno.test("verify-deploy-target: each role name accepts ONLY its own project", async () => {
+  // Two projects again. The check that matters: "deploy to test" must never be
+  // satisfied by production, and the reverse.
+  assertEquals(await verifyDeployTarget("test", TEST_REF), 0);
   assertEquals(await verifyDeployTarget("production", PROD_REF), 0);
+  assertEquals(await verifyDeployTarget("test", PROD_REF), 1, "test expected, production given → refused");
+  assertEquals(await verifyDeployTarget("production", TEST_REF), 1, "production expected, TEST given → refused");
 });
 
 Deno.test("verify-deploy-target refuses an unknown ref", async () => {
@@ -191,4 +195,39 @@ Deno.test("the baseline snapshot still declares itself informational", async () 
     "../../supabase/migrations-archive/20260526000000_baseline_from_prod.sql", import.meta.url));
   assertStringIncludes(sql, "INFORMATIONAL ONLY");
   assertStringIncludes(sql, "NOT meant to be applied");
+});
+
+// The checked-in TEST ref is the isolated project; the read-only guard remains
+// for the day someone points it back at production.
+Deno.test("test target: the checked-in TEST ref is NOT production", () => {
+  assertEquals(testIsProduction(), false);
+  const r = resolveTarget({ requested: "test", env: {} });
+  assert(r.ok); assertEquals(r.ref, TEST_REF);
+  assert(r.ref !== PROD_REF);
+});
+
+Deno.test("test target: if it ever named production again, every mutating command is refused", () => {
+  const collapsed = { production: PROD_REF, test: PROD_REF };
+  assert(testIsProduction(collapsed));
+  for (const args of [["functions", "deploy", "run-agent"], ["secrets", "set", "X=1"], ["migration", "repair"], ["storage", "rm", "x"], ["link"]]) {
+    const r = testTargetRefusal(args, collapsed);
+    assert(r, args.join(" "));
+    assertStringIncludes(r!, "PRODUCTION project");
+  }
+  for (const args of [["functions", "list"], ["secrets", "list"], ["migration", "list", "--linked"], ["projects", "list"]]) {
+    assertEquals(testTargetRefusal(args, collapsed), null, args.join(" "));
+  }
+});
+
+Deno.test("test target: once an isolated TEST ref exists, the read-only restriction lifts", () => {
+  const isolated = { production: "ohsdatpvfdjdemstoiuj", test: "abcdefghijklmnopqrst" };
+  assertEquals(testIsProduction(isolated), false);
+  assertEquals(testTargetRefusal(["functions", "deploy", "run-agent"], isolated), null);
+});
+
+Deno.test("test target: main() applies the guard before the CLI runs", () => {
+  const src = Deno.readTextFileSync(new URL("../../scripts/supabase-target.mjs", import.meta.url));
+  const guard = src.indexOf("testTargetRefusal(args)");
+  const cli = src.indexOf('execFileSync("supabase"');
+  assert(guard > 0 && cli > guard, "the refusal precedes the supabase call");
 });

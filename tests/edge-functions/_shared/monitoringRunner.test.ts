@@ -646,3 +646,37 @@ Deno.test("19. a mixed subject keeps what it can collect and reports what it can
   // And funding is still explained, not dropped in silence.
   assert(out.dropped_subjects.some((d) => /funding/.test(d.reason)));
 });
+
+// ═══════════════ ZERO-OUTPUT INVESTIGATION (LISA V2) ═══════════════════════
+//
+// Hypothesis from the LISA audit: production monitoring wrote 0 events in 30
+// days while passes looked successful. One cause is reproducible in code: when
+// SIGNALS_V2 is off the writer refuses every event (`flag_disabled`) and the
+// runner still answered ok:true. Whether this is THE production cause is
+// unverified (production logs were not read); this pins the defect itself.
+
+Deno.test("Z1. every event write refused (SIGNALS_V2 off) → ok:false events_not_persisted, not a silent success", async () => {
+  const h = harness({
+    writeEvent: () => Promise.resolve({ written: false, deduplicated: false, error_class: "flag_disabled" }),
+  });
+  const out = await run([{ kind: "icp", signals: [{ event: "funding", subject: "company" }] }], h);
+  assertEquals(out.ok, false);
+  assertEquals(out.refusal, "events_not_persisted");
+  assertEquals(out.events, { attempted: 1, written: 0, deduplicated: 0, failed: 1 });
+});
+
+Deno.test("Z2. a partial write failure stays ok:true with the failure counted; all-duplicates is ok", async () => {
+  let n = 0;
+  const h = harness({
+    runPlan: () => Promise.resolve({
+      companies: [company("acme.com", "Acme", "acme.com"), company("beta.io", "Beta", "beta.io")],
+      state: { qualified_company_keys: ["acme.com", "beta.io"], completed_capabilities: ["funding_signal_discovery", "company_brain_qualification"] },
+    }),
+    writeEvent: () => Promise.resolve(n++ === 0 ? { written: true } : { written: false, error_class: "database_rejected" }),
+  });
+  const out = await run([{ kind: "icp", signals: [{ event: "funding", subject: "company" }] }], h);
+  assertEquals(out.ok, true);
+  assertEquals(out.events.failed, 1);
+  const dup = harness({ writeEvent: () => Promise.resolve({ written: false, deduplicated: true }) });
+  assertEquals((await run([{ kind: "icp", signals: [{ event: "funding", subject: "company" }] }], dup)).ok, true);
+});

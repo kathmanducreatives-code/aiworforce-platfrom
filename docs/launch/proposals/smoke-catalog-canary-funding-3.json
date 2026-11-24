@@ -1,0 +1,157 @@
+{
+  "status": "PROPOSED for Contract 3 \u2014 narrower than smoke-catalog-canary-funding.json in every quote; raises nothing",
+  "live_execution": "blocked until: prices re-observed on the canary Apify account within 24 h, account and caps verified, and the read allocation fits (see live_blockers)",
+  "scenario": "canary_funding \u2014 'Find one US company hiring Account Executives that raised funding within the last six months.'",
+  "no_fallback": "Pvalyou has no template: the gate refuses it (no unapproved paid fallback). A company Atomus leaves open stays PENDING (unverified).",
+  "live_blockers": [
+    "READ CAP: the isolated project's authorize_discovery_smoke and provider_polls check allow 5 reads; this catalog needs 7. Apply the proposed held migration 20261029120000_smoke_read_cap_seven.sql to the isolated project only (reads are free; no spending cap changes).",
+    "PRICES: every maximum is derived from public prices read 2026-10-28 (FREE/BRONZE tier). Re-observe them on the canary Apify account within 24 h of authorization; fill source and observed_at.",
+    "ACCOUNT: the canary Apify account's identity, plan, remaining credit and maxTotalChargeUsd enforcement are unverified (scripts/test-project/apify-account-check.ts).",
+    "CODE: the worker must run a commit containing the candidateEligibility.ts fix (an evaluator abstention citing nothing no longer lowers a funding window decided from dated rounds); without it Atomus is bought and nothing qualifies (canaryFundingRehearsal.contract.test.ts)."
+  ],
+  "approved_quotes": {
+    "jobs": {
+      "allowed_kinds": [
+        "provider"
+      ],
+      "allowed_actors": [
+        "apify:harvestapi~linkedin-job-search"
+      ],
+      "maximum_microusd": 2000,
+      "discovery_page": true,
+      "source": null,
+      "liability_bound_ref": "maxTotalChargeUsd=0.002 (gate-pinned)",
+      "observed_at": null,
+      "request_limits": {
+        "max_request_bytes": 4096,
+        "pin_query": {
+          "timeout": "120",
+          "memory": "256"
+        },
+        "max_fields": {
+          "maxItems": 1
+        },
+        "max_array_items": {
+          "jobTitles": 1,
+          "locations": 1,
+          "geoIds": 0
+        }
+      },
+      "maximum_basis": "1 start ($0.001) + at most 1 job x $0.001 (PAY_PER_EVENT; the Contract 2 receipt: chargedEventCounts {\"job\":3,\"actor-start\":1} = $0.004)"
+    },
+    "details": {
+      "allowed_kinds": [
+        "provider"
+      ],
+      "allowed_actors": [
+        "apify:harvestapi~linkedin-company"
+      ],
+      "maximum_microusd": 4050,
+      "source": null,
+      "liability_bound_ref": "maxTotalChargeUsd = the maximum once observed (gate-pinned)",
+      "observed_at": null,
+      "request_limits": {
+        "max_request_bytes": 1024,
+        "pin_query": {
+          "timeout": "120",
+          "memory": "256"
+        },
+        "max_array_items": {
+          "companies": 1,
+          "searches": 0
+        }
+      },
+      "maximum_basis": "1 start ($0.00005) + 1 company x $0.004 (FREE/BRONZE tier; SILVER $0.003) \u2014 read 2026-10-28 from api.apify.com/v2/acts/harvestapi~linkedin-company"
+    },
+    "atomus": {
+      "allowed_kinds": [
+        "provider"
+      ],
+      "allowed_actors": [
+        "apify:atomus~linkedin-company-scraper"
+      ],
+      "maximum_microusd": 3550,
+      "maximum_basis": "1 start ($0.00005) + at most 1 company found x $0.0035 (not-found is free)",
+      "source": null,
+      "observed_at": null,
+      "liability_bound_ref": "maxTotalChargeUsd=0.00355 (gate-pinned)",
+      "request_limits": {
+        "max_request_bytes": 2048,
+        "pin_query": {
+          "timeout": "120",
+          "memory": "256"
+        },
+        "max_array_items": {
+          "companies": 1
+        }
+      }
+    },
+    "reads": {
+      "allowed_kinds": [
+        "poll"
+      ],
+      "allowed_actors": [
+        "apify:harvestapi~linkedin-job-search",
+        "apify:harvestapi~linkedin-company",
+        "apify:atomus~linkedin-company-scraper"
+      ],
+      "maximum_microusd": 0,
+      "source": "<Apify usage page: API reads not charged>",
+      "liability_bound_ref": "reads are not actor events",
+      "observed_at": null,
+      "request_limits": {
+        "max_reads_per_actor": {
+          "apify:harvestapi~linkedin-job-search": 3,
+          "apify:harvestapi~linkedin-company": 2,
+          "apify:atomus~linkedin-company-scraper": 2
+        }
+      }
+    },
+    "luna": {
+      "allowed_kinds": [
+        "model"
+      ],
+      "allowed_actors": [
+        "openai:gpt-5.6-luna"
+      ],
+      "maximum_microusd": 12480,
+      "source": "<OpenAI project pricing, Standard: $<in>/1M input, $<cache write>/1M cache writes, $<out>/1M output>",
+      "liability_bound_ref": "B=30720 bytes (tokens <= bytes) priced at the cache-write rate, the dearest input rate ($0.25/1M listed 2026-10-17); O=4000 at $1.20/1M. 0.25*30720 + 1.2*4000 = 12480; four attempts 49920 <= 50000",
+      "observed_at": "<ISO time>",
+      "request_limits": {
+        "max_request_bytes": 30720,
+        "max_output_tokens": 4000
+      }
+    }
+  },
+  "actor_limits_for_kickoff": {
+    "apify:harvestapi~linkedin-job-search": 0,
+    "apify:harvestapi~linkedin-company": 0,
+    "apify:atomus~linkedin-company-scraper": 0
+  },
+  "actor_limits_proposed_for_paid_canary": {
+    "note": "NOT authorized. Applied only by the separately reviewed authorization SQL.",
+    "apify:harvestapi~linkedin-job-search": 1,
+    "apify:harvestapi~linkedin-company": 1,
+    "apify:atomus~linkedin-company-scraper": 1
+  },
+  "worst_case_provider_microusd": 9600,
+  "read_plan": {
+    "cap": 7,
+    "needs": "supabase/migrations-held/20261029120000_smoke_read_cap_seven.sql (proposed, unapplied); the current cap is 5",
+    "apify:harvestapi~linkedin-job-search": [
+      "status (long poll)",
+      "settled receipt",
+      "dataset"
+    ],
+    "apify:harvestapi~linkedin-company": [
+      "status (long poll)",
+      "dataset \u2014 its receipt is deferred to reconciliation"
+    ],
+    "apify:atomus~linkedin-company-scraper": [
+      "status (long poll)",
+      "dataset \u2014 its receipt is deferred to reconciliation"
+    ]
+  },
+  "runbook": "docs/demo/FIRST_APIFY_CANARY.md"
+}

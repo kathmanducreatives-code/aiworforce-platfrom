@@ -29,6 +29,8 @@
 // doing the same job in a new file. A caller cannot tell the difference except
 // by the URL.
 
+import { type GuardDb, legacyExecutionGuard, referencedPlanId, referencedTaskIds } from "../_shared/legacyExecutionGuard.ts";
+import { bindEffectPrincipal, effectScope, type EffectPrincipalDb, installEffectFence } from "../_shared/effectFence.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool } from "../_shared/toolRegistry.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
@@ -41,6 +43,7 @@ import {
 import { summarizeDirectAction } from "../_shared/leadActionOutcome.ts";
 import { ModelCallCollector, createLedgerWriter } from "../_shared/executionLedger.ts";
 import { resolveRunBudget } from "../_shared/modelSpendCeiling.ts";
+import { canRunPaidOperation, paidRoleRefusal } from "../_shared/paidOperationRole.ts";
 
 /** Bookkeeping must never fail the run it only describes. */
 async function drainModelCalls(
@@ -67,7 +70,10 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-Deno.serve(async (req) => {
+// Every new model/provider operation re-checks the principal (effectFence.ts, EXEC-EFFECT).
+installEffectFence();
+
+Deno.serve((req) => effectScope.run({ principal: null }, async () => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const supabase = createClient(
@@ -116,6 +122,7 @@ Deno.serve(async (req) => {
     bearerIsServiceRole = !!bearer && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     let isMember = false;
+    let memberRole: unknown = null;
     if (!bearerIsServiceRole) {
       try {
         const userClient = createClient(
@@ -126,15 +133,40 @@ Deno.serve(async (req) => {
         authenticatedUserId = userData?.user?.id ?? null;
         if (authenticatedUserId) {
           const { data: member } = await supabase
-            .from("workspace_members").select("workspace_id")
+            .from("workspace_members").select("workspace_id, role")
             .eq("workspace_id", workspace_id).eq("user_id", authenticatedUserId).maybeSingle();
           isMember = !!member;
+          memberRole = (member as { role?: unknown } | null)?.role ?? null;
         }
       } catch (_e) { /* treated as unauthenticated below */ }
     }
 
     const access = decideWorkspaceAccess({ bearerIsServiceRole, authenticatedUserId, isMember });
     if (!access.ok) return json({ error: access.error }, access.status);
+    // A lead unlock spends credits: a browser caller needs owner/admin/editor.
+    if (!bearerIsServiceRole && !canRunPaidOperation(memberRole)) return json(paidRoleRefusal(memberRole), 403);
+  }
+
+  // THE LEGACY PRE-EFFECT GUARD (legacyExecutionGuard.ts), before the agent
+  // lookup, the task row, any ledger/credit write, model call or purchase:
+  // pilot/client scope refused, a service caller's forwarded user must still be
+  // a member. (The task row is re-authorized at commit by the held boundary.)
+  {
+    const guard = await legacyExecutionGuard({
+      db: supabase as unknown as GuardDb, workspaceId: workspace_id,
+      principalUserId: bearerIsServiceRole ? (typeof user_id === "string" && user_id ? user_id : null) : authenticatedUserId,
+      principalMembershipVerified: !bearerIsServiceRole,
+      body, taskIds: referencedTaskIds(body), planId: referencedPlanId(body),
+    });
+    if (!guard.ok) {
+      console.error("[run-lead-action][pre-effect-guard] refused", { workspace_id, code: guard.code, detail: guard.detail });
+      return json({ success: false, error: guard.code, detail: guard.detail }, guard.status);
+    }
+    // Every later model call or purchase re-checks this principal (EXEC-EFFECT).
+    bindEffectPrincipal({
+      db: supabase as unknown as EffectPrincipalDb, workspaceId: workspace_id,
+      userId: (bearerIsServiceRole ? user_id : authenticatedUserId) as string,
+    });
   }
 
   // AGENT, SCOPED TO THE WORKSPACE. Unscoped, `scout` can resolve to another
@@ -253,4 +285,4 @@ Deno.serve(async (req) => {
       per_lead: failed,
     }, 500);
   }
-});
+}));

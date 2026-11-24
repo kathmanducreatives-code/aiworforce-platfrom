@@ -14,6 +14,8 @@ import ResumeRunCard from './bubbles/ResumeRunCard';
 import BetaAccessCard from './bubbles/BetaAccessCard';
 import InterpretationPill from './bubbles/InterpretationPill';
 import SafetyChip from './bubbles/SafetyChip';
+import OrionEvidencePanel from './bubbles/OrionEvidencePanel';
+import OrionDraftChip from './bubbles/OrionDraftChip';
 import AgentAvatar from './agents/AgentAvatar';
 import AgentTypingIndicator from './AgentTypingIndicator';
 import EmptyState from './EmptyState';
@@ -199,6 +201,8 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                     {m.content}
                   </div>
                 )}
+                {meta?.orion_draft && <OrionDraftChip metadata={meta} />}
+                {meta?.orion_evidence && <OrionEvidencePanel metadata={meta} />}
                 {showPennSafety && (
                   <div className="mt-1.5"><SafetyChip /></div>
                 )}

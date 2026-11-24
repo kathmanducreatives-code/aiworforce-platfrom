@@ -454,7 +454,7 @@ Deno.test("turn 6: sourcing compiles a mission and stops at the Start", async ()
 
 // ══ TURN 7 — ORDINARY CONVERSATION, GROUNDED ══════════════════════════════
 
-Deno.test("turn 7: 'hello' answers as Pilot without inventing workspace state", async () => {
+Deno.test("turn 7: 'hello' answers as ORION without inventing workspace state", async () => {
   const { out, net } = await conversation(
     [
       {
@@ -468,18 +468,19 @@ Deno.test("turn 7: 'hello' answers as Pilot without inventing workspace state", 
         }], 1),
       },
     ],
-    "Hey — I'm Pilot. What would you like to work on?",
+    "Hey — I'm ORION. What would you like to work on?",
   );
   const t7 = out[1];
 
+  // The stored slug stays `pilot` (the coordinator's execution identity); it displays as ORION.
   assertEquals(t7.reply?.agent_slug, "pilot",
-    "Pilot is the default speaker; a specialist needs a recorded handoff");
-  assertStringIncludes(t7.content, "Pilot");
+    "the coordinator is the default speaker; a specialist needs a recorded handoff");
+  assertStringIncludes(t7.content, "ORION");
 
   // THE FACTS IT WAS GIVEN CARRY THEIR SCOPE. Live, a conversation count of
   // zero under a `workspace_facts` heading became "we're starting from zero"
   // one turn after 32 leads were named.
-  const converseCall = net.modelCalls.find((c) => c.system.includes("You are Pilot"))!;
+  const converseCall = net.modelCalls.find((c) => c.system.includes("You are ORION"))!;
   assertStringIncludes(converseCall.system, "TRUE OF THIS CONVERSATION ONLY");
   assertStringIncludes(converseCall.system,
     "a number you were not given is a number you do not know");

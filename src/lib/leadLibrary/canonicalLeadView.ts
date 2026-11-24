@@ -26,6 +26,8 @@
 // Pure — no React, no network, no Supabase.
 
 import { hydrateOutreachStage } from "@/lib/outreachStageView";
+import { requirementEvidenceLines } from "./requirementEvidence";
+import { contactIsVerified, pipelineRoleVerification, pipelineUnverifiedRequirements } from "./contactVerification";
 import type { OutreachStageView } from "@/lib/workbenchAccountView";
 
 // ----------------------------------------------------------------- inputs -----
@@ -147,6 +149,8 @@ export interface CanonicalDiscoverySource {
   observedAt: string | null;
   confidence: string | null;
   provenanceCompleteness: ProvenanceCompleteness;
+  /** A readable line for requirement evidence ("Funding · provider record (…)"); absent on discovery sources. */
+  headline?: string | null;
 }
 
 export interface CanonicalSelectedRecipient {
@@ -157,6 +161,12 @@ export interface CanonicalSelectedRecipient {
   email: string | null;
   phone: string | null;
   verified: boolean;
+  /**
+   * The discovery pipeline's own verdict on this person's role and current employment
+   * (`raw.agentory_pipeline.verification.status`), when the contact came from it:
+   * `requires_role_verification` | `employment_mismatch` | `verified`. Null otherwise.
+   */
+  roleVerification?: string | null;
 }
 
 export interface CanonicalLeadView {
@@ -184,6 +194,12 @@ export interface CanonicalLeadView {
     verdict: string | null;
     recommendedAction: string | null;
     hardDisqualifiers: string[];
+    /**
+     * Discovery-pipeline leads: hard requirements no evidence established yet
+     * (e.g. "business_model" for "only verified B2B"). The lead needs verification on
+     * these — they are neither met nor failed.
+     */
+    unverifiedRequirements: string[];
     requiresReview: boolean;
   };
   research: {
@@ -348,6 +364,9 @@ export function selectRepresentativeLead(rows: CanonicalLeadCandidate[]): Canoni
 // -------------------------------------------------------------- recipient -----
 
 function contactView(c: CanonicalContact): CanonicalSelectedRecipient {
+  // A contact the discovery pipeline wrote is verified only when ITS verification says so
+  // (contactVerification.ts; S2 identity review, 2026-11-01).
+  const roleVerification = pipelineRoleVerification(c.raw);
   return {
     contactId: c.id,
     fullName: str(c.full_name),
@@ -355,7 +374,8 @@ function contactView(c: CanonicalContact): CanonicalSelectedRecipient {
     linkedinUrl: str(c.linkedin_url),
     email: str(c.email),
     phone: str(c.phone),
-    verified: !!str(c.email) || !!str(c.linkedin_url),
+    verified: contactIsVerified(c),
+    roleVerification,
   };
 }
 
@@ -363,11 +383,12 @@ function contactView(c: CanonicalContact): CanonicalSelectedRecipient {
 
 function collectSource(lc: CanonicalLeadCandidate): CanonicalDiscoverySource | null {
   const jsonb = jsonbOf(lc);
-  const sourceUrl = str(jsonb.source_url) ?? str(jsonb.input_url) ?? str(jsonb.source_proof) ?? str(jsonb.job_url);
+  const sourceUrl = str(jsonb.source_url) ?? str(jsonb.input_url) ?? str(jsonb.source_proof) ?? str(jsonb.job_url) ??
+    str(jsonb.hiring_signal_url);
   const providerRef = str(jsonb.provider_job_id) ?? str(jsonb.provider_ref_id) ?? str(jsonb.provider_tracking_id);
   const discoveryMethod = str(jsonb.source) ?? str(jsonb.lead_type) ?? str(jsonb.job_function);
-  const sourceType = str(jsonb.source_type) ?? (str(jsonb.job_title) ? "job_posting" : null);
-  const observedAt = str(jsonb.posted_at) ?? str(lc.created_at);
+  const sourceType = str(jsonb.source_type) ?? (str(jsonb.job_title) || str(jsonb.hiring_signal_title) ? "job_posting" : null);
+  const observedAt = str(jsonb.posted_at) ?? str(jsonb.hiring_signal_date) ?? str(lc.created_at);
   const confidence = str(jsonb.confidence_level) ?? str(jsonb.match_tier);
 
   if (!sourceUrl && !providerRef && !discoveryMethod && !sourceType) return null;
@@ -573,11 +594,26 @@ export function deriveCanonicalLeadView(input: DeriveCanonicalLeadInput): Canoni
     recommendedAction: str(repJsonb.recommended_next_action) ?? str(repJsonb.next_action) ?? null,
     hardDisqualifiers: Array.isArray(repJsonb.disqualifiers_hit)
       ? (repJsonb.disqualifiers_hit as unknown[]).filter((x): x is string => typeof x === "string") : [],
-    requiresReview: str(repJsonb.gate_decision) === "manual_review" || accountStatus === "watch",
+    unverifiedRequirements: pipelineUnverifiedRequirements(repJsonb),
+    requiresReview: str(repJsonb.gate_decision) === "manual_review" || accountStatus === "watch" ||
+      pipelineUnverifiedRequirements(repJsonb).length > 0,
   };
 
   // ---- provenance -----------------------------------------------------------
   const discoverySources = rows.map(collectSource).filter((s): s is CanonicalDiscoverySource => !!s);
+  // What each hard requirement rests on — hiring posting, funding record —
+  // shown as sources with its standing (independently confirmed / reported by
+  // a named provider / missing / not met).
+  for (const lc of rows) {
+    for (const line of requirementEvidenceLines(jsonbOf(lc))) {
+      discoverySources.push({
+        sourceType: `${line.dimension} evidence`, discoveryMethod: line.providers.join(", ") || null, sourceUrl: line.url,
+        providerReference: null, planId: str(lc.plan_id), taskId: null, observedAt: null,
+        confidence: line.confidence, provenanceCompleteness: line.standing === "missing" || line.providers.length === 0 ? "partial" : "complete",
+        headline: `${line.headline} — ${line.detail}`,
+      });
+    }
+  }
   if (discoverySources.length === 0 && (str(account.source) || str((account.raw as Record<string, unknown>)?.source_url))) {
     const araw = isObj(account.raw) ? account.raw : {};
     discoverySources.push({

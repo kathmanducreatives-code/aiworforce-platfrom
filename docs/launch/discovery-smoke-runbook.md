@@ -246,7 +246,15 @@ A worker-written receipt (`report_source`) closes nothing.
 
 ```sh
 psql "$TEST_DB_URL" -v queue_id='<queue_id>' -f scripts/test-project/smoke-reconciliation.sql
+# and the credit check: a purchase the admission ledger proves whose credit is not charged
+psql "$TEST_DB_URL" -v queue_id='<queue_id>' -f scripts/test-project/smoke-credit-reconciliation.sql
 ```
+
+The credit check is empty after a normal or recovered mission. A row means a
+worker died after a paid start and nothing adopted the run before the
+authorization ended, so the credit was held and later released by the reaper.
+Correct it with the two statements in the file's header (re-arm, then charge),
+once, after the USD reconciliation below.
 
 1. **Wait until the authorization is no longer live.** Either its deadline
    has passed (≤ 300 s from the queue row) or it was stopped (Phase 6).
