@@ -88,7 +88,10 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
     );
   }
 
-  const canRun = plan?.status === 'ready' && approved && state === 'idle' && !run;
+  // Flexible asked for, but the backend planned strictly (it predates Flexible Discovery): say so
+  // and never let that plan be approved as if it were Flexible.
+  const flexibleUnsupported = mode === 'flexible' && !!plan && plan.discoveryMode !== 'flexible';
+  const canRun = plan?.status === 'ready' && approved && state === 'idle' && !run && !flexibleUnsupported;
   const overlap = overlapView(run?.summary ?? null);
 
   return (
@@ -151,6 +154,11 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
               <p className="text-[11px] text-[#6E7278]">Only Strong and Close matches count toward the number you asked for. Every other requirement still applies.</p>
             </div>
           )}
+          {flexibleUnsupported && (
+            <div className="rounded-lg border border-amber-300/30 bg-amber-300/[0.06] px-3 py-2 text-amber-100/90" data-testid="strategy-flexible-unsupported">
+              This server doesn't support Flexible Discovery yet, so the plan below is a Strict plan. It can't be approved in Flexible mode. Switch to Strict to run it as Strict.
+            </div>
+          )}
           <RequirementList plan={plan} />
           {plan.status === 'blocked' && plan.questions.length > 0 && (
             <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.04] px-3 py-2 space-y-1.5" data-testid="strategy-questions">
@@ -180,7 +188,7 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
           {plan.status === 'ready' && reviewOnly && (
             <div className="text-[11px] text-amber-200/80" data-testid="strategy-review-only-note">Review-only: requirements no approved tool can prove stay unverified. Those companies are listed as “Needs verification” and are never counted as qualified.</div>
           )}
-          {plan.status === 'ready' && (
+          {plan.status === 'ready' && !flexibleUnsupported && (
             <div className="flex items-center gap-2 pt-1">
               {plan.worstCase.apifyUsd > 0 || plan.worstCase.leadoceanRecords > 0 ? (
                 <label className="flex items-center gap-1.5 text-[#A3A7AD] cursor-pointer">

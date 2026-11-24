@@ -223,6 +223,10 @@ Deno.test("FLEXIBLE UI: relaxed criteria are read from the plan; tiers and statu
     flexible: { relaxed: [{ label: "Industry: a or b", why: "w" }], industries: { requested: ["a"], related: ["c"], note: null } } })!;
   assertEquals(plan.flexible, { relaxed: [{ label: "Industry: a or b", why: "w" }], industries: { requested: ["a"], related: ["c"], note: null } });
   assertEquals(readStrategyPlan({ plan: { status: "ready", planHash: "h", estimate: { apifyUsd: 0, leadoceanRecords: 0 }, steps: [] } })!.flexible, null, "strict plan");
+  const bare = { plan: { status: "ready", planHash: "h", estimate: { apifyUsd: 0, leadoceanRecords: 0 }, steps: [] } };
+  assertEquals(readStrategyPlan(bare)!.discoveryMode, null, "a pre-Flexible backend says nothing: never read as flexible");
+  assertEquals(readStrategyPlan({ ...bare, discoveryMode: "flexible" })!.discoveryMode, "flexible");
+  assertEquals(readStrategyPlan({ ...bare, discoveryMode: "loose" })!.discoveryMode, null);
   const m = readFlexibleMatches({ matches: [
     { leadKey: "k", name: "Co", tier: "strong", why: ["x"], attributes: { headquarters: { status: "verified", value: "US" }, industry: { status: "proven!", value: "?" } },
       sources: ["https://co.example/", "javascript:alert(1)"] },

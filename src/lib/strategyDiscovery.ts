@@ -69,6 +69,9 @@ export interface StrategyPlanView {
   interpretation: { assumptions: string[]; disclosures: string[]; merged: { span: string; reason: string }[] };
   /** FLEXIBLE DISCOVERY: what this plan relaxed and the related industries it ranks by. Null = strict. */
   flexible: FlexiblePlanView | null;
+  /** The mode the BACKEND planned in. Null = a backend from before Flexible Discovery (it ignores
+   *  discovery_mode and plans strictly), so a Flexible request must not be approved against it. */
+  discoveryMode: DiscoveryMode | null;
 }
 
 export type DiscoveryMode = 'strict' | 'flexible';
@@ -183,6 +186,7 @@ export function readStrategyPlan(body: unknown): StrategyPlanView | null {
     questions: Array.isArray(p.questions) ? [...new Set(p.questions.map(String))] : [],
     interpretation: interpretationOf(body),
     flexible: readFlexiblePlan(body.flexible),
+    discoveryMode: body.discoveryMode === 'flexible' || body.discoveryMode === 'strict' ? body.discoveryMode : null,
   };
 }
 
