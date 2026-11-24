@@ -1,6 +1,7 @@
 // Centralized data layer for the orchestration backend (workspaces, agents,
 // task plans, activity feed, approvals). All queries are workspace-scoped.
 
+import { decideActiveWorkspace, rememberedWorkspace, rememberWorkspace, type MembershipRow } from './activeWorkspace';
 import { supabase } from '@/integrations/supabase/client';
 import { invokeFunction } from '@/lib/agentoryApi';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -74,18 +75,26 @@ export async function getCurrentWorkspaceId(): Promise<string | null> {
   }
   if (!userId) return null;
 
+  // Deterministic, and a failed read never provisions (src/lib/activeWorkspace.ts).
   const { data, error } = await supabase
     .from('workspace_members' as any)
-    .select('workspace_id')
+    .select('workspace_id, created_at')
     .eq('user_id', userId)
-    .limit(1)
-    .maybeSingle();
+    .order('created_at', { ascending: true })
+    .order('workspace_id', { ascending: true });
 
-  if (error || !data) {
+  const decision = decideActiveWorkspace({
+    memberships: error ? null : ((data ?? []) as unknown as MembershipRow[]),
+    queryFailed: !!error,
+    remembered: rememberedWorkspace(userId),
+  });
+  if (decision.kind === 'error') throw new Error(`Could not load your workspace: ${error?.message ?? 'unknown error'}`);
+  if (decision.kind === 'provision') {
     const { data: rpc } = await supabase.rpc('provision_workspace_for_user' as any, { _user_id: userId });
     return (rpc as unknown as string) ?? null;
   }
-  return (data as any).workspace_id as string;
+  rememberWorkspace(userId, decision.workspaceId);
+  return decision.workspaceId;
 }
 
 // ---------------- Fetchers ----------------
