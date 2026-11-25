@@ -87,7 +87,9 @@ echo "  TEST pilot-chat build = ${build:-none} (HEAD $head)"
 echo "== 6. live run"
 rc=0
 if [ -n "${R11_FOCUS:-}" ]; then
-  # FOCUSED RETEST (R11_FOCUS="F3-signals,F3-analyze,F6-under30" R11_FOCUS_REPEAT=2): only those
+  # FOCUSED RETEST (e.g. R11_FOCUS="F1-brief,F1-report-ok,F2-apify,F4-followup,F3-signals,F3-analyze,F6-under30"
+  # R11_FOCUS_REPEAT=2): name EVERY turn the target turn follows in its suite, because ORION reads the
+  # last 6 messages (chatBrain.userPrompt) and 8 rows of history (TURN_LOOKBACK). Only those
   # R1.2 turns, in suite order, in R11_FOCUS_REPEAT fresh conversations, plus the R1.2.1 binding
   # probe and the isolation probe. Same assertions; the full suites are not re-run.
   ORION_R11_APPROVED="I approve the ORION R1.1 TEST run on $REF" ORION_PILOT_SUPABASE_URL="https://$REF.supabase.co" \
