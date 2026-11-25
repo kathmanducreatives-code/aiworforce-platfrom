@@ -25,7 +25,10 @@ cd "$(dirname "$0")/../.."
 db="${TEST_DB_URL:?set TEST_DB_URL}"
 case "$db" in *"$PROD"*) echo "refusing: TEST_DB_URL names production" >&2; exit 2 ;; *"$REF"*) ;; *) echo "refusing: TEST_DB_URL does not name $REF" >&2; exit 2 ;; esac
 command -v psql >/dev/null && command -v curl >/dev/null && command -v jq >/dev/null || { echo "refusing: psql, curl and jq are required"; exit 2; }
-q() { psql "$db" -X -At -v ON_ERROR_STOP=1 -c "$1"; }
+q() { psql -w "$db" -X -At -v ON_ERROR_STOP=1 -c "$1"; }
+export PGCONNECT_TIMEOUT="${PGCONNECT_TIMEOUT:-10}"
+q "select 1" >/dev/null 2>&1 || { echo "refusing: cannot authenticate to the TEST database without a password prompt."; \
+  echo "  run: scripts/test-env/agentory-test-env run -- $0 --confirm $REF"; exit 3; }
 
 echo "== 2. TEST secrets (names only)"
 names="$(npm run --silent supabase:test -- secrets list 2>/dev/null | awk -F'|' 'NR>2 {gsub(/ /,"",$1); if ($1!="") print $1}')"
@@ -38,10 +41,14 @@ bad="$(echo "$names" | grep -E '^AGENTORY_(TERRA|HYBRID|ROUTE)_|^AGENTORY_GPT_MO
 
 START="$(q "select now()")"
 cleanup() {
+  local rc=$?; set +e
   n="$(q "select count(*) from public.conversations where workspace_id='$WS' and created_at >= '$START'")"
   q "delete from public.messages where conversation_id in (select id from public.conversations where workspace_id='$WS' and created_at >= '$START')" >/dev/null
   q "delete from public.conversations where workspace_id='$WS' and created_at >= '$START'" >/dev/null
-  echo "== 5. cleanup: $n probe conversation(s) removed; left: $(q "select count(*) from public.conversations where workspace_id='$WS' and created_at >= '$START'")"
+  left="$(q "select count(*) from public.conversations where workspace_id='$WS' and created_at >= '$START'")"
+  if [ "$left" = 0 ]; then echo "== 5. cleanup VERIFIED: ${n:-?} probe conversation(s) removed, 0 left"
+  else echo "== 5. CLEANUP FAILED: ${left:-unknown} probe conversation(s) left"; rc=4; fi
+  exit "$rc"
 }
 trap cleanup EXIT
 
