@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # DEPLOY THE COMPANY BRAIN V2 FUNCTIONS TO THE DEDICATED BRAIN TEST PROJECT.
-# Needs the owner's approval and a SUPABASE_ACCESS_TOKEN that can reach that project.
+# Needs the owner's approval and a Supabase CLI login (or SUPABASE_ACCESS_TOKEN) that can see that project.
 #
 #   BRAIN_TEST_PROJECT_REF=<ref> scripts/test-project/brain-test/deploy-brain-test.sh \
 #     --confirm <ref> --spend-ceiling-usd <approved limit>
@@ -32,8 +32,11 @@ for r in $REFUSED; do [ "$ref" != "$r" ] || refuse "$ref is never the Brain TEST
 [ "$confirm" = "$ref" ] || refuse "--confirm must repeat BRAIN_TEST_PROJECT_REF exactly"
 echo "$ceiling" | grep -Eq '^[0-9]*\.?[0-9]+$' && awk -v c="$ceiling" 'BEGIN { exit !(c > 0 && c <= 1) }' \
   || refuse "--spend-ceiling-usd must be a positive amount no larger than 1.00 (e.g. 0.25)"
-[ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || refuse "SUPABASE_ACCESS_TOKEN is not set (never printed)"
 command -v supabase >/dev/null && command -v docker >/dev/null && docker info >/dev/null 2>&1 || refuse "the supabase CLI and a running Docker are required"
+# Credentials: SUPABASE_ACCESS_TOKEN (never printed), or an existing `supabase login`.
+# Either way, the login must be able to see THIS project before anything is changed.
+supabase projects list 2>/dev/null | grep -q "$ref" \
+  || refuse "the Supabase CLI cannot see project $ref (run 'supabase login', or set SUPABASE_ACCESS_TOKEN for an account in its organization)"
 root="$(cd "$(dirname "$0")/../../.." && pwd)"; cd "$root"
 FUNCTIONS="generate-company-brain-draft setup-company-brain company-brain-memory pilot-chat daily-brief run-radar-scan run-monitoring-scan"
 supabase secrets set --project-ref "$ref" \
