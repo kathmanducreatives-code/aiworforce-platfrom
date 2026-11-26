@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# AGENTORY TEST DATABASE CREDENTIALS — macOS Keychain → a temporary, scoped PGPASSFILE.
+#
+#   agentory-test-env store-password            # once: saves the TEST DB password in Keychain (prompted, never echoed)
+#   agentory-test-env check                     # read-only connectivity check; never prompts
+#   agentory-test-env run -- <command> [args]   # runs <command> with TEST DB access, then deletes the password file
+#
+#   e.g. agentory-test-env run -- scripts/test-project/r11-test-run.sh --confirm tlvnfrxzjhsjgdofwehb
+#
+# WHAT `run` DOES
+#   1. Validates the NON-SECRET connection settings (below): they must name the TEST project
+#      and must not name production. Anything else is refused before Keychain is read.
+#   2. Reads the password from Keychain into a variable (never argv, never printed), writes ONE
+#      pgpass line scoped to exactly host:port:database:user, in a fresh private directory
+#      (umask 077; directory 0700, file 0600, both checked), and exports PGPASSFILE.
+#   3. Exports PGHOST/PGPORT/PGDATABASE/PGUSER/PGSSLMODE=require, PGCONNECT_TIMEOUT, and a
+#      password-free TEST_DB_URL for the runners. PGPASSWORD is unset.
+#   4. Authenticates once, read-only, with `psql -w` (never prompts). A failure stops here,
+#      with exit 3, before the command starts.
+#   5. Runs the command. The file stays until the command has exited, so the command's own
+#      cleanup (its EXIT trap) can still authenticate after a failure.
+#   6. Deletes the directory on every exit path (normal, error, Ctrl-C, TERM, HUP), and sweeps
+#      directories left by an earlier wrapper that was killed.
+#
+# SETTINGS (non-secret; environment or ~/.config/agentory/test-db.conf, KEY=value lines)
+#   AGENTORY_TEST_PGHOST      e.g. aws-0-ap-northeast-2.pooler.supabase.com (session pooler)
+#   AGENTORY_TEST_PGPORT      default 5432
+#   AGENTORY_TEST_PGDATABASE  default postgres
+#   AGENTORY_TEST_PGUSER      e.g. postgres.tlvnfrxzjhsjgdofwehb
+#   AGENTORY_TEST_REF         default tlvnfrxzjhsjgdofwehb (ATLAS TEST)
+# Production (ohsdatpvfdjdemstoiuj) is refused in every setting, always.
+set -euo pipefail
+umask 077
+
+PROD_REF=ohsdatpvfdjdemstoiuj
+SERVICE="agentory.test.postgres"
+SECURITY_BIN="${AGENTORY_SECURITY_BIN:-security}"   # overridable for tests only
+PSQL_BIN="${AGENTORY_PSQL_BIN:-psql}"
+CONF="${AGENTORY_TEST_CONF:-$HOME/.config/agentory/test-db.conf}"
+
+die() { echo "agentory-test-env: $*" >&2; exit "${2:-1}"; }
+
+load_settings() {
+  if [ -f "$CONF" ]; then
+    # KEY=value lines only; no shell evaluation of the file.
+    while IFS='=' read -r k v; do
+      case "$k" in AGENTORY_TEST_PGHOST|AGENTORY_TEST_PGPORT|AGENTORY_TEST_PGDATABASE|AGENTORY_TEST_PGUSER|AGENTORY_TEST_REF)
+        [ -n "${!k:-}" ] || export "$k=$v" ;; esac
+    done < <(grep -E '^[A-Z_]+=[^[:space:]]*$' "$CONF" || true)
+  fi
+  REF="${AGENTORY_TEST_REF:-tlvnfrxzjhsjgdofwehb}"
+  H="${AGENTORY_TEST_PGHOST:-}"; P="${AGENTORY_TEST_PGPORT:-5432}"
+  D="${AGENTORY_TEST_PGDATABASE:-postgres}"; U="${AGENTORY_TEST_PGUSER:-}"
+  [ -n "$H" ] && [ -n "$U" ] || die "set AGENTORY_TEST_PGHOST and AGENTORY_TEST_PGUSER (environment or $CONF)" 2
+  for v in "$REF" "$H" "$P" "$D" "$U"; do
+    case "$v" in *"$PROD_REF"*) die "refusing: a setting names production ($PROD_REF)" 2 ;; esac
+    case "$v" in *[[:space:]]*) die "refusing: settings must not contain whitespace" 2 ;; esac
+  done
+  case "$H" in *:*) die "refusing: put the port in AGENTORY_TEST_PGPORT, not in the host" 2 ;; esac
+  echo "$REF" | grep -Eq '^[a-z]{20}$' || die "refusing: AGENTORY_TEST_REF is not a project ref" 2
+  echo "$P" | grep -Eq '^[0-9]{2,5}$' || die "refusing: AGENTORY_TEST_PGPORT is not a port" 2
+  # The TEST ref must be in the user (pooler: postgres.<ref>) or the host (direct: db.<ref>.supabase.co),
+  # and no OTHER project ref (20 lowercase letters) may appear in either.
+  case "$U$H" in *"$REF"*) ;; *) die "refusing: neither AGENTORY_TEST_PGUSER nor AGENTORY_TEST_PGHOST names $REF" 2 ;; esac
+  for word in $(printf '%s\n%s\n' "$U" "$H" | grep -Eo '[a-z]{20}' || true); do
+    [ "$word" = "$REF" ] || die "refusing: the settings name another project ($word)" 2
+  done
+  ACCOUNT="$U@$H:$P/$D"
+  [ "${AGENTORY_TEST_LOCAL:-0}" = 1 ] && SSL=prefer || SSL=require   # TEST-ONLY knob for the local self-test
+}
+
+keychain_read() { "$SECURITY_BIN" find-generic-password -s "$SERVICE" -a "$ACCOUNT" -w 2>/dev/null; }
+
+store_password() {
+  load_settings
+  [ -t 0 ] || die "store-password must run in an interactive terminal (the password is typed, never passed)" 2
+  echo "Saving the TEST database password for $ACCOUNT in Keychain (service $SERVICE)."
+  echo "macOS will ask for it twice; it is not echoed and not written anywhere else."
+  # -w as the LAST argument with no value: `security` prompts for the secret itself.
+  "$SECURITY_BIN" add-generic-password -U -s "$SERVICE" -a "$ACCOUNT" -l "Agentory TEST Postgres ($REF)" -w
+  echo "saved. Next: agentory-test-env check"
+}
+
+sweep_stale() {
+  local base="${TMPDIR:-/tmp}"; base="${base%/}"
+  for d in "$base"/agentory-pgpass.*; do
+    [ -d "$d" ] && [ -O "$d" ] || continue
+    local pid="${d#"$base"/agentory-pgpass.}"; pid="${pid%%.*}"
+    if ! kill -0 "$pid" 2>/dev/null; then rm -rf -- "$d"; fi
+  done
+}
+
+perms() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
+
+make_passfile() {
+  sweep_stale
+  local base="${TMPDIR:-/tmp}"; base="${base%/}"
+  PASSDIR="$(mktemp -d "$base/agentory-pgpass.$$.XXXXXX")"
+  trap cleanup_passfile EXIT
+  trap 'cleanup_passfile; exit 130' INT
+  trap 'cleanup_passfile; exit 143' TERM
+  trap 'cleanup_passfile; exit 129' HUP
+  local pw
+  pw="$(keychain_read)" || die "no Keychain item for $ACCOUNT (service $SERVICE). Run: agentory-test-env store-password" 3
+  [ -n "$pw" ] || die "the Keychain item for $ACCOUNT is empty. Run: agentory-test-env store-password" 3
+  # pgpass escaping: backslash and colon, in every field.
+  esc() { local s="${1//\\/\\\\}"; printf '%s' "${s//:/\\:}"; }
+  PGPASSFILE="$PASSDIR/pgpass"
+  printf '%s:%s:%s:%s:%s\n' "$(esc "$H")" "$(esc "$P")" "$(esc "$D")" "$(esc "$U")" "$(esc "$pw")" > "$PGPASSFILE"
+  pw=""; unset pw
+  chmod 600 "$PGPASSFILE"; chmod 700 "$PASSDIR"
+  [ "$(perms "$PGPASSFILE")" = 600 ] && [ "$(perms "$PASSDIR")" = 700 ] || die "refusing: could not make the password file private" 3
+  export PGPASSFILE PGHOST="$H" PGPORT="$P" PGDATABASE="$D" PGUSER="$U" PGSSLMODE="$SSL" PGCONNECT_TIMEOUT="${PGCONNECT_TIMEOUT:-10}"
+  export TEST_DB_URL="postgresql://$U@$H:$P/$D?sslmode=$SSL"
+  unset PGPASSWORD
+}
+
+cleanup_passfile() {
+  [ -n "${PASSDIR:-}" ] && [ -d "$PASSDIR" ] && rm -rf -- "$PASSDIR"
+  PASSDIR=""
+}
+
+auth_check() {
+  # Read-only, never prompts (-w). Prints only non-secret facts.
+  # The read-only guarantee is IN the transaction (BEGIN READ ONLY … ROLLBACK), not in
+  # PGOPTIONS: the Supabase session pooler does not forward startup options, so a
+  # `-c default_transaction_read_only=on` was silently dropped (macOS check, 2026-11-26:
+  # "read-only=off"). The probe also proves it: a write inside the same transaction must fail.
+  local out
+  if ! out="$("$PSQL_BIN" -w -X -At -q -v ON_ERROR_STOP=1 <<'SQL' 2>&1
+begin transaction read only;
+select current_user || ' @ ' || current_database() || ' · read-only=' || current_setting('transaction_read_only');
+rollback;
+SQL
+)"; then
+    echo "agentory-test-env: TEST database authentication FAILED for $ACCOUNT (no password prompt is ever shown)." >&2
+    echo "$out" | grep -iv "password" | sed 's/^/  /' >&2 || true
+    echo "  fix: agentory-test-env store-password   (wrong or rotated password), or check the settings in $CONF" >&2
+    exit 3
+  fi
+  case "$out" in *"read-only=on") ;; *)
+    echo "agentory-test-env: refusing: the check did not run read-only ($out)" >&2; exit 3 ;; esac
+  # Proof, not assertion: a write in a read-only transaction is refused by the server.
+  local w
+  w="$("$PSQL_BIN" -w -X -At -q <<'SQL' 2>&1 || true
+begin transaction read only;
+create temporary table agentory_readonly_probe (x int);
+rollback;
+SQL
+)"
+  case "$w" in *"read-only transaction"*) ;; *)
+    echo "agentory-test-env: refusing: a write was NOT refused inside the read-only check" >&2; exit 3 ;; esac
+  echo "TEST database: $out (a write inside it was refused)"
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  store-password) store_password ;;
+  check)
+    load_settings; make_passfile; auth_check ;;
+  run)
+    [ "${1:-}" = "--" ] && shift
+    [ $# -gt 0 ] || die "usage: agentory-test-env run -- <command> [args]" 2
+    load_settings; make_passfile; auth_check >&2
+    set +e; "$@"; rc=$?; set -e
+    exit $rc ;;
+  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+esac

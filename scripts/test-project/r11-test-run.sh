@@ -31,7 +31,13 @@ db="${TEST_DB_URL:?set TEST_DB_URL to the TEST database URL}"
 case "$db" in *"$PROD"*) echo "refusing: TEST_DB_URL names production" >&2; exit 2 ;; *"$REF"*) ;; *) echo "refusing: TEST_DB_URL does not name $REF" >&2; exit 2 ;; esac
 command -v psql >/dev/null && command -v deno >/dev/null || { echo "refusing: psql and deno are required"; exit 2; }
 t() { npm run --silent supabase:test -- "$@"; }
-q() { psql "$db" -X -At -v ON_ERROR_STOP=1 -c "$1"; }
+q() { psql -w "$db" -X -At -v ON_ERROR_STOP=1 -c "$1"; }
+# FAIL EARLY: authenticate once, without a prompt (-w), before anything is snapshotted,
+# seeded or deployed. Run through scripts/test-env/agentory-test-env so the password comes
+# from Keychain and stays available to the cleanup below even when a step fails.
+export PGCONNECT_TIMEOUT="${PGCONNECT_TIMEOUT:-10}"
+q "select 1" >/dev/null 2>&1 || { echo "refusing: cannot authenticate to the TEST database without a password prompt."; \
+  echo "  run: scripts/test-env/agentory-test-env run -- $0 --confirm $REF"; exit 3; }
 [ "$(q "select count(*) from public.workspaces where id='$WS'")" = 1 ] || { echo "refusing: the fictional ORION pilot workspace is not on this database"; exit 1; }
 
 echo "== 2. TEST secrets (names only)"
@@ -60,21 +66,33 @@ LABELS="content_item tasks outreach_drafts approvals saved_outputs lead_mission_
 echo "== 3. snapshot ($LABELS)"; before="$(snap)"; echo "  $before"
 
 cleanup() {
+  # Runs on EVERY exit. Each step is attempted even if an earlier one fails, and the result is
+  # VERIFIED: a cleanup that could not finish says so and fails the run.
+  local rc=$? failed=0
+  set +e
   echo "== 8. cleanup (this run only)"
-  conv="$(q "select count(*) from public.conversations where workspace_id='$WS' and created_at >= '$START'")"
-  echo "  conversations created by this run: $conv (their messages go with them); seeded records: orion-r11-cleanup.sql"
-  q "delete from public.messages where conversation_id in (select id from public.conversations where workspace_id='$WS' and created_at >= '$START')" >/dev/null
-  q "delete from public.conversations where workspace_id='$WS' and created_at >= '$START'" >/dev/null
+  conv="$(q "select count(*) from public.conversations where workspace_id='$WS' and created_at >= '$START'")" || failed=1
+  echo "  conversations created by this run: ${conv:-?} (their messages go with them); seeded records: orion-r11-cleanup.sql"
+  q "delete from public.messages where conversation_id in (select id from public.conversations where workspace_id='$WS' and created_at >= '$START')" >/dev/null || failed=1
+  q "delete from public.conversations where workspace_id='$WS' and created_at >= '$START'" >/dev/null || failed=1
   # R1.2.1 probe rows that did not bind (a failed probe leaves them unbound).
-  q "delete from public.messages where conversation_id in (select id from public.conversations where title='r121-binding-probe' and created_at >= '$START')" >/dev/null
-  q "delete from public.conversations where title='r121-binding-probe' and created_at >= '$START'" >/dev/null
-  psql "$db" -X -q -v ON_ERROR_STOP=1 --single-transaction -f scripts/test-project/orion-r11-cleanup.sql | tail -1
+  q "delete from public.messages where conversation_id in (select id from public.conversations where title='r121-binding-probe' and created_at >= '$START')" >/dev/null || failed=1
+  q "delete from public.conversations where title='r121-binding-probe' and created_at >= '$START'" >/dev/null || failed=1
+  psql -w "$db" -X -q -v ON_ERROR_STOP=1 --single-transaction -f scripts/test-project/orion-r11-cleanup.sql >/dev/null || failed=1
+  left="$(q "select (select count(*) from public.conversations where workspace_id='$WS' and created_at >= '$START')
+    + (select count(*) from public.conversations where title='r121-binding-probe')
+    + (select count(*) from public.accounts where id::text like 'a71a1100-%')
+    + (select count(*) from public.signal_events where dedupe_key like 'orion-r11:%')
+    + (select count(*) from public.monitoring_subjects where id::text like 'a71a1100-%')")" || failed=1
+  if [ "$failed" = 0 ] && [ "$left" = 0 ]; then echo "  CLEANUP VERIFIED: 0 run records left"
+  else echo "  CLEANUP FAILED: ${left:-unknown} run record(s) left — re-run: scripts/test-env/agentory-test-env run -- psql -w -f scripts/test-project/orion-r11-cleanup.sql"; rc=4; fi
+  exit "$rc"
 }
 trap cleanup EXIT
 
 echo "== 4. seed"
 if [ "$(q "select count(*) from public.accounts where id::text like 'a71a1100-%'")" = 0 ]; then
-  psql "$db" -X -q -v ON_ERROR_STOP=1 --single-transaction -f scripts/test-project/orion-r11-seed.sql | tail -1
+  psql -w "$db" -X -q -v ON_ERROR_STOP=1 --single-transaction -f scripts/test-project/orion-r11-seed.sql | tail -1
 else echo "  already present (left from an earlier run; cleanup removes it)"; fi
 
 echo "== 5. deploy pilot-chat to TEST"
@@ -86,9 +104,22 @@ echo "  TEST pilot-chat build = ${build:-none} (HEAD $head)"
 
 echo "== 6. live run"
 rc=0
+if [ -n "${R11_FOCUS:-}" ]; then
+  # FOCUSED RETEST (e.g. R11_FOCUS="F1-brief,F1-report-ok,F2-apify,F4-followup,F3-signals,F3-analyze,F6-under30"
+  # R11_FOCUS_REPEAT=2): name EVERY turn the target turn follows in its suite, because ORION reads the
+  # last 6 messages (chatBrain.userPrompt) and 8 rows of history (TURN_LOOKBACK). Only those
+  # R1.2 turns, in suite order, in R11_FOCUS_REPEAT fresh conversations, plus the R1.2.1 binding
+  # probe and the isolation probe. Same assertions; the full suites are not re-run.
+  ORION_R11_APPROVED="I approve the ORION R1.1 TEST run on $REF" ORION_PILOT_SUPABASE_URL="https://$REF.supabase.co" \
+  ORION_PILOT_ANON_KEY="${ORION_PILOT_ANON_KEY:-$ANON_DEFAULT}" \
+    deno run --allow-env --allow-net --allow-read --allow-write=. scripts/orion-pilot/run-r11.ts \
+      --suite r12 --only "$R11_FOCUS" --repeat "${R11_FOCUS_REPEAT:-2}" --binding-probe || rc=$?
+  R11_SKIP_R12=1
+else
 ORION_R11_APPROVED="I approve the ORION R1.1 TEST run on $REF" ORION_PILOT_SUPABASE_URL="https://$REF.supabase.co" \
 ORION_PILOT_ANON_KEY="${ORION_PILOT_ANON_KEY:-$ANON_DEFAULT}" \
   deno run --allow-env --allow-net --allow-read --allow-write=. scripts/orion-pilot/run-r11.ts || rc=$?
+fi
 # R1.2: the owner's manual acceptance prompts (14 turns), same conversation rules, no retries.
 if [ "${R11_SKIP_R12:-0}" != 1 ]; then
   ORION_R11_APPROVED="I approve the ORION R1.1 TEST run on $REF" ORION_PILOT_SUPABASE_URL="https://$REF.supabase.co" \

@@ -80,7 +80,14 @@ export function judge(t: T, r: { http: number; answer: string; metadata: Record<
 
 if (import.meta.main) {
   const suite = Deno.args.includes("--suite") ? Deno.args[Deno.args.indexOf("--suite") + 1] : "r11";
-  const tests = suite === "r12" ? r12Tests() : FIXTURES.tests as T[];
+  const all = suite === "r12" ? r12Tests() : FIXTURES.tests as T[];
+  // FOCUSED RETEST: --only <id,…> keeps those turns in their suite order (so each
+  // keeps the turns it followed), --repeat <n> runs them in n fresh conversations.
+  // The assertions are the suite's own, unchanged.
+  const only = Deno.args.includes("--only") ? Deno.args[Deno.args.indexOf("--only") + 1].split(",").map((x) => x.trim()) : null;
+  const repeat = Deno.args.includes("--repeat") ? Math.max(1, Math.min(5, Number(Deno.args[Deno.args.indexOf("--repeat") + 1]) || 1)) : 1;
+  if (only && only.some((id) => !all.some((t) => (t.id ?? String(t.n)) === id))) { console.error(`refusing: --only names an unknown test (${only.join(",")})`); Deno.exit(2); }
+  const tests = only ? all.filter((t) => only.includes(t.id ?? String(t.n))) : all;
   if (Deno.args.includes("--dry-run")) {
     for (const t of tests) console.log(`${String(t.n).padStart(2)}  → ${t.expected_route.padEnd(11)} ${t.prompt.slice(0, 90)}`);
     console.log(`\n${tests.length} turns in one conversation + 1 isolation probe. Not run (dry run).`);
@@ -110,7 +117,9 @@ if (import.meta.main) {
 
   const out: unknown[] = [];
   let conversation: string | null = null, failures = 0;
-  for (const t of tests) {
+  const runs = Array.from({ length: repeat }, (_, i) => tests.map((t) => ({ t, fresh: i > 0 && t === tests[0] }))).flat();
+  for (const { t, fresh } of runs) {
+    if (fresh) conversation = null;
     const r = await ask(base!, anon, owner, PILOT_WS, t.prompt, conversation);
     conversation = r.conversation_id ?? conversation;
     if (r.http === 429 && r.error === "model_spend_ceiling_reached") { console.log(`${t.n}: STOPPED — TEST spend ceiling reached; the rest not run`); break; }
@@ -123,7 +132,7 @@ if (import.meta.main) {
   // "New chat" does) is bound to its workspace on first use; the database refuses
   // a conversation naming a workspace the user does not belong to. One model call.
   let bindingOk = true;
-  if (suite === "r11") {
+  if (suite === "r11" || Deno.args.includes("--binding-probe")) {
     const rest = async (method: string, path: string, body?: unknown) => {
       const res = await fetch(`${base!.replace(/\/$/, "")}/rest/v1/${path}`, { method,
         headers: { "Content-Type": "application/json", apikey: anon, Authorization: `Bearer ${owner}`, Prefer: "return=representation" },
@@ -155,6 +164,6 @@ if (import.meta.main) {
   console.log(`isolation probe: HTTP ${probe.http} ${isolated ? "ok (refused)" : "FAIL"}`);
   out.push({ probe: "outsider_on_pilot_workspace", http: probe.http, answer_chars: probe.answer.length });
   await Deno.writeTextFile(`${suite}-transcript.json`, JSON.stringify(out, null, 2));
-  console.log(`\n${tests.length - failures}/${tests.length} turns passed the automatic checks; transcript: ${suite}-transcript.json`);
+  console.log(`\n${runs.length - failures}/${runs.length} turns passed the automatic checks; transcript: ${suite}-transcript.json`);
   Deno.exit(failures || !isolated || !bindingOk ? 1 : 0);
 }
