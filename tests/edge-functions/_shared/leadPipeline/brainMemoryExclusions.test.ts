@@ -75,7 +75,7 @@ Deno.test("G1 (pure): approved exclusions are added as EXPLICIT exclusions, de-d
   const out = withMemoryExclusions(base, ["Crypto", "consumer retail", " ", "crypto"]);
   assertEquals(out.contractInput?.excluded_industries_explicit, [...(base.contractInput?.excluded_industries_explicit ?? []), "Crypto"]);
   assertEquals(out.context, base.context, "targeting (industries, geography, size) is untouched");
-  assert(out.fields.includes("memory_exclusions"));
+  assertEquals(out.fields, base.fields, "the v1 path's field report is unchanged (it applies no exclusions)");
   assertEquals(withMemoryExclusions(base, []), base, "no memory → identical");
   const absent = brainPlanningContext(null);
   assertEquals(withMemoryExclusions(absent, ["Crypto"]), absent, "no usable Brain → memory adds nothing either");
@@ -109,7 +109,7 @@ Deno.test("G1: retracted, expired or pending memory serves nothing; another work
   for (const v of ["Crypto", "Gambling", "Tobacco", "Defense"]) {
     assert(!brain.contractInput?.excluded_industries_explicit?.includes(v), `${v} must not apply: ${JSON.stringify(brain.contractInput)}`);
   }
-  assert(!brain.fields.includes("memory_exclusions"));
+  assertEquals(brain.fields, brainPlanningContext({ profile: PROFILE, onboarding_completed: true }).fields);
 });
 
 Deno.test("G1: a memory read failure leaves planning exactly as it was before (no throw, no partial context)", async () => {
@@ -117,3 +117,4 @@ Deno.test("G1: a memory read failure leaves planning exactly as it was before (n
   const plain = brainPlanningContext({ profile: PROFILE, onboarding_completed: true });
   assertEquals(withFailure, plain);
 });
+

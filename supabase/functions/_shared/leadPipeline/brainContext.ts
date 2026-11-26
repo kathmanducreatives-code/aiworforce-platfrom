@@ -87,7 +87,8 @@ export function brainPlanningContext(row: { profile?: unknown; onboarding_comple
 /**
  * Approved memory exclusions, folded into the Mission Contract input as EXPLICIT
  * workspace exclusions (pure). Case-insensitive de-duplication against what the
- * profile already excludes; nothing else in the context changes.
+ * profile already excludes; nothing else in the context — including the v1 path's
+ * `fields` report — changes.
  */
 export function withMemoryExclusions(base: BrainPlanningContext, industries: readonly string[]): BrainPlanningContext {
   if (base.status !== "used" || !base.contractInput) return base;
@@ -99,9 +100,11 @@ export function withMemoryExclusions(base: BrainPlanningContext, industries: rea
     if (v && !known.has(v.toLowerCase())) { known.add(v.toLowerCase()); added.push(v); }
   }
   if (!added.length) return base;
+  // `fields` is NOT extended: it is also the v1 compiler path's report, and that path
+  // applies no exclusions. Contract mode reports each applied exclusion itself
+  // (report.applied: brain:exclusion:industry:<slug>, authority "policy").
   return {
     ...base,
-    fields: [...base.fields, "memory_exclusions"],
     contractInput: { ...base.contractInput, excluded_industries_explicit: [...(base.contractInput.excluded_industries_explicit ?? []), ...added] },
   };
 }
