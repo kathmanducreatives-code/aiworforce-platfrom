@@ -29,7 +29,8 @@ agentory-test-env check
 ```
 
 - **`store-password`:** the macOS `security` tool prompts for the password; it is never echoed. The Keychain item is service `agentory.test.postgres`, with account `user@host:port/db`.
-- **`check`:** runs one read-only query and prints the user, the database and `read-only=on`.
+- **`check`:** runs one query inside `BEGIN READ ONLY … ROLLBACK`, then proves the transaction is read-only by attempting a temporary-table write that the server must refuse. It prints `… · read-only=on (a write inside it was refused)`.
+- **Through the session pooler, the user prints as `postgres`.** The pooler maps `postgres.<ref>` to `postgres`; this is expected.
 
 ## Every run: one command
 
@@ -68,3 +69,13 @@ This runs against a real **local** Postgres with a fake Keychain, and checks 23 
 - fail-early on a wrong password (exit 3, no prompt);
 - that no password ever appears in output;
 - refusal of production and foreign refs.
+
+## Validation record
+
+| Date | Where | Result |
+|---|---|---|
+| 2026-11-25 | Linux, local Postgres 17 (self-test) | 23/23 |
+| 2026-11-26 | **macOS, owner's machine, ATLAS TEST via the session pooler, commit `e267a083`** | Keychain item saved; `check` authenticated with **no password prompt**. Installed as the alias `agentory-test-db`; the existing `agentory-test-env` shell function is kept. Output: `postgres @ postgres · read-only=off` (see the next row) |
+| 2026-11-26 | Fix | `read-only=off` was real. The old check set read-only through `PGOPTIONS`, a startup option that the **Supabase pooler does not forward**. The probe itself was a single `SELECT`, so nothing was written. The check now enforces read-only inside the transaction and proves it with a refused write. The production backup script had the same dependency and is fixed the same way. Self-test 24/24, including a case where the session default is read-write |
+
+**To confirm on macOS** (read-only, no cost): `agentory-test-db check`. It should end with `read-only=on (a write inside it was refused)`.

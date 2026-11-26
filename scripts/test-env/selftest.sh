@@ -31,9 +31,14 @@ nosecret() { grep -qF -- "$PW" "$1" && return 1 || return 0; }
 
 # 1 check: read-only, authenticated, no prompt (stdin closed)
 out="$T/o1"; "$TOOL" check </dev/null >"$out" 2>&1; rc=$?
-[ $rc = 0 ] && grep -q "read-only=on" "$out" && grep -q "postgres.tlvnfrxzjhsjgdofwehb @ postgres" "$out" && ok "check authenticates read-only" || { ko "check ($rc)"; cat "$out"; }
+[ $rc = 0 ] && grep -q "read-only=on (a write inside it was refused)" "$out" && grep -q "postgres.tlvnfrxzjhsjgdofwehb @ postgres" "$out" && ok "check authenticates read-only" || { ko "check ($rc)"; cat "$out"; }
 nosecret "$out" && ok "check never prints the password" || ko "check printed the password"
 [ "$(leftover)" = 0 ] && ok "check removes the password file" || ko "check left a password file"
+
+# 1b the pooler case: startup options are not honoured, the session default is read-WRITE.
+#    The check must still report read-only=on and prove a write is refused.
+out="$T/o1b"; PGOPTIONS='-c default_transaction_read_only=off' "$TOOL" check </dev/null >"$out" 2>&1; rc=$?
+[ $rc = 0 ] && grep -q "read-only=on (a write inside it was refused)" "$out" && ok "read-only enforced in the transaction, not via PGOPTIONS" || { ko "pooler case ($rc)"; cat "$out"; }
 
 # 2 run: file is 0600 in a 0700 dir, scoped to exactly one line; command exit code propagates; file removed
 out="$T/o2"; "$TOOL" run -- bash -c '

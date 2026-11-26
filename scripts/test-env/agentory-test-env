@@ -121,16 +121,36 @@ cleanup_passfile() {
 }
 
 auth_check() {
-  # Read-only, never prompts (-w), one statement. Prints only non-secret facts.
+  # Read-only, never prompts (-w). Prints only non-secret facts.
+  # The read-only guarantee is IN the transaction (BEGIN READ ONLY … ROLLBACK), not in
+  # PGOPTIONS: the Supabase session pooler does not forward startup options, so a
+  # `-c default_transaction_read_only=on` was silently dropped (macOS check, 2026-11-26:
+  # "read-only=off"). The probe also proves it: a write inside the same transaction must fail.
   local out
-  if ! out="$(PGOPTIONS='-c default_transaction_read_only=on' "$PSQL_BIN" -w -X -At -v ON_ERROR_STOP=1 \
-        -c "select current_user || ' @ ' || current_database() || ' · read-only=' || current_setting('transaction_read_only')" 2>&1)"; then
+  if ! out="$("$PSQL_BIN" -w -X -At -q -v ON_ERROR_STOP=1 <<'SQL' 2>&1
+begin transaction read only;
+select current_user || ' @ ' || current_database() || ' · read-only=' || current_setting('transaction_read_only');
+rollback;
+SQL
+)"; then
     echo "agentory-test-env: TEST database authentication FAILED for $ACCOUNT (no password prompt is ever shown)." >&2
     echo "$out" | grep -iv "password" | sed 's/^/  /' >&2 || true
     echo "  fix: agentory-test-env store-password   (wrong or rotated password), or check the settings in $CONF" >&2
     exit 3
   fi
-  echo "TEST database: $out"
+  case "$out" in *"read-only=on") ;; *)
+    echo "agentory-test-env: refusing: the check did not run read-only ($out)" >&2; exit 3 ;; esac
+  # Proof, not assertion: a write in a read-only transaction is refused by the server.
+  local w
+  w="$("$PSQL_BIN" -w -X -At -q <<'SQL' 2>&1 || true
+begin transaction read only;
+create temporary table agentory_readonly_probe (x int);
+rollback;
+SQL
+)"
+  case "$w" in *"read-only transaction"*) ;; *)
+    echo "agentory-test-env: refusing: a write was NOT refused inside the read-only check" >&2; exit 3 ;; esac
+  echo "TEST database: $out (a write inside it was refused)"
 }
 
 cmd="${1:-}"; shift || true
