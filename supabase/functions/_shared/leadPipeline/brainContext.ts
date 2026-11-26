@@ -15,12 +15,20 @@
 //   * a Brain that is not usable (not onboarded, or empty) is no context at all
 //   * the row is read by workspace id with the service client AFTER the caller's
 //     membership was checked: one workspace's Brain never informs another's plan
+//   * APPROVED MEMORY (Company Brain V2 · B2.3) adds exclusions only: an industry the
+//     team approved excluding ("never target crypto") becomes an explicit workspace
+//     exclusion in Mission Contract mode. It only NARROWS — it never adds a target,
+//     never changes size or geography, and a request that asks for that industry
+//     becomes a question for the user (missionContract/brain.ts), never a silent
+//     winner. Pending, expired, disputed or unapproved memory serves nothing (the
+//     shared loader's rule). A memory read failure leaves planning exactly as before.
 
 import { compileCompanyBrainContext } from "../companyBrainCompiler.ts";
 import { hasUsableBrain } from "../companyBrainContext.ts";
 import { compileLeadMission } from "../leadMissionCompiler.ts";
 import type { BrainMergeInput } from "../leadMission.ts";
 import type { ContractBrainInput } from "../missionContract/brain.ts";
+import { loadCompanyBrainContext, type LoaderDb } from "../companyBrainContextLoader.ts";
 
 export interface BrainPlanningContext {
   /** The compiler's view of the Brain ICP; null when there is no usable Brain. */
@@ -76,6 +84,39 @@ export function brainPlanningContext(row: { profile?: unknown; onboarding_comple
   return { context, status: "used", fields, contractInput: contractBrainInput(profile) };
 }
 
+/**
+ * Approved memory exclusions, folded into the Mission Contract input as EXPLICIT
+ * workspace exclusions (pure). Case-insensitive de-duplication against what the
+ * profile already excludes; nothing else in the context changes.
+ */
+export function withMemoryExclusions(base: BrainPlanningContext, industries: readonly string[]): BrainPlanningContext {
+  if (base.status !== "used" || !base.contractInput) return base;
+  const known = new Set([...(base.contractInput.excluded_industries_explicit ?? []), ...(base.contractInput.excluded_industries_generic ?? [])]
+    .map((x) => x.trim().toLowerCase()));
+  const added: string[] = [];
+  for (const raw of industries) {
+    const v = String(raw ?? "").trim();
+    if (v && !known.has(v.toLowerCase())) { known.add(v.toLowerCase()); added.push(v); }
+  }
+  if (!added.length) return base;
+  return {
+    ...base,
+    fields: [...base.fields, "memory_exclusions"],
+    contractInput: { ...base.contractInput, excluded_industries_explicit: [...(base.contractInput.excluded_industries_explicit ?? []), ...added] },
+  };
+}
+
+/** The approved, servable industry exclusions in a workspace's memory (shared loader). Never throws. */
+export async function loadMemoryExclusions(admin: unknown, workspaceId: string): Promise<string[]> {
+  try {
+    // The caller (handleStrategyRequest) already checked membership; the loader reads this workspace only.
+    const r = await loadCompanyBrainContext(admin as LoaderDb, workspaceId, { skipMembershipCheck: true });
+    return r.ok ? [...(r.context.exclusions?.industries ?? [])] : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Read ONE workspace's Brain (service client, after the membership check). Never throws. */
 export async function loadBrainPlanningContext(
   admin: { from(t: string): { select(c: string): { eq(c: string, v: string): { maybeSingle(): PromiseLike<{ data: unknown; error: unknown }> } } } },
@@ -84,7 +125,9 @@ export async function loadBrainPlanningContext(
   try {
     const { data, error } = await admin.from("company_brain").select("profile, onboarding_completed").eq("workspace_id", workspaceId).maybeSingle();
     if (error) return { context: null, status: "unreadable", fields: [] };
-    return brainPlanningContext(data as never);
+    const base = brainPlanningContext(data as never);
+    if (base.status !== "used") return base;
+    return withMemoryExclusions(base, await loadMemoryExclusions(admin, workspaceId));
   } catch {
     return { context: null, status: "unreadable", fields: [] };
   }
