@@ -48,6 +48,12 @@ for (const s of scenarios) {
       excluded: b.excludedCount ?? null, leadsSaved: r.db.leads.length, actorCalls: r.actorCalls.length, persistFailed: b.persistence?.failed ?? null,
       rejected: (b.rejected ?? []).map((x) => x.name).sort(),
       // Phase C (async runs): Actor runs bought, the spend's basis and how sure each charge is.
+      // What a blocked plan asks the user — once per requirement, never once per alternative.
+      questions: (planOf(r.plan.body) as { questions?: string[] }).questions ?? null,
+      // FLEXIBLE DISCOVERY: the mode the plan was approved in, what it relaxed, and each company's tier.
+      discoveryMode: (r.plan.body as { discoveryMode?: string }).discoveryMode ?? null,
+      relaxed: ((r.plan.body as { flexible?: { relaxed?: { label: string }[] } }).flexible?.relaxed ?? null)?.map((x) => x.label) ?? null,
+      flexibleTiers: ((b as { flexible?: { matches?: { name: string; tier: string }[] } }).flexible?.matches ?? null)?.map((m) => `${m.name}: ${m.tier}`) ?? null,
       purchases: r.purchases, spendBasis: b.outcome?.spend?.basis ?? null, chargeStates: (b as { chargeStates?: unknown }).chargeStates ?? null,
     };
     for (const [k, v] of Object.entries(s.expect ?? {})) assertEquals(got[k], v, `${s.name}: ${k}`);

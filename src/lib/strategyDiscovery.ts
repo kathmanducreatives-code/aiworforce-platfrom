@@ -67,6 +67,60 @@ export interface StrategyPlanView {
   questions: string[];
   /** What the interpreter assumed, what it could not check, and what it merged — from the contract. */
   interpretation: { assumptions: string[]; disclosures: string[]; merged: { span: string; reason: string }[] };
+  /** FLEXIBLE DISCOVERY: what this plan relaxed and the related industries it ranks by. Null = strict. */
+  flexible: FlexiblePlanView | null;
+  /** The mode the BACKEND planned in. Null = a backend from before Flexible Discovery (it ignores
+   *  discovery_mode and plans strictly), so a Flexible request must not be approved against it. */
+  discoveryMode: DiscoveryMode | null;
+}
+
+export type DiscoveryMode = 'strict' | 'flexible';
+export interface FlexiblePlanView {
+  relaxed: { label: string; why: string }[];
+  industries: { requested: string[]; related: string[]; note: string | null };
+}
+export type MatchTier = 'strong' | 'close' | 'exploratory' | 'insufficient';
+export type AttributeStatus = 'verified' | 'inferred' | 'unknown';
+export interface FlexibleMatchView {
+  leadKey: string; name: string; domain: string | null; tier: MatchTier; why: string[];
+  attributes: { name: string; status: AttributeStatus; value: string }[];
+  sources: string[];
+}
+export const TIER_LABEL: Record<MatchTier, string> = { strong: 'Strong Match', close: 'Close Match', exploratory: 'Exploratory', insufficient: 'Insufficient Evidence' };
+export const ATTRIBUTE_LABEL: Record<string, string> = {
+  headquarters: 'HQ', hiring: 'Hiring', industry: 'Industry', business_model: 'Business model', consumer_only: 'Consumer-only', size: 'Size',
+};
+const TIERS: readonly MatchTier[] = ['strong', 'close', 'exploratory', 'insufficient'];
+const STATUSES: readonly AttributeStatus[] = ['verified', 'inferred', 'unknown'];
+
+function readFlexiblePlan(v: unknown): FlexiblePlanView | null {
+  if (!isObj(v)) return null;
+  const ind = isObj(v.industries) ? v.industries : {};
+  const strs = (x: unknown) => (Array.isArray(x) ? x.filter((y): y is string => typeof y === 'string') : []);
+  return {
+    relaxed: (Array.isArray(v.relaxed) ? v.relaxed : []).filter(isObj).map((r) => ({ label: String(r.label ?? ''), why: String(r.why ?? '') })).filter((r) => r.label),
+    industries: { requested: strs(ind.requested), related: strs(ind.related), note: str(ind.note) },
+  };
+}
+
+/** Flexible Discovery's tiered companies; unknown tiers or statuses are dropped, never guessed. */
+export function readFlexibleMatches(v: unknown): FlexibleMatchView[] {
+  if (!isObj(v) || !Array.isArray(v.matches)) return [];
+  return v.matches.filter(isObj).flatMap((m) => {
+    const tier = TIERS.find((t) => t === m.tier);
+    if (!tier) return [];
+    const attrs = isObj(m.attributes) ? m.attributes : {};
+    return [{
+      leadKey: String(m.leadKey ?? ''), name: str(m.name) ?? str(m.domain) ?? 'Unnamed company', domain: str(m.domain), tier,
+      why: (Array.isArray(m.why) ? m.why : []).filter((x): x is string => typeof x === 'string').slice(0, 4),
+      attributes: Object.keys(ATTRIBUTE_LABEL).flatMap((k) => {
+        const a = attrs[k];
+        const status = isObj(a) ? STATUSES.find((x) => x === a.status) : undefined;
+        return isObj(a) && status ? [{ name: k, status, value: String(a.value ?? '') }] : [];
+      }),
+      sources: (Array.isArray(m.sources) ? m.sources : []).map((u) => (typeof u === 'string' ? safeHref(u) : null)).filter((u): u is string => !!u).slice(0, 6),
+    }];
+  });
 }
 
 export interface RequirementView {
@@ -128,8 +182,11 @@ export function readStrategyPlan(body: unknown): StrategyPlanView | null {
       route: r.route === 'checked' || r.route === 'ranked_only' ? r.route : 'not_checkable' as const,
       checkedBy: Array.isArray(r.checkedBy) ? r.checkedBy.map(String) : [], explanation: String(r.explanation ?? ''),
     }))) : [],
-    questions: Array.isArray(p.questions) ? p.questions.map(String) : [],
+    // Once each: an any-of group's alternatives used to repeat the same question (pre-fix backends).
+    questions: Array.isArray(p.questions) ? [...new Set(p.questions.map(String))] : [],
     interpretation: interpretationOf(body),
+    flexible: readFlexiblePlan(body.flexible),
+    discoveryMode: body.discoveryMode === 'flexible' || body.discoveryMode === 'strict' ? body.discoveryMode : null,
   };
 }
 
@@ -153,16 +210,19 @@ export interface PlanRequest {
   reviewOnly?: boolean;
   /** The user's explicit permission to count LIKELY business-model matches (labelled, never verified; hash-bound on the server). */
   acceptLikely?: boolean;
+  /** Flexible Discovery: industry and consumer-only rank instead of gate (hash-bound on the server). */
+  mode?: DiscoveryMode;
 }
 
 function baseBody(r: PlanRequest) {
   return {
-    workspace_id: r.workspaceId, walk_id: walkIdFor(r.messageId, r.choice), query: r.query,
+    workspace_id: r.workspaceId, walk_id: walkIdFor(r.messageId, r.choice) + (r.mode === 'flexible' ? '-flex' : ''), query: r.query,
     ...(r.requestedCount ? { requested_count: r.requestedCount } : {}),
     ...(r.choice === 'auto' ? {} : { strategy: r.choice }),
     // LeadOcean alone cannot prove a hiring signal: its companies are shown as pending review.
     allow_review_only: r.reviewOnly === true || r.choice === 'leadocean_only',
     ...(r.acceptLikely === true ? { accept_likely: true } : {}),
+    ...(r.mode === 'flexible' ? { discovery_mode: 'flexible' } : {}),
   };
 }
 
@@ -282,6 +342,9 @@ export interface StrategyRunView {
   summary: ProviderRunSummary | null;
   /** The raw response, for ProviderRunSummaryCard (which reads `providerSummary` itself). */
   response: Record<string, unknown>;
+  /** Flexible Discovery: every company by tier, and the request as the user wrote it. Empty/null = strict. */
+  matches: FlexibleMatchView[];
+  originalRequest: string | null;
 }
 
 /** Provider-supplied URLs are untrusted: only http(s) links are ever rendered. */
@@ -349,6 +412,8 @@ export function readStrategyRun(body: unknown): StrategyRunView | null {
     written: typeof body.written === 'number' ? body.written : null,
     workbenchPlanId: isObj(body.workbench) && typeof body.workbench.planId === 'string' && body.workbench.planId ? body.workbench.planId : null,
     summary: readProviderRunSummary(body), response: body,
+    matches: readFlexibleMatches(body.flexible),
+    originalRequest: isObj(body.flexible) ? str(body.flexible.originalRequest) : null,
   };
 }
 

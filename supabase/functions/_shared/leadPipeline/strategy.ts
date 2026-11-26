@@ -43,7 +43,7 @@ import { reviewedBuild } from "./actorBuilds.ts";
 import { compileHarvestCompanySearchInput, type HarvestCompanySearchInput } from "../hiringActorInputs.ts";
 import { companySizeBandsFor, industryIdsForVertical } from "../icpDiscoveryConstraints.ts";
 
-import { resolveRequirementRoutes, uncheckedQuestion, uncheckedRequired, type ProofDimension, type RequirementRoute } from "./capabilityResolution.ts";
+import { oncePerLabel, proofNeeded, resolveRequirementRoutes, uncheckedQuestion, uncheckedRequired, type ProofDimension, type RequirementRoute } from "./capabilityResolution.ts";
 
 export const STRATEGY_PLANNER_VERSION = "discovery-strategy-v2" as const;
 
@@ -224,8 +224,12 @@ export function chainFor(strategy: DiscoveryStrategyId, spec: DiscoverySpec, opt
     : companyFirst ? "apify.linkedin_company_search"
     : "apify.linkedin_job_search";
   const rec = "apify.linkedin_company_record";
-  // A REQUIRED business model is checked on the company's own pages, after its record.
-  const bm = spec.requirements.criteria.some((c) => c.kind === "hard" && c.dimension === "business_model") ? ["apify.website_business_model"] : [];
+  // A REQUIRED business model is checked on the company's own pages, after its record —
+  // and so is any other required criterion that business-model evidence decides
+  // ("Exclude consumer-only companies", an industry like "B2B SaaS"): proofNeeded says which.
+  // Flexible Discovery reads the website for a business-model PREFERENCE too ("B2B", a relaxed
+  // "exclude consumer-only"): it ranks by it, within the same approved step.
+  const bm = spec.requirements.criteria.some((c) => (c.kind === "hard" || !!spec.flexible) && proofNeeded(c as never).includes("business_model")) ? ["apify.website_business_model"] : [];
   switch (strategy) {
     case "leadocean_only": return ["leadocean.people_search"];
     case "leadocean_plus_apify": return ["leadocean.people_search", rec];
@@ -281,6 +285,8 @@ export interface DiscoverySpec {
   forbidBroadening: string[];
   /** For the executor and the shared engine: the compiler's requirements, criteria untouched. */
   requirements: DiscoveryRequirements;
+  /** FLEXIBLE DISCOVERY (flexibleDiscovery.ts): what was relaxed and the related industries. Absent = strict. */
+  flexible?: import("./flexibleDiscovery.ts").FlexibleSpec;
 }
 
 interface MissionLike {
@@ -705,7 +711,7 @@ function judge(strategy: DiscoveryStrategyId, spec: DiscoverySpec, ctx: Strategy
   const requirementRoutes = resolveRequirementRoutes(spec.requirements.criteria, provesBy);
   const unchecked = uncheckedRequired(requirementRoutes);
   if (unchecked.length && !ctx.user?.allowReviewOnly) {
-    refusals.push(`no lead could become qualified: ${unchecked.map((r) => `"${r.label}" (${r.explanation.replace(/^required, but /, "")})`).join("; ")} — run it as review-only, change the requirement, or cancel`);
+    refusals.push(`no lead could become qualified: ${oncePerLabel(unchecked).map((r) => `"${r.label}" (${r.explanation.replace(/^required, but /, "")})`).join("; ")} — run it as review-only, change the requirement, or cancel`);
   }
 
   // 4 forbidden broadening: a required filter the discovery step cannot apply
@@ -895,6 +901,9 @@ export function planStrategy(spec: DiscoverySpec, ctx: StrategyContext, advice?:
     user: { strategy: ctx.user?.strategy ?? null, excludeProviders: [...(ctx.user?.excludeProviders ?? [])].sort(), allowReviewOnly: ctx.user?.allowReviewOnly === true,
       // Only when granted, so every plan without it keeps its hash.
       ...(ctx.user?.acceptLikely === true ? { acceptLikely: true } : {}) },
+    // FLEXIBLE DISCOVERY: the mode, what it relaxed and GPT's related industries are part of
+    // what is approved. Absent in strict mode, so every strict plan keeps its hash.
+    ...(spec.flexible ? { flexible: { v: spec.flexible.version, relaxed: spec.flexible.relaxed.map((r) => r.criterionId).sort(), related: spec.flexible.industries.related } } : {}),
   };
   return {
     version: STRATEGY_PLANNER_VERSION,
@@ -925,7 +934,7 @@ function questionsFor(candidates: readonly StrategyCandidate[]): string[] {
   if (!viable.length) return [];
   const ids = new Set(uncheckedRequired(viable[0].requirementRoutes).map((r) => r.criterionId));
   for (const c of viable.slice(1)) for (const id of [...ids]) if (!uncheckedRequired(c.requirementRoutes).some((r) => r.criterionId === id)) ids.delete(id);
-  return viable[0].requirementRoutes.filter((r) => ids.has(r.criterionId)).map(uncheckedQuestion);
+  return oncePerLabel(viable[0].requirementRoutes.filter((r) => ids.has(r.criterionId))).map(uncheckedQuestion);
 }
 
 // ── Bridges to the existing pipeline ────────────────────────────────────────

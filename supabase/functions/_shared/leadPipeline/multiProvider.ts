@@ -52,6 +52,7 @@ import {
   type DiscoverySpec, type DiscoveryStrategyId, type Limitation, type StrategyPlan,
 } from "./strategy.ts";
 import { rethrowPending } from "./runErrors.ts";
+import { proofNeeded } from "./capabilityResolution.ts";
 
 export const STRATEGY_RUN_VERSION = "discovery-strategy-run-v1" as const;
 
@@ -454,17 +455,33 @@ async function runApifyLed(input: StrategyRunInput, cap: { leadoceanRecords: num
   if (bmStep) {
     const required = String(spec.requirements.criteria.find((c) => c.kind === "hard" && c.dimension === "business_model")?.value ?? "B2B");
     const eligibleNow = leads.filter((l) => l.shared?.eligibility === "eligible").length;
-    const need = Math.max(0, spec.requestedCount - eligibleNow);
+    const need = spec.flexible ? spec.requestedCount : Math.max(0, spec.requestedCount - eligibleNow);
     // An industry gap never closes on any strategy (strategy.ts: "a taxonomy label proves no
     // industry"), so it must not hide a company from the one check that CAN still decide it:
     // pilot rehearsal 2026-11-09 — an industry-scoped request left every company open on
     // [business_model, industry], the website step never ran, and a homeowner-only roofer was
     // saved as "needs verification" instead of being rejected as consumer.
     const closable = (g: string) => g !== "industry";
-    const open = leads.filter((l) => {
-      const gaps = (l.shared?.gaps ?? []).filter(closable);
-      return l.shared?.eligibility === "pending" && gaps.length === 1 && gaps[0] === "business_model" && !(l.shared.disproven ?? []).length && l.company.domain.length;
-    });
+    // A requirement business-model evidence decides is not always filed as a business_model gap:
+    // "Exclude consumer-only companies" is an exclusion, which no gap names (pilot 2026-11-23 —
+    // the step was planned for it and then read no site). Such a company is read too, when
+    // every check still open on it is either one the website decides or one nothing can close.
+    const hardCrit = spec.requirements.criteria.filter((c) => c.kind === "hard");
+    const siteDecides = new Set(hardCrit.filter((c) => proofNeeded(c as never).includes("business_model")).map((c) => c.id));
+    const neverCloses = new Set(hardCrit.filter((c) => { const n = proofNeeded(c as never); return n.length === 1 && n[0] === "industry"; }).map((c) => c.id));
+    const openOnSite = (l: VerifiedLead) => {
+      const unknown = (l.shared?.checks ?? []).filter((c) => c.result === "unknown").map((c) => c.criterion_id);
+      return unknown.some((id) => siteDecides.has(id)) && unknown.every((id) => siteDecides.has(id) || neverCloses.has(id));
+    };
+    // FLEXIBLE DISCOVERY ranks by the business model (flexibleDiscovery.ts), so it reads every
+    // company still in play — eligible ones too — within the same approved step and budget.
+    const open = spec.flexible
+      ? leads.filter((l) => l.shared?.eligibility !== "ineligible" && !(l.shared?.disproven ?? []).length && l.company.domain.length)
+      : leads.filter((l) => {
+        const gaps = (l.shared?.gaps ?? []).filter(closable);
+        return l.shared?.eligibility === "pending" && ((gaps.length === 1 && gaps[0] === "business_model") || (gaps.length === 0 && openOnSite(l)))
+          && !(l.shared.disproven ?? []).length && l.company.domain.length;
+      });
     // ONE SITE, ONE READ. Two records of one company (two LinkedIn pages, one domain) are merged
     // only after this step, so without this both were targeted: the same three pages were bought
     // twice and credited to one record, and the record that survived the merge read "no readable
