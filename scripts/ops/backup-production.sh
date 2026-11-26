@@ -9,7 +9,9 @@
 # keeps no automatic backups, so this is the only way back.
 #
 # READ-ONLY BY CONSTRUCTION: every connection to production is opened with
-# default_transaction_read_only=on, so neither the dump nor the counts can
+# default_transaction_read_only=on AND every query runs inside BEGIN READ ONLY …
+# ROLLBACK (the Supabase pooler does not forward startup options, so the first alone
+# is not enough); pg_dump itself only ever opens READ ONLY transactions. Neither the dump nor the counts can
 # write. Nothing is restored to production; the restore check runs in a
 # disposable LOCAL container of production's exact Postgres image.
 #
@@ -68,11 +70,16 @@ stamp="$(date -u +%Y%m%dT%H%M%SZ)"; dir="$out/prod-$stamp"; mkdir -m 700 "$dir"
 # Postgres 17 client tools; read-only session for every production connection.
 pgt() { docker run --rm -i --network host -e PGOPTIONS='-c default_transaction_read_only=on' \
           -v "$dir:/out" "$PG_TOOLS_IMAGE" "$@"; }
-q() { pgt psql "$url" -X -At -v ON_ERROR_STOP=1 -c "$1"; }
+# Every query in a READ ONLY transaction that is rolled back (pooler-proof).
+ro() { printf 'begin transaction read only;\n%s\n;\nrollback;\n' "$1" | pgt psql "$url" -X -At -q -v ON_ERROR_STOP=1; }
+q() { ro "$1"; }
 
 ver="$(q "show server_version_num")" || refuse "cannot connect"
 [ "${ver:0:2}" = "17" ] || refuse "server is Postgres $ver; this procedure is for Postgres 17"
-[ "$(q "show default_transaction_read_only")" = "on" ] || refuse "the session is not read-only"
+[ "$(q "select current_setting('transaction_read_only')")" = "on" ] || refuse "the session is not read-only"
+# Proof: a write inside the same kind of transaction must be refused by the server.
+printf 'begin transaction read only;\ncreate temporary table agentory_backup_readonly_probe (x int);\nrollback;\n' \
+  | pgt psql "$url" -X -At -q 2>&1 | grep -q "read-only transaction" || refuse "a write was not refused in a read-only transaction"
 echo "connected read-only: Postgres $ver"
 
 # ── 2. counts + fingerprint ──────────────────────────────────────────────────
@@ -99,8 +106,8 @@ select 'columns' || E'\t' || md5(coalesce(string_agg(table_name || '.' || column
   from information_schema.columns where table_schema = 'public';
 SQL
 )"
-snapshot() { pgt psql "$url" -X -At -v ON_ERROR_STOP=1 -c "$COUNTS_SQL"; }
-fingerprint() { pgt psql "$url" -X -At -v ON_ERROR_STOP=1 -c "$FINGER_SQL"; }
+snapshot() { ro "$COUNTS_SQL"; }
+fingerprint() { ro "$FINGER_SQL"; }
 snapshot > "$dir/counts.before.tsv"
 fingerprint > "$dir/fingerprint.tsv"
 echo "counted $(wc -l < "$dir/counts.before.tsv") tables; storage objects: $(awk -F'\t' '$1=="storage.objects"{print $2}' "$dir/counts.before.tsv")"
@@ -140,7 +147,8 @@ errors="$(grep -c '^pg_restore: error' "$dir/restore.log" || true)"
 # platform role supabase_functions_admin exists on Supabase but not in the image.
 unexpected="$(grep '^pg_restore: error' "$dir/restore.log" \
   | grep -Ev 'can only create extension in database postgres|extension "pg_cron" does not exist|schema "cron" does not exist|relation "cron\.[a-z_]+" does not exist|schema "net" does not exist|role "supabase_functions_admin" does not exist' || true)"
-rq() { lpg psql "$local_url/restore_check" -X -At -v ON_ERROR_STOP=1 -c "$1"; }
+# The SAME transaction shape as the source side (quiet, read only), so the outputs compare 1:1.
+rq() { printf 'begin transaction read only;\n%s\n;\nrollback;\n' "$1" | lpg psql "$local_url/restore_check" -X -At -q -v ON_ERROR_STOP=1; }
 rq "$COUNTS_SQL" > "$dir/counts.restored.tsv"
 rq "$FINGER_SQL" > "$dir/fingerprint.restored.tsv"
 rows_ok=1; cmp -s "$dir/counts.before.tsv" "$dir/counts.restored.tsv" || rows_ok=0
