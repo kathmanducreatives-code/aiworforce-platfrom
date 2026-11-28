@@ -53,7 +53,7 @@ function seed(role = "owner"): Record<string, Row[]> {
     company_brain: [{ id: "cb-1", workspace_id: WORKSPACE, onboarding_completed: true, updated_at: "2026-11-27T09:00:00Z", profile: NORTHWIND }],
     company_brain_memory: [CRYPTO], company_brain_revisions: [], company_brain_memory_proposals: [],
     lead_candidates: [], accounts: [], contacts: [], outreach_drafts: [], saved_outputs: [],
-    monitoring_subjects: [], signal_events: [], signals: [], request_understanding_log: [], tasks: [], approvals: [],
+    monitoring_subjects: [], monitoring_plans: [], signal_events: [], signals: [], request_understanding_log: [], tasks: [], approvals: [],
   };
 }
 const isBrain = (system: string) => system.includes("REFERENCES");
@@ -100,41 +100,48 @@ Deno.test("Historical signal summary with zero signals: the read surface says no
   assertStringIncludes(out.content, "I don't have any signals recorded");
 });
 
-// ═══ ISSUE B · ICP-wide monitoring PLAN, not executed ═════════════════════════════════════════
+// ═══ ISSUE B · ICP-wide monitoring PLAN — saved as a DRAFT, nothing executed ══════════════════
+const DRAFT = "Draft monitoring plan saved — nothing is running";
 for (const [label, reading] of [
   ["monitor/company (no name)", modelRequest([{ objective: "monitor", entity: "company", shape: "records" }])],
   ["monitor/market", modelRequest([{ objective: "monitor", entity: "market", shape: "records" }])],
 ] as const) {
-  Deno.test(`Issue B (${label}, evidence ON — deployed config): a planning answer; nothing created, nothing bought`, async () => {
-    const { out, tables, answer } = await turn(ISSUE_B, reading, { evidence: true });
-    assertEquals(out.status, 200);
-    assertFalse(out.content.includes(CANT_WATCH), out.content);
-    assertEquals(tables.monitoring_subjects.length, 0, "no monitoring subject created");
-    assert(answer, "ORION wrote the plan as text");
-  });
-  Deno.test(`Issue B (${label}, evidence OFF — Brain TEST before 0defebd): REPRODUCES the reported failure`, async () => {
-    const { out, tables } = await turn(ISSUE_B, reading, { evidence: false });
-    assertStringIncludes(out.content, CANT_WATCH);
-    assertEquals(tables.monitoring_subjects.length, 0);
-  });
+  for (const evidence of [true, false]) {
+    Deno.test(`Issue B (${label}, evidence ${evidence ? "on" : "off"}): an ICP-wide DRAFT plan from the Brain; nothing enabled, nothing bought`, async () => {
+      const { out, tables, net } = await turn(ISSUE_B, reading, { evidence });
+      assertEquals(out.status, 200);
+      assertFalse(out.content.includes(CANT_WATCH), out.content);
+      assertStringIncludes(out.content, DRAFT);
+      assertEquals(tables.monitoring_subjects.length, 0, "no monitoring subject");
+      assertEquals(tables.monitoring_plans.length, 1);
+      const plan = tables.monitoring_plans[0] as Record<string, unknown>;
+      assertEquals([plan.kind, plan.status], ["icp", "draft"]);
+      assertEquals(((plan.target as Record<string, unknown>).industries as string[]).slice(0, 2), ["Manufacturing", "Distribution"]);
+      assert((plan.signal_categories as string[]).includes("expansion") && (plan.signal_categories as string[]).includes("hiring"));
+      assertEquals((plan.constraints as Record<string, unknown>).provider_calls_before_approval, 0);
+      assert(((plan.constraints as Record<string, unknown>).respects_exclusions as string[]).some((x) => /crypto/i.test(x)), "approved exclusion honoured");
+      assertEquals(net.functionCalls.length, 0, "no scan or provider function called");
+    });
+  }
 }
 
 // ═══ NAMED-COMPANY monitoring ═════════════════════════════════════════════════════════════════
 const namedMonitor = modelRequest([{ objective: "monitor", entity: "company", shape: "records",
   references: [{ kind: "named", value: "acme-fixture.example" }] }]);
-Deno.test("Named-company monitoring PLAN with 'do not execute' (evidence on): answered, no subject created", async () => {
-  const { tables } = await turn(NAMED_PLAN, namedMonitor, { evidence: true });
+for (const say of [NAMED_PLAN, NAMED_WATCH]) {
+  Deno.test(`FIXED: "${say.slice(0, 40)}…" saves a DRAFT company plan — never an enabled watch`, async () => {
+    const { out, tables } = await turn(say, namedMonitor, { evidence: true });
+    assertEquals(tables.monitoring_subjects.length, 0, out.content);
+    assertEquals(tables.monitoring_plans.length, 1);
+    assertEquals((tables.monitoring_plans[0] as Record<string, unknown>).status, "draft");
+    assertStringIncludes(out.content, DRAFT);
+  });
+}
+Deno.test("FIXED: a VIEWER cannot create monitoring through chat — refused, nothing saved", async () => {
+  const { out, tables } = await turn(NAMED_WATCH, namedMonitor, { evidence: true, role: "viewer" });
   assertEquals(tables.monitoring_subjects.length, 0);
-});
-Deno.test("FINDING: 'watch <company>' creates an ENABLED monitoring subject immediately — no confirmation card", async () => {
-  const { out, tables } = await turn(NAMED_WATCH, namedMonitor, { evidence: true });
-  assertEquals(tables.monitoring_subjects.length, 1, out.content);
-  assertEquals(tables.monitoring_subjects[0].enabled, true);
-  assertStringIncludes(out.content, "I'm watching");
-});
-Deno.test("FINDING: a VIEWER can create an enabled monitoring subject through chat (pilot-chat has no role gate)", async () => {
-  const { tables } = await turn(NAMED_WATCH, namedMonitor, { evidence: true, role: "viewer" });
-  assertEquals(tables.monitoring_subjects.length, 1, "a viewer's chat message created a paid, scheduled watch");
+  assertEquals(tables.monitoring_plans.length, 0);
+  assertStringIncludes(out.content, "Only an owner, admin or editor");
 });
 
 // ═══ COMPANY BRAIN → RADAR ════════════════════════════════════════════════════════════════════

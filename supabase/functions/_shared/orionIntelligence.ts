@@ -286,7 +286,10 @@ export function orionRoute(request: RequestV1, message: string, o: { evidenceEna
   }
 
   // 3. A paid objective with an explicit "do not execute" is a question about it.
-  if (request.parts.some((p) => PAID.has(p.objective)) && NO_EXECUTION_RE.test(message)) {
+  // A MONITOR request is excepted (Signals recovery): its route only ever saves a reviewable DRAFT
+  // plan — it starts nothing — so "create a monitoring plan … do not execute it yet" belongs there.
+  const paidParts = request.parts.filter((p) => PAID.has(p.objective));
+  if (paidParts.length && !paidParts.every((p) => p.objective === "monitor") && NO_EXECUTION_RE.test(message)) {
     return { request: asConverse(request), reroute: "held_records", reasons: ["no_execution_requested"], draft: null };
   }
   // R1.2: an execution request read only as compose (no paid part) is not a

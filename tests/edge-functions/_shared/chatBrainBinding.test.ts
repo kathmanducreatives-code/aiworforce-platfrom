@@ -183,8 +183,11 @@ Deno.test("pilot-chat records a monitor without starting a scan", async () => {
     new URL("../../../supabase/functions/pilot-chat/index.ts", import.meta.url));
   const i = SRC.indexOf('if (brainBinding.kind === "monitor")');
   assert(i > 0, "the monitor surface must be wired");
-  const block = SRC.slice(i, i + 1400);
-  assert(block.includes("planMonitor(") && block.includes("executeMonitor("));
+  const block = SRC.slice(i, i + 5200);
+  // Signals recovery: a monitor request saves a DRAFT plan; it never enables a watch.
+  assert(block.includes("planMonitor(") && block.includes("buildMonitoringPlan("));
+  assertEquals(block.includes("executeMonitor("), false, "no enabled monitoring_subjects row from chat");
+  assert(block.includes("canRunPaidOperation("), "the caller's role is checked");
   assert(block.includes("return json("), "recording an intention answers and stops");
   assertEquals(/run-monitoring-scan|invokeScan/.test(block), false,
     "a monitor request must not trigger a scan now");

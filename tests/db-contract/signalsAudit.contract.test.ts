@@ -59,3 +59,64 @@ Deno.test("The DATABASE refuses a direct monitoring_subjects write from any memb
   const [{ n }] = await sql`select count(*)::int as n from public.monitoring_subjects where workspace_id = ${t.ws}`;
   assertEquals(n, 0);
 });
+
+// ── Signals recovery · monitoring plans: draft → approve → activate, by role, in the database ──
+async function draftPlan(ws: string, kind: "company" | "icp" = "company"): Promise<string> {
+  const [row] = await sql`insert into public.monitoring_plans (workspace_id, kind, status, title, target, signal_categories, frequency)
+    values (${ws}, ${kind}, 'draft', '[TEST FIXTURE] Watch Acme',
+            ${sql.json((kind === "company" ? { label: "Acme", identifier: "acme-fixture.example" } : { label: "US Manufacturing", industries: ["Manufacturing"] }) as never)},
+            ${["hiring", "expansion"]}, 'weekly') returning id`;
+  return row.id as string;
+}
+const decide = async (userId: string, plan: string, decision: string) => {
+  const c = await as("authenticated", userId);
+  const { data, error } = await c.rpc("monitoring_plan_decide", { p_plan_id: plan, p_decision: decision });
+  assertEquals(error, null, JSON.stringify(error));
+  return data as Record<string, unknown>;
+};
+const subjects = async (ws: string) => await sql`select subject_kind, identifier, enabled from public.monitoring_subjects where workspace_id = ${ws}`;
+
+Deno.test("Monitoring plan: a VIEWER can neither approve nor activate; nothing is enabled", opts, async () => {
+  const t = await team(PROFILE);
+  const plan = await draftPlan(t.ws);
+  assertEquals((await decide(t.viewer.id, plan, "approve")).outcome, "forbidden_role");
+  assertEquals((await decide(t.viewer.id, plan, "activate")).outcome, "forbidden_role");
+  assertEquals((await subjects(t.ws)).length, 0);
+});
+
+Deno.test("Monitoring plan: a draft cannot be activated; approve THEN activate creates the one enabled subject", opts, async () => {
+  const t = await team(PROFILE);
+  const plan = await draftPlan(t.ws);
+  assertEquals((await decide(t.editor.id, plan, "activate")).outcome, "invalid_transition");
+  assertEquals((await subjects(t.ws)).length, 0, "still nothing after a refused activation");
+  assertEquals((await decide(t.editor.id, plan, "approve")).status, "approved");
+  assertEquals((await subjects(t.ws)).length, 0, "approval alone enables nothing");
+  const act = await decide(t.owner.id, plan, "activate");
+  assertEquals(act.status, "active");
+  const s = await subjects(t.ws);
+  assertEquals(s.length, 1);
+  assertEquals([s[0].subject_kind, s[0].identifier, s[0].enabled], ["tracked_company", "acme-fixture.example", true]);
+  assertEquals((await decide(t.owner.id, plan, "pause")).status, "paused");
+  assertEquals((await subjects(t.ws))[0].enabled, false);
+});
+
+Deno.test("Monitoring plan: an ICP plan activates as an icp subject; a rejected plan can never activate; outsiders are refused", opts, async () => {
+  const t = await team(PROFILE); const other = await team(PROFILE);
+  const icp = await draftPlan(t.ws, "icp");
+  assertEquals((await decide(other.owner.id, icp, "approve")).outcome, "not_member");
+  await decide(t.editor.id, icp, "approve");
+  await decide(t.editor.id, icp, "activate");
+  const s = await subjects(t.ws);
+  assertEquals([s[0].subject_kind, s[0].identifier], ["icp", null]);
+  const rejected = await draftPlan(t.ws);
+  assertEquals((await decide(t.editor.id, rejected, "reject")).status, "rejected");
+  assertEquals((await decide(t.editor.id, rejected, "activate")).outcome, "invalid_transition");
+});
+
+Deno.test("Monitoring plan: browser roles cannot write plans directly (only the server drafts them)", opts, async () => {
+  const t = await team(PROFILE);
+  const c = await as("authenticated", t.owner.id);
+  const { error } = await c.from("monitoring_plans").insert({ workspace_id: t.ws, kind: "company", title: "x",
+    target: { label: "x", identifier: "x.example" }, signal_categories: ["hiring"] });
+  assert(error, "direct insert refused");
+});

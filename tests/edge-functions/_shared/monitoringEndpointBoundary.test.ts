@@ -213,3 +213,11 @@ Deno.test("11. a pass may ask to be smaller, never larger", () => {
   // It is reported, so a reader knows how big the pass actually was.
   assert(SRC.includes("max_candidates: maxCandidates"));
 });
+
+Deno.test("Signals recovery: a human caller needs an edit-capable role before anything can spend", () => {
+  const gate = SRC.indexOf("canRunPaidOperation(role)");
+  const admin = SRC.indexOf("const admin = createClient(");
+  assert(gate > 0, "run-monitoring-scan checks the caller's role (a viewer is refused)");
+  assert(gate < admin, "the role is checked before the service client exists");
+  assert(SRC.includes("paidRoleRefusal(role)"), "with the same refusal run-radar-scan returns");
+});

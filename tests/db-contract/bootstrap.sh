@@ -139,3 +139,14 @@ for f in "${held_conversations[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
   apply "$held/$f"
 done
+
+# Signals recovery (2026-11-28): reviewable monitoring plans, then the canonical signal store
+# (reviews of signal_events, legacy backfill). Depends on monitoring_subjects, signal_events and
+# the security chain above.
+held_signals=(
+  20261128140000_signals_monitoring_plans.sql
+)
+for f in "${held_signals[@]}"; do
+  if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi
+  apply "$held/$f"
+done

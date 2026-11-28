@@ -34,6 +34,7 @@ import {
 } from "../_shared/missionEvaluationBinding.ts";
 import { evaluationCriteria, parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
 import { writeSignalEventV2 } from "../_shared/signalsV2Writer.ts";
+import { canRunPaidOperation, paidRoleRefusal } from "../_shared/paidOperationRole.ts";
 import { isSignalsV2Enabled } from "../_shared/signalsV2Flag.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
 import {
@@ -133,9 +134,13 @@ Deno.serve(async (req) => {
   // workspace has to be established while only their own token is in play.
   if (!scheduled) {
     const { data: member } = await userClient
-      .from("workspace_members").select("workspace_id")
+      .from("workspace_members").select("workspace_id, role")
       .eq("workspace_id", workspace_id).eq("user_id", userId).maybeSingle();
     if (!member) return json({ error: "forbidden_workspace" }, 403);
+    // Signals recovery: a scan can spend. Only an owner, admin or editor may start one — the
+    // same rule run-radar-scan applies (a viewer reads; it never runs paid work).
+    const role = (member as { role?: unknown }).role;
+    if (!canRunPaidOperation(role)) return json(paidRoleRefusal(role), 403);
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);

@@ -102,7 +102,7 @@ import {
   compileRequestMission, unrepresentedRequirements,
 } from "../_shared/requestToMission.ts";
 import {
-  planMonitor, executeMonitor, type MonitorDb,
+  planMonitor,
 } from "../_shared/monitorSurface.ts";
 import {
   heldEvidenceFor, renderHeldEvidence, type EvidenceDb,
@@ -151,6 +151,9 @@ import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
 import { routeQualifiedLead, qualifiedLeadRouteFromMission, normalizeCompanyVertical, inferCompanyStage, contractJobTitles } from "../_shared/qualifiedLeadRouting.ts";
 import { inferFamilyKey, getJobFamily } from "../_shared/jobFamilyRegistry.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
+import { radarTargeting } from "../_shared/radarScanPlanner.ts";
+import { buildMonitoringPlan, renderMonitoringPlan } from "../_shared/monitoringPlan.ts";
+import { canRunPaidOperation } from "../_shared/paidOperationRole.ts";
 import {
   mergeCompanyBrainIntoMission, parseLeadMissionDeterministic, type LeadMissionV1,
   effectiveRequestedCount, DEFAULT_REQUESTED_COUNT,
@@ -2893,22 +2896,63 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
         // to the user's own words, and a subject created for the wrong company
         // spends every cadence period, unattended, forever.
         const plan = planMonitor(understood.request, resolvedBindings);
-        const outcome = await executeMonitor(
-          admin as unknown as MonitorDb, plan, workspaceId);
-        const answer = outcome.error
-          ? "I couldn't work out exactly what to watch. Tell me the company and I'll set it up."
-          : outcome.already_watching
-          ? `You're already watching ${outcome.label}. I've left it as it is.`
-          : `Done — I'm watching ${outcome.label}${plan.signals.length ? ` for ${plan.signals.join(", ")}` : ""}. It'll be checked on the workspace's normal schedule.`;
-        const { data: saved } = await admin.from("messages").insert({
-          conversation_id: conversationId, role: "assistant",
-          content: answer, agent_slug: "pilot",
-          metadata: {
-            chat_brain: { route: "monitor", created: outcome.created,
-              already_watching: outcome.already_watching, reason: brainRoute.reason },
+        // ── SIGNALS RECOVERY: A MONITOR REQUEST IS A DRAFT PLAN, NEVER A RUNNING WATCH ──
+        // It used to insert an ENABLED monitoring_subjects row at once, for any member —
+        // a viewer included — and that row is scanned on a schedule against paid providers.
+        // Now: the caller's live role is checked; a draft plan (named company, or the
+        // Company Brain's ICP when no company is named) is saved; nothing is enabled and no
+        // provider is called. Approval and activation happen on the Signals page through
+        // monitoring_plan_decide, by an owner, admin or editor.
+        const replyMonitor = async (content: string, meta: Record<string, unknown>) => {
+          const { data: saved } = await admin.from("messages").insert({
+            conversation_id: conversationId, role: "assistant", content, agent_slug: "lisa",
+            metadata: { chat_brain: { route: "monitor", reason: brainRoute?.reason ?? null }, ...meta },
+          }).select("*").single();
+          return json({ type: "reply", conversation_id: conversationId, message: saved });
+        };
+        const { data: memberRow } = await admin.from("workspace_members").select("role")
+          .eq("workspace_id", workspaceId).eq("user_id", userId).maybeSingle();
+        if (!canRunPaidOperation((memberRow as { role?: unknown } | null)?.role)) {
+          return await replyMonitor(
+            "Only an owner, admin or editor of this workspace can set up monitoring. Nothing was created — ask one of them, or I can describe what a monitoring plan would cover.",
+            { monitoring_plan: { status: "refused", reason: "forbidden_role" } });
+        }
+        const brainProfile = (chatBrain.row?.profile ?? null) as Record<string, unknown> | null;
+        const targeting = brainProfile
+          ? radarTargeting(compileCompanyBrainContext({ workspace_id: workspaceId, profile: brainProfile }))
+          : null;
+        const readEnv = (k: string) => { try { return Deno.env.get(k); } catch { return undefined; } };
+        const fixtureMode = readEnv("LISA_FIXTURE_MODE") === "true";
+        const draft = buildMonitoringPlan({
+          request: understood.request, message,
+          company: plan.subject ? { label: plan.subject.label, identifier: plan.subject.identifier } : null,
+          targeting,
+          readiness: {
+            lisa: readEnv("LISA_V2_ENABLED") === "true" && (fixtureMode || !!readEnv("FIRECRAWL_API_KEY")),
+            jobs: !!readEnv("APIFY_API_TOKEN"),
+            fixture_mode: fixtureMode,
           },
-        }).select("*").single();
-        return json({ type: "reply", conversation_id: conversationId, message: saved });
+        });
+        if (!draft.ok) {
+          return await replyMonitor(
+            "I couldn't tell what to watch: name a company, or complete your Company Brain's target market and I'll draft an ICP-wide plan. Nothing was created.",
+            { monitoring_plan: { status: "refused", reason: draft.refusal } });
+        }
+        const p = draft.plan;
+        const { data: row, error: planErr } = await admin.from("monitoring_plans").insert({
+          workspace_id: workspaceId, kind: p.kind, status: "draft", title: p.title, target: p.target,
+          signal_categories: p.signal_categories, sources: p.sources.map((x) => `${x.category}:${x.source}`),
+          frequency: p.frequency, estimated_usage: p.estimated_usage, constraints: p.constraints,
+          source_ref: `conversation:${conversationId}`, created_by: userId,
+        }).select("id").single();
+        if (planErr || !row) {
+          // The held migration is not applied on this project: say so; never fall back to a live watch.
+          return await replyMonitor(
+            `${renderMonitoringPlan(p).replace(/^Draft monitoring plan saved — nothing is running\./, "Here is the monitoring plan I would set up — it could not be saved because monitoring plans are not enabled on this project yet. Nothing is running.")}`,
+            { monitoring_plan: { status: "unsaved", plan: p } });
+        }
+        return await replyMonitor(renderMonitoringPlan(p),
+          { monitoring_plan: { status: "draft", id: (row as { id: string }).id, plan: p } });
       }
       // The held-evidence reuse moved INTO the lead route, below — see there.
 
