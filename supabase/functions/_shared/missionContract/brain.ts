@@ -286,3 +286,24 @@ export function workspaceExclusionsOf(b: ContractBrainInput | null | undefined):
     ...(memory.length ? { excluded_industries_memory: memory } : {}),
   };
 }
+
+/**
+ * G4 — WHAT THE APPROVAL ASSUMED ABOUT THE WORKSPACE. A fingerprint of everything in the Company
+ * Brain input that can change a plan's requirements: ICP fill-ins, the size rule, the profile's
+ * exclusions and the approved memory exclusions that may act (servable only — a pending memory
+ * changes nothing, so it does not change the fingerprint). Signed into the approval; a run whose
+ * workspace now fingerprints differently is refused (lead-pipeline service, code brain_changed).
+ */
+export async function workspaceRulesFingerprint(b: ContractBrainInput | null | undefined, o: { workspaceId?: string | null; now?: Date } = {}): Promise<string> {
+  const list = (xs: unknown) => [...new Set((Array.isArray(xs) ? xs : []).map((x) => normalizePhrase(x)).filter(Boolean))].sort();
+  // EFFECTIVE rules only: no Brain and a Brain whose only change is a pending memory fingerprint alike.
+  const x = b ?? {};
+  const view = {
+    industries: list(x.industries), business_models: list(x.business_models), stages: list(x.stages), locations: list(x.locations),
+    employee: x.employee_policy ? [x.employee_min ?? null, x.employee_max ?? null] : null,
+    excluded_explicit: list(x.excluded_industries_explicit), excluded_generic: list(x.excluded_industries_generic),
+    excluded_memory: servableMemoryExclusions(x.excluded_industries_memory, o).accepted.map((m) => `${normalizePhrase(m.value)}#${m.memory_id}`).sort(),
+  };
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(view)));
+  return `wr1:${[...new Uint8Array(digest)].map((x) => x.toString(16).padStart(2, "0")).join("").slice(0, 32)}`;
+}

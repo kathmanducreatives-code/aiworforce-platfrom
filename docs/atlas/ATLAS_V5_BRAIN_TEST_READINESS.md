@@ -65,6 +65,7 @@ Compatibility: **ATLAS V5 adds no migration.** Every new field is in function co
 3. A request for a memory-excluded industry → 422 with the question, and nothing planned.
 4. Apify-only: LeadOcean allocation `not used`. LeadOcean-only: Apify `not used`.
 5. Approval negatives, each 409 with `stage: "approval"`: forged token (`approval_invalid`), another walk, a changed limit (`plan_changed`), a non-member (403 `not_authorized`).
-6. Production untouched; spending ledger unchanged.
+6. Approve a plan, then approve a new exclusion memory, then run → `409 brain_changed`, nothing bought. Re-plan, and the new exclusion appears under approved memories. A memory left pending after approval → the run proceeds.
+7. Production untouched; spending ledger unchanged.
 
 **Paid** (separate approval): one Apify-only plan within its ceiling. Companies named by a memory exclusion are rejected with the reason. Receipts are `settled` or `provider_reported`. A duplicate run buys nothing twice.

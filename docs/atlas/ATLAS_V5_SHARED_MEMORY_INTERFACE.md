@@ -38,6 +38,14 @@ export interface MemoryIndustryExclusion {
 - An exclusion also matches on its **core**, with generic head nouns (agency, company, firm, business, service, provider…) dropped: "staffing agencies" matches "Staffing and Recruiting".
 - Known limit: "crypto" does **not** match the single word "cryptocurrency". Whole-word matching was required. Brain may approve both spellings as separate memories if a workspace wants both.
 
+## Approvals and memory changes (G4, ATLAS, commit `43359431`)
+
+A plan signs `workspaceRulesFingerprint(contractInput)`, a hash of the **effective** workspace rules: ICP fill-ins, the size rule, profile exclusions, and servable approved-memory exclusions (value plus `memory_id`). A run recomputes it from the Brain *now*, through `loadBrainPlanningContext`. Any difference refuses the run (`409`, `stage: "approval"`, `code: "brain_changed"`) with nothing bought, and the user re-plans.
+
+- A pending, expired, retracted or cross-workspace memory acts on nothing, so it changes nothing.
+- A memory that is approved, retracted, or has its value or id changed invalidates earlier approvals.
+- What Brain needs to do: nothing beyond the field. The fingerprint is read through the same loader as planning, so plan and run see the same memories.
+
 ## Compatibility
 
 - **Additive.** The field is optional; absent or empty, every contract hashes exactly as before (tested). `Origin.memoryIds` is present only when memory contributed.

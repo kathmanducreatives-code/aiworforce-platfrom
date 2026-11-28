@@ -29,7 +29,9 @@ import { ProviderRunSummaryCard } from './ProviderRunSummaryCard';
 // Development-only simulation (strategyDiscoveryMock.ts): never active in a production build.
 const MOCK = strategyDiscoveryMockMode();
 // A scenario from `npm run dev:atlas -- <scenario> --preview` replaces the committed simulation.
-const invoke: Invoke = MOCK === 'off' ? invokeFunction as unknown as Invoke : MOCK === 'server' ? serverInvoke()
+// `import.meta.env.DEV` is a build-time constant: in a production build both simulations are dead
+// code and Vite drops them (no simulator URL, header or fixture reaches the bundle).
+const invoke: Invoke = !import.meta.env.DEV || MOCK === 'off' ? invokeFunction as unknown as Invoke : MOCK === 'server' ? serverInvoke()
   : simulatedInvoke(MOCK, (localSimulation ?? simulation) as unknown as Simulation);
 const nameOf = (p: string) => PROVIDER_LABEL[p] ?? p;
 const VERDICT_TONE = { qualified: 'text-emerald-300/90', pending: 'text-amber-200/80', rejected: 'text-[#8B8F96]' } as const;

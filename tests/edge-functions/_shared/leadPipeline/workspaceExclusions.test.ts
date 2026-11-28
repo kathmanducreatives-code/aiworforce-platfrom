@@ -5,7 +5,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { exclusionMatches, mergeExclusions, normalizePhrase, phraseMatches } from "../../../../supabase/functions/_shared/exclusionPhrase.ts";
 import {
-  applyCompanyBrain, resolveWorkspaceExclusions, servableMemoryExclusions, workspaceExclusionsOf, type MemoryIndustryExclusion,
+  applyCompanyBrain, resolveWorkspaceExclusions, servableMemoryExclusions, workspaceExclusionsOf, workspaceRulesFingerprint, type MemoryIndustryExclusion,
 } from "../../../../supabase/functions/_shared/missionContract/brain.ts";
 import { contractFromProposal } from "../../../../supabase/functions/_shared/missionContract/interpret.ts";
 import { contractHash } from "../../../../supabase/functions/_shared/missionContract/contract.ts";
@@ -161,4 +161,17 @@ Deno.test("FLEXIBLE: the request's own industry and exclusion relax; a Brain rul
   assertEquals([kind.ind, kind.excl, kind["brain:exclusion:industry:crypto"], kind["memory:exclusion:industry:gambling"]], ["target", "target", "hard", "hard"]);
   assertEquals(flex.flexible?.kept?.map((k) => k.criterionId), ["brain:exclusion:industry:crypto", "memory:exclusion:industry:gambling"]);
   assert(flex.requirements.criteria.filter((c) => c.id.startsWith("memory:")).every(isWorkspaceExclusion));
+});
+
+// ── G4: an approval assumes the workspace's rules as they were ──────────────
+
+Deno.test("G4 FINGERPRINT: an approved memory or a changed rule changes it; order, case, pending or other-workspace memory do not", async () => {
+  const f = (b: Record<string, unknown> | null) => workspaceRulesFingerprint(b as never, { workspaceId: WS, now: new Date("2026-11-28T00:00:00Z") });
+  const base = await f({ excluded_industries_explicit: ["Crypto", "Gambling"], industries: ["SaaS"] });
+  assertEquals(await f({ excluded_industries_explicit: ["gambling", "CRYPTO"], industries: ["saas"] }), base, "order and case are not changes");
+  assert(await f({ excluded_industries_explicit: ["Crypto", "Gambling"], industries: ["SaaS"], excluded_industries_memory: [mem("tobacco", "m1")] }) !== base, "a newly approved memory is a change");
+  assertEquals(await f({ excluded_industries_explicit: ["Crypto", "Gambling"], industries: ["SaaS"], excluded_industries_memory: [mem("tobacco", "m1", { approval_status: "pending" }), mem("x", "m2", { workspace_id: "other" })] }), base,
+    "pending and cross-workspace memory act on nothing, so they change nothing");
+  assert(await f({ excluded_industries_explicit: ["Crypto"], industries: ["SaaS"] }) !== base, "a removed exclusion is a change");
+  assertEquals(await f(null), await f({}), "no Brain and an empty Brain are the same rules");
 });
