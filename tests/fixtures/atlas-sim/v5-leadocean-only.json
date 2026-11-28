@@ -1,0 +1,122 @@
+{
+ "name": "v5-leadocean-only",
+ "description": "G3: LeadOcean only — Apify is allocated $0 and receives zero calls.",
+ "covers": [
+  "leadocean-only isolation"
+ ],
+ "query": "Find 5 companies expanding their sales teams.",
+ "requestedCount": 5,
+ "interpretation": {
+  "understanding": {
+   "roles": [
+    {
+     "span": "sales teams",
+     "title": null,
+     "family": "gtm_sales",
+     "relation": "required"
+    }
+   ],
+   "role_match": "any",
+   "places": [],
+   "industries": [],
+   "signals": [
+    {
+     "span": "expanding their sales teams",
+     "kind": "hiring",
+     "necessity": "required"
+    }
+   ],
+   "signal_logic": "all",
+   "ambiguities": [],
+   "unsupported": []
+  },
+  "signal_windows": [],
+  "deliverable": {
+   "entity": "company",
+   "count": 5,
+   "count_span": "5",
+   "person_roles": []
+  },
+  "company_size": null,
+  "funding_stages": [],
+  "forbid_broadening": []
+ },
+ "companies": [
+  {
+   "slug": "northwind",
+   "name": "Northwind Ledger",
+   "site": "northwind.example",
+   "page": "Accounting software built for finance teams at mid-market companies. Close your books faster with Northwind Ledger.",
+   "model": "b2b_software"
+  },
+  {
+   "slug": "harbor",
+   "name": "Harbor Kids",
+   "site": "harborkids.example",
+   "page": "Harbor Kids sells toys and games to consumers through our online store. Free shipping for families.",
+   "model": "consumer"
+  },
+  {
+   "slug": "quartz",
+   "name": "Quartz Data",
+   "site": "quartz.example",
+   "page": "Welcome. Learn more about us.",
+   "model": "unknown"
+  },
+  {
+   "slug": "maple",
+   "name": "Maple Goods",
+   "site": "maple.example",
+   "page": "Maple Goods sells kitchenware to consumers in our online shop and supplies restaurants and other businesses wholesale.",
+   "model": "b2b_service"
+  },
+  {
+   "slug": "cobalt",
+   "name": "Cobalt Freight",
+   "site": "cobalt.example",
+   "page": "Cobalt Freight provides logistics services to manufacturers and retailers across North America.",
+   "model": "b2b_service"
+  },
+  {
+   "slug": "coinvault",
+   "name": "Coinvault",
+   "site": "coinvault.example",
+   "industry": "Crypto Exchange",
+   "page": "Coinvault is a crypto exchange for businesses and traders.",
+   "model": "b2b_service"
+  },
+  {
+   "slug": "toiletco",
+   "name": "Porcelain Works",
+   "site": "porcelain.example",
+   "industry": "Toilet Manufacturing",
+   "page": "Porcelain Works makes toilets and bathroom fixtures for contractors.",
+   "model": "b2b_service"
+  }
+ ],
+ "strategy": "leadocean_only",
+ "leadocean": true,
+ "allowReviewOnly": true,
+ "expect": {
+  "planStatus": 200,
+  "planCode": "plan_ready",
+  "runCodes": [
+   "200 execution/completed"
+  ],
+  "outcome": "no_results",
+  "qualified": [],
+  "rejected": [],
+  "actorCalls": 0,
+  "leadoceanCalls": 1,
+  "purchases": 0,
+  "allocationUsed": [
+   "apify: not used",
+   "leadocean: used"
+  ],
+  "provenance": [
+   "request: Hiring: sales roles",
+   "system: hiring: last 30 days (default)"
+  ],
+  "kept": null
+ }
+}

@@ -28,7 +28,7 @@ export function strategyDiscoveryUiEnabled(env: Record<string, unknown> = (impor
 }
 
 export type Invoke = <T>(name: string, body: unknown) => Promise<{ data: T | null; error: (Error & { context?: Response }) | null }>;
-export type Result<T> = { ok: true; value: T; error?: undefined } | { ok: false; value?: undefined; error: string };
+export type Result<T> = { ok: true; value: T; error?: undefined } | { ok: false; value?: undefined; error: string; stage?: string | null; code?: string | null };
 
 /** The server validates walk ids as /^[a-z0-9:_-]{1,120}$/i; one walk per card and strategy. */
 export function walkIdFor(messageId: string, choice: StrategyChoice): string {
@@ -69,6 +69,10 @@ export interface StrategyPlanView {
   interpretation: { assumptions: string[]; disclosures: string[]; merged: { span: string; reason: string }[] };
   /** FLEXIBLE DISCOVERY: what this plan relaxed and the related industries it ranks by. Null = strict. */
   flexible: FlexiblePlanView | null;
+  /** G2: where each requirement came from (null on a backend from before it). */
+  provenance: ProvenanceView | null;
+  /** G3: limits in force and who gets what (null on a backend from before it). */
+  budget: PlanBudgetView | null;
   /** The mode the BACKEND planned in. Null = a backend from before Flexible Discovery (it ignores
    *  discovery_mode and plans strictly), so a Flexible request must not be approved against it. */
   discoveryMode: DiscoveryMode | null;
@@ -125,7 +129,7 @@ export function readFlexibleMatches(v: unknown): FlexibleMatchView[] {
 
 export interface RequirementView {
   label: string; necessity: 'required' | 'preferred';
-  route: 'checked' | 'ranked_only' | 'not_checkable';
+  route: 'checked' | 'ranked_only' | 'not_checkable' | 'screened';
   checkedBy: string[]; explanation: string;
 }
 
@@ -153,6 +157,7 @@ export const capabilityLabel = (id: string) => CAPABILITY_LABEL[id] ?? id.split(
 export function routeLine(r: RequirementView): string {
   if (r.route === 'ranked_only') return 'Preference — ranks results, never rejects';
   if (r.route === 'checked') return `Checked by ${r.checkedBy.map(capabilityLabel).join(' + ')}`;
+  if (r.route === 'screened') return 'Workspace exclusion — companies whose industry names it are rejected';
   return 'Cannot be checked by any approved tool';
 }
 
@@ -179,7 +184,7 @@ export function readStrategyPlan(body: unknown): StrategyPlanView | null {
     approvalToken: str(body.approval_token),
     requirements: Array.isArray(p.requirementRoutes) ? oncePerGroup(p.requirementRoutes.filter(isObj).map((r) => ({
       label: String(r.label ?? ''), necessity: r.necessity === 'preferred' ? 'preferred' as const : 'required' as const,
-      route: r.route === 'checked' || r.route === 'ranked_only' ? r.route : 'not_checkable' as const,
+      route: r.route === 'checked' || r.route === 'ranked_only' || r.route === 'screened' ? r.route : 'not_checkable' as const,
       checkedBy: Array.isArray(r.checkedBy) ? r.checkedBy.map(String) : [], explanation: String(r.explanation ?? ''),
     }))) : [],
     // Once each: an any-of group's alternatives used to repeat the same question (pre-fix backends).
@@ -187,6 +192,8 @@ export function readStrategyPlan(body: unknown): StrategyPlanView | null {
     interpretation: interpretationOf(body),
     flexible: readFlexiblePlan(body.flexible),
     discoveryMode: body.discoveryMode === 'flexible' || body.discoveryMode === 'strict' ? body.discoveryMode : null,
+    budget: readBudget(body.budget),
+    provenance: readProvenance(body.provenance),
   };
 }
 
@@ -212,6 +219,78 @@ export interface PlanRequest {
   acceptLikely?: boolean;
   /** Flexible Discovery: industry and consumer-only rank instead of gate (hash-bound on the server). */
   mode?: DiscoveryMode;
+  /**
+   * G3 spending limits. Sent IDENTICALLY on plan and run: they are bound into the plan hash, so a
+   * run with different limits is refused (409 plan_changed) rather than run against them.
+   */
+  budget?: BudgetInput;
+}
+
+export type ProvenanceGroup = 'request' | 'brain_default' | 'brain_memory' | 'gpt_inferred' | 'system';
+export interface ProvenanceEntryView {
+  id: string; label: string; value: string; group: ProvenanceGroup;
+  necessity: 'mandatory' | 'preferred' | 'inferred'; relaxed: boolean; memoryIds: string[]; alsoFrom: string[];
+}
+export interface ProvenanceView {
+  entries: ProvenanceEntryView[];
+  notApplied: { group: 'brain_default' | 'brain_memory'; values: string[]; reason: string }[];
+  refusedMemory: { value: string; reason: string }[];
+  searchFor: { required: string[]; preferred: string[] };
+}
+export const PROVENANCE_QUESTION: Record<ProvenanceGroup, string> = {
+  request: 'You asked for', brain_default: 'From your Company Brain', brain_memory: 'From approved memories',
+  gpt_inferred: 'GPT inferred', system: 'System rules',
+};
+const GROUPS: readonly ProvenanceGroup[] = ['request', 'brain_default', 'brain_memory', 'gpt_inferred', 'system'];
+
+/** G2 provenance; unknown groups or necessities are dropped, never guessed. */
+export function readProvenance(v: unknown): ProvenanceView | null {
+  if (!isObj(v) || !Array.isArray(v.entries)) return null;
+  const strs = (x: unknown) => (Array.isArray(x) ? x.filter((y): y is string => typeof y === 'string') : []);
+  const entries = v.entries.filter(isObj).flatMap((e) => {
+    const group = GROUPS.find((g) => g === e.group);
+    const necessity = (['mandatory', 'preferred', 'inferred'] as const).find((n) => n === e.necessity);
+    if (!group || !necessity || typeof e.label !== 'string') return [];
+    return [{ id: String(e.id ?? ''), label: e.label, value: String(e.value ?? ''), group, necessity, relaxed: e.relaxed === true, memoryIds: strs(e.memoryIds), alsoFrom: strs(e.alsoFrom) }];
+  });
+  const sf = isObj(v.searchFor) ? v.searchFor : {};
+  return {
+    entries,
+    notApplied: (Array.isArray(v.notApplied) ? v.notApplied : []).filter(isObj).map((n) => ({
+      group: n.group === 'brain_memory' ? 'brain_memory' as const : 'brain_default' as const, values: strs(n.values), reason: String(n.reason ?? '') })),
+    refusedMemory: (Array.isArray(v.refusedMemory) ? v.refusedMemory : []).filter(isObj).map((r) => ({ value: String(r.value ?? ''), reason: String(r.reason ?? '') })),
+    searchFor: { required: strs(sf.required), preferred: strs(sf.preferred) },
+  };
+}
+
+/** The user's limits; absent fields use the server's defaults ($0.25 Apify, 50 LeadOcean records). */
+export interface BudgetInput { totalUsd?: number | null; apifyUsd?: number | null; leadoceanRecords?: number | null }
+
+export interface ProviderAllocationView {
+  provider: 'apify' | 'leadocean'; used: boolean; steps: number;
+  worstCase: { apifyUsd: number; leadoceanRecords: number };
+  ceiling: { apifyUsd: number | null; leadoceanRecords: number | null };
+}
+export interface PlanBudgetView {
+  totalUsd: number | null;
+  effective: { apifyUsd: number; leadoceanRecords: number };
+  providers: ProviderAllocationView[];
+  explanation: string;
+}
+
+export function readBudget(v: unknown): PlanBudgetView | null {
+  if (!isObj(v) || !isObj(v.effective) || !isObj(v.allocation)) return null;
+  const e = v.effective, a = v.allocation;
+  const ap = amount(e.maxApifyUsd), lo = amount(e.maxLeadoceanRecords);
+  if (ap === null || lo === null) return null;
+  const providers = (Array.isArray(a.providers) ? a.providers : []).filter(isObj).flatMap((p) => {
+    if (p.provider !== 'apify' && p.provider !== 'leadocean') return [];
+    const w = isObj(p.worstCase) ? p.worstCase : {}, c = isObj(p.ceiling) ? p.ceiling : {};
+    return [{ provider: p.provider, used: p.used === true, steps: typeof p.steps === 'number' ? p.steps : 0,
+      worstCase: { apifyUsd: amount(w.apifyUsd) ?? 0, leadoceanRecords: amount(w.leadoceanRecords) ?? 0 },
+      ceiling: { apifyUsd: amount(c.apifyUsd), leadoceanRecords: amount(c.leadoceanRecords) } } as ProviderAllocationView];
+  });
+  return { totalUsd: amount(v.totalUsd), effective: { apifyUsd: ap, leadoceanRecords: lo }, providers, explanation: str(a.explanation) ?? '' };
 }
 
 function baseBody(r: PlanRequest) {
@@ -223,6 +302,17 @@ function baseBody(r: PlanRequest) {
     allow_review_only: r.reviewOnly === true || r.choice === 'leadocean_only',
     ...(r.acceptLikely === true ? { accept_likely: true } : {}),
     ...(r.mode === 'flexible' ? { discovery_mode: 'flexible' } : {}),
+    ...budgetBody(r.budget),
+  };
+}
+
+/** The limits as the server reads them; a field left empty is not sent (the server default applies). */
+export function budgetBody(b: BudgetInput | undefined): Record<string, number> {
+  const ok = (x: number | null | undefined): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
+  return {
+    ...(ok(b?.apifyUsd) ? { max_apify_usd: b!.apifyUsd } : {}),
+    ...(ok(b?.leadoceanRecords) ? { max_leadocean_records: Math.floor(b!.leadoceanRecords) } : {}),
+    ...(ok(b?.totalUsd) ? { max_total_usd: b!.totalUsd } : {}),
   };
 }
 
@@ -233,8 +323,51 @@ export async function planStrategy(invoke: Invoke, r: PlanRequest): Promise<Resu
   let body: unknown = res.data;
   if (!body && ctx) { try { body = await ctx.clone().json(); } catch { body = null; } }
   const plan = readStrategyPlan(body);
-  return plan ? { ok: true, value: plan } : { ok: false, error: await errorMessage(res.error, 'The discovery service is unavailable.') };
+  return plan ? { ok: true, value: plan } : { ok: false, error: await errorMessage(res.error, 'The discovery service is unavailable.'), ...stageOf(body) };
 }
+
+/** The server's stage/code, only when it sent them (an older backend's error reads as before). */
+const stageOf = (body: unknown): { stage?: string; code?: string } => {
+  const stage = isObj(body) ? str(body.stage) : null, code = isObj(body) ? str(body.code) : null;
+  return { ...(stage ? { stage } : {}), ...(code ? { code } : {}) };
+};
+
+/**
+ * What happened to an approved run, in the words the panel shows. The server's own stage/code
+ * decide it (service.ts); the HTTP status is never reinterpreted, and an unknown answer is
+ * shown as unknown, never as success.
+ *   approval_rejected  the run never started (stale, expired, other plan/workspace, plan changed,
+ *                      meaning changed, provider isolation): nothing was spent; re-approve
+ *   still_running      execution started and is still going at the provider; nothing is bought twice
+ *   execution_refused  execution started and stopped before spending
+ *   execution_failed   execution started, spent, and failed
+ *   completed          execution finished (the outcome says how well)
+ */
+export type RunState = 'approval_rejected' | 'still_running' | 'execution_refused' | 'execution_failed' | 'completed' | 'unknown';
+export function runStateOf(r: Result<StrategyRunView>): { state: RunState; needsReapproval: boolean; label: string } {
+  const stage = r.ok ? r.value.stage : (r as { stage?: string | null }).stage ?? null;
+  const code = r.ok ? r.value.code : (r as { code?: string | null }).code ?? null;
+  if (stage === 'approval' || stage === 'plan') return { state: 'approval_rejected', needsReapproval: code !== 'not_authorized', label: APPROVAL_LABEL[code ?? ''] ?? 'Approval not accepted — nothing ran' };
+  if (code === 'running') return { state: 'still_running', needsReapproval: false, label: 'Still running at the provider — run again to pick it up; nothing is bought twice' };
+  if (code === 'execution_refused') return { state: 'execution_refused', needsReapproval: false, label: 'Approval accepted; execution stopped before spending anything' };
+  if (code === 'execution_failed') return { state: 'execution_failed', needsReapproval: false, label: 'Approval accepted; execution started, spent, then failed' };
+  if (r.ok && code === 'completed') return { state: 'completed', needsReapproval: false, label: 'Completed' };
+  if (r.ok && !code) return { state: 'completed', needsReapproval: false, label: 'Completed' }; // a backend from before stage codes
+  return { state: 'unknown', needsReapproval: false, label: 'The service gave no clear answer; nothing is assumed to have run' };
+}
+const APPROVAL_LABEL: Record<string, string> = {
+  approval_expired: 'Approval expired — nothing ran. Re-plan and approve again.',
+  approval_other_walk: 'This approval belongs to another run — nothing ran. Re-plan and approve again.',
+  approval_other_plan: 'This approval names a different plan — nothing ran. Re-plan and approve again.',
+  approval_other_workspace: 'This approval is for another workspace — nothing ran.',
+  approval_invalid: 'This approval could not be verified — nothing ran. Re-plan and approve again.',
+  approval_missing: 'No approval was sent — nothing ran.',
+  plan_changed: 'The plan changed since you approved it (limits, provider or reading) — nothing ran. Review the new plan.',
+  plan_blocked: 'The plan can no longer run as approved — nothing ran. Review the new plan.',
+  meaning_changed: 'The request’s meaning did not survive intact — nothing ran. Re-plan.',
+  provider_isolation: 'The plan would use a provider you ruled out — nothing ran.',
+  not_authorized: 'Only a workspace owner or admin can approve a paid run — nothing ran.',
+};
 
 /** How a run still going at Apify is picked up again (the server answers 202 `running`). */
 export const RUNNING_RETRY = { attempts: 12, waitMs: 5_000 } as const;
@@ -259,9 +392,9 @@ export async function runStrategy(invoke: Invoke, r: PlanRequest, plan: Strategy
     if (!body && res.error?.context) { try { body = await res.error.context.clone().json(); } catch { body = null; } }
     if (isObj(body) && body.status === 'running') { if (i < attempts - 1) await sleep(o.waitMs ?? RUNNING_RETRY.waitMs); continue; }
     const run = readStrategyRun(body);
-    return run ? { ok: true, value: run } : { ok: false, error: await errorMessage(res.error, 'The run did not return a readable result.') };
+    return run ? { ok: true, value: run } : { ok: false, error: await errorMessage(res.error, 'The run did not return a readable result.'), ...stageOf(body) };
   }
-  return { ok: false, error: 'The run is still in progress at the provider. Run the same plan again to pick it up — nothing will be bought twice.' };
+  return { ok: false, error: 'The run is still in progress at the provider. Run the same plan again to pick it up — nothing will be bought twice.', stage: 'execution', code: 'running' };
 }
 
 // ── Run ─────────────────────────────────────────────────────────────────────
@@ -328,6 +461,8 @@ export function spendLine(s: OutcomeView['spend']): string {
 }
 export interface StrategyRunView {
   status: string; reason: string | null; strategy: string | null;
+  /** The server's stage/code (service.ts); null on a backend from before them. */
+  stage: string | null; code: string | null;
   /** What the request got (backend outcome.ts). Null on an older backend: no outcome is guessed. */
   outcome: OutcomeView | null;
   spend: { apifyUsd: number; leadoceanRecords: number };
@@ -402,6 +537,7 @@ export function readStrategyRun(body: unknown): StrategyRunView | null {
   const companies = [...queue.map((l) => companyRow(l, false)), ...review.map((l) => companyRow(l, true))].filter((x): x is CompanyRow => !!x);
   return {
     status: body.status, reason: str(body.reason), strategy: str(body.strategy), outcome: readOutcome(body.outcome),
+    stage: str(body.stage), code: str(body.code),
     spend: { apifyUsd: usd, leadoceanRecords: lo },
     steps: body.steps.filter(isObj).map((s) => ({ capability: String(s.capability ?? ''), provider: String(s.provider ?? ''), status: String(s.status ?? ''), reason: str(s.reason) })),
     companies, excludedCount: typeof body.excludedCount === 'number' ? body.excludedCount : 0,

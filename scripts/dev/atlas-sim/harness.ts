@@ -15,6 +15,7 @@
 // tests/edge-functions/_shared/leadPipeline/atlasSimScenarios.test.ts.
 
 import { handleStrategyRequest, parseStrategyRequest, readPipelineFlags, type StrategyDeps } from "../../../supabase/functions/_shared/leadPipeline/service.ts";
+import { applyCompanyBrain } from "../../../supabase/functions/_shared/missionContract/brain.ts";
 import { modelGrounder } from "../../../supabase/functions/_shared/leadPipeline/businessModelCheck.ts";
 import { readFlags } from "../../../supabase/functions/_shared/discoveryProviders/flags.ts";
 import { memoryLedger } from "../../../supabase/functions/_shared/discoveryProviders/budget.ts";
@@ -68,7 +69,21 @@ export interface Scenario {
   /** Extra function env for this scenario (e.g. LEAD_PIPELINE_COMPANY_SEARCH). */
   flags?: Record<string, string>;
   grounding?: boolean;
-  approval?: "approve" | "none" | "tampered_hash" | "under_estimate" | "reject";
+  /**
+   * How the run is approved. V5 adds the approval-execution cases: `expired` (run 25 h after the
+   * plan), `other_walk` (the token sent for a different walk), `changed_provider` / `changed_budget`
+   * (the run asks for a different provider or limit than the approved plan), `duplicate` (the same
+   * approved run sent twice).
+   */
+  approval?: "approve" | "none" | "tampered_hash" | "under_estimate" | "reject" | "expired" | "other_walk" | "changed_provider" | "changed_budget" | "duplicate";
+  /** V5 G3: the provider choice sent with plan and run (absent = Auto). */
+  strategy?: string;
+  /** V5 G3: limits sent with plan and run (max_apify_usd, max_leadocean_records, max_total_usd). */
+  budget?: Record<string, number>;
+  /** V5 G3: a connected LeadOcean that returns no records (calls are counted; costs nothing). */
+  leadocean?: boolean;
+  /** V5 G2 / memory: the workspace's Company Brain input, applied as lead-pipeline does (missionContract/brain.ts). */
+  brain?: Record<string, unknown>;
   allowReviewOnly?: boolean;
   /** FLEXIBLE DISCOVERY: the mode the request is sent in (absent = strict). */
   mode?: "strict" | "flexible";
@@ -246,6 +261,8 @@ export interface SimResult {
   plan: { status: number; body: Record<string, unknown> };
   runs: { approval: string; status: number; body: Record<string, unknown> }[];
   actorCalls: ActorCall[];
+  /** V5 G3: every call the (fake) LeadOcean received. */
+  leadoceanCalls: { capability: string; limit: number }[];
   /** Actor runs PURCHASED (async: runs created at the fake Apify; sync: invocations). */
   purchases: number;
   groundingCalls: { host: string; value: string }[];
@@ -287,9 +304,15 @@ function asyncRig(s: Scenario, ap: ReturnType<typeof simApify>, base: ReturnType
   return { api, calls, apifyRuns: { transport, ledger, deadlineMs: a.deadlineMs ?? 90_000, now: api.now, sleep: api.sleep } };
 }
 
-export async function runScenario(s: Scenario): Promise<SimResult> {
+/** The REAL lead-pipeline service's dependencies for one scenario, every provider faked (offline). */
+export async function buildSim(s: Scenario) {
   const signer = await planSigner("offline-sim-secret-0123456789abcdef");
-  const env: Record<string, string> = { LEAD_PIPELINE_ENABLED: "true", LEAD_PIPELINE_WORKSPACES: SIM_WS, PROVIDER_DISCOVERY_ENABLED: "true", PROVIDER_APIFY_DISCOVERY_ENABLED: "true", ...(s.flags ?? {}) };
+  const env: Record<string, string> = { LEAD_PIPELINE_ENABLED: "true", LEAD_PIPELINE_WORKSPACES: SIM_WS, PROVIDER_DISCOVERY_ENABLED: "true", PROVIDER_APIFY_DISCOVERY_ENABLED: "true",
+    ...(s.leadocean ? { PROVIDER_LEADOCEAN_ENABLED: "true", LEADOCEAN_COMMERCIAL_TERMS_CONFIRMED: "true" } : {}), ...(s.flags ?? {}) };
+  // V5 G3: a fake LeadOcean that answers every search with nothing, and counts the calls.
+  const loCalls: { capability: string; limit: number }[] = [];
+  const fakeLeadOcean = { provider: "leadocean", verifyKey: () => Promise.resolve({ remaining: 1000, restrictions: [] }),
+    search: (step: { capability?: string }, _r: unknown, _c: unknown, limit: number) => { loCalls.push({ capability: String(step?.capability ?? ""), limit }); return Promise.resolve({ companies: [], people: [], nextCursor: null, creditsCharged: 0, ignoredFilters: [], total: 0 }); } };
   const ap = simApify(s);
   const ledger = memoryLedger();
   const rig = s.async ? asyncRig(s, ap, ledger) : null;
@@ -302,16 +325,22 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
   let planSeq = 0;
   const d: StrategyDeps = {
     userId: "u-owner", flags: readPipelineFlags((k) => env[k]), discoveryFlags: readFlags((k) => env[k]),
-    store: { memberRole: (u: string, w: string) => Promise.resolve(w === SIM_WS && u === "u-owner" ? "owner" : null), list: () => Promise.resolve([]), secret: () => Promise.resolve(null) } as never,
+    store: { memberRole: (u: string, w: string) => Promise.resolve(w === SIM_WS && u === "u-owner" ? "owner" : null),
+      list: () => Promise.resolve(s.leadocean ? [{ provider: "leadocean", status: "connected", usage: { remaining: 1000, restrictions: [] } }] : []),
+      secret: () => Promise.resolve(s.leadocean ? "sim-leadocean-key" : null) } as never,
     ledger, checkpoints: memoryCheckpointStore(),
     apifyRuns: rig?.apifyRuns ?? null,
     loadExisting: () => Promise.resolve(s.persistence?.existingRecords ?? []),
-    leadoceanFor: () => { throw new Error("LeadOcean is not simulated (flag off)"); },
+    leadoceanFor: () => { if (s.leadocean) return { adapter: fakeLeadOcean } as never; throw new Error("LeadOcean is not simulated (flag off)"); },
     apify: ap.invoke,
     persist: (rows: PipelineRow[]) => persistRows(mem.store, rows),
     now: NOW,
     interpret: async (query: string) => {
-      const { contract } = contractFromProposal(query, s.interpretation as never);
+      const read = contractFromProposal(query, s.interpretation as never).contract;
+      // V5: the workspace's Company Brain (profile and approved memory), applied as lead-pipeline does.
+      const applied = s.brain ? applyCompanyBrain(read, s.brain as never, { workspaceId: SIM_WS, now: NOW() }) : null;
+      const contract = applied?.contract ?? read;
+      const report = applied?.report ?? null;
       // As lead-pipeline/index.ts does: open questions are a clarification, never compiled
       // (compiling an ambiguous or empty contract throws ContractInvalidError).
       if (contract.ambiguities.length) {
@@ -319,7 +348,9 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
         return { error: "needs_clarification", clarification: { questions, message: questions.join(" ") } } as never;
       }
       const hash = await contractHash(contract);
-      return { mission: await compileContract(contract), contract, brain: { status: "absent", fields: [], applied: [], rejected: [] },
+      return { mission: await compileContract(contract), contract,
+        brain: report ? { status: "used", fields: [], applied: report.applied, rejected: report.notApplied, ...(report.merged ? { merged: report.merged } : {}), ...(report.refusedMemory ? { refusedMemory: report.refusedMemory } : {}) }
+          : { status: "absent", fields: [], applied: [], rejected: [] },
         replay: { proposal: { contract, contractHash: hash }, brain: { status: "absent", fields: [], context: null } } } as never;
     },
     recompile: async (_q: string, _n: number | null, replay: { proposal: unknown }) => {
@@ -340,10 +371,16 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
     ...(s.grounding === false ? {} : { groundBusinessModel: modelGrounder(simModel(s, grounding) as never, s.query) }),
   } as StrategyDeps;
 
+  return { d, ap, rig, loCalls, mem, planRecords, grounding };
+}
+
+export async function runScenario(s: Scenario): Promise<SimResult> {
+  const { d, ap, rig, loCalls, mem, planRecords, grounding } = await buildSim(s);
   const ws = s.workspace === "not_member" ? OTHER_WS : SIM_WS;
   const correlationId = `sim-${s.name}`;
   const req = (b: Record<string, unknown>, walk = correlationId) =>
-    parseStrategyRequest({ workspace_id: ws, walk_id: walk, query: s.query, requested_count: s.requestedCount ?? 5, ...(s.mode ? { discovery_mode: s.mode } : {}), ...b })!;
+    parseStrategyRequest({ workspace_id: ws, walk_id: walk, query: s.query, requested_count: s.requestedCount ?? 5, ...(s.mode ? { discovery_mode: s.mode } : {}),
+      ...(s.strategy ? { strategy: s.strategy } : {}), ...(s.budget ?? {}), ...b })!;
 
   const t0 = performance.now();
   const plan = await handleStrategyRequest(req({ action: "strategy_plan", ...(s.allowReviewOnly ? { allow_review_only: true } : {}) }), d);
@@ -359,17 +396,25 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
       const walk = i === 0 ? correlationId : `${correlationId}-${i + 1}`;
       let cur = plan;
       if (i > 0) cur = await handleStrategyRequest(req({ action: "strategy_plan", ...(s.allowReviewOnly ? { allow_review_only: true } : {}) }, walk), d);
-      const cp = cur.body.plan as { planHash: string; estimate: { apifyUsd: number } };
+      const cp = cur.body.plan as { planHash: string; estimate: { apifyUsd: number; leadoceanRecords?: number } };
+      const lo = { leadocean_records: cp.estimate.leadoceanRecords ?? 0 };
       const tok = cur.body.approval_token;
       const approval = mode === "none" ? undefined
-        : mode === "tampered_hash" ? { plan_hash: cp.planHash.replace(/^./, (c) => (c === "a" ? "b" : "a")), apify_usd: cp.estimate.apifyUsd, token: tok }
-        : mode === "under_estimate" ? { plan_hash: cp.planHash, apify_usd: Number((cp.estimate.apifyUsd / 2).toFixed(5)), token: tok }
-        : { plan_hash: cp.planHash, apify_usd: cp.estimate.apifyUsd, token: tok };
+        : mode === "changed_budget" ? { plan_hash: cp.planHash, apify_usd: cp.estimate.apifyUsd, ...lo, token: tok }
+        : mode === "tampered_hash" ? { plan_hash: cp.planHash.replace(/^./, (c) => (c === "a" ? "b" : "a")), apify_usd: cp.estimate.apifyUsd, ...lo, token: tok }
+        : mode === "under_estimate" ? { plan_hash: cp.planHash, apify_usd: Number((cp.estimate.apifyUsd / 2).toFixed(5)), ...lo, token: tok }
+        : { plan_hash: cp.planHash, apify_usd: cp.estimate.apifyUsd, ...lo, token: tok };
       const t = performance.now();
-      const send = () => handleStrategyRequest(req({ action: "strategy_run", ...(approval ? { approval } : {}), ...(s.allowReviewOnly ? { allow_review_only: true } : {}) }, walk), d);
+      // V5 approval-execution cases: what the run changes relative to the approved plan.
+      const changed: Record<string, unknown> = mode === "changed_provider" ? { strategy: s.strategy === "apify_only" ? "leadocean_only" : "apify_only" }
+        : mode === "changed_budget" ? { max_apify_usd: Number(((s.budget?.max_apify_usd ?? 0.25) / 2).toFixed(4)) } : {};
+      const runDeps = mode === "expired" ? { ...d, now: () => new Date(NOW().getTime() + 25 * 3600_000) } : d;
+      const runWalk = mode === "other_walk" ? `${walk}-other` : walk;
+      const send = () => handleStrategyRequest(req({ action: "strategy_run", ...(approval ? { approval } : {}), ...(s.allowReviewOnly ? { allow_review_only: true } : {}), ...changed }, runWalk), runDeps);
       let r = await send();
       runTimes.push(performance.now() - t);
       runs.push({ approval: mode, status: r.status, body: r.body });
+      if (mode === "duplicate") { r = await send(); runs.push({ approval: mode, status: r.status, body: r.body }); }
       // 202 running: the SAME request again (same walk, same approval) adopts the run in progress.
       for (let k = 0; rig && (r.status === 202 || (k === 0 && s.async?.resendOnce)) && k < (s.async?.resumes ?? 4); k++) {
         rig.api.advance((s.async?.resumeGapS ?? 60) * 1000);
@@ -386,7 +431,7 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
     return { planId: r.planId!, leadIds, filter };
   });
 
-  return { scenario: s, correlationId, plan, runs, actorCalls: rig ? rig.calls : ap.calls, purchases: rig ? rig.api.purchases() : ap.calls.length, groundingCalls: grounding,
+  return { scenario: s, correlationId, plan, runs, leadoceanCalls: loCalls, actorCalls: rig ? rig.calls : ap.calls, purchases: rig ? rig.api.purchases() : ap.calls.length, groundingCalls: grounding,
     db: { accounts: mem.accounts, contacts: mem.contacts, leads: mem.leads }, planRecords, workbench, timingsMs: { plan: tPlan, runs: runTimes } };
 }
 

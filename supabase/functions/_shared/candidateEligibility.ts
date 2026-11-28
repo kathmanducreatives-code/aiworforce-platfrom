@@ -50,6 +50,7 @@ import type { QualificationHold } from "./qualificationHold.ts";
 import { excludedByRole, namedTitles, titleSatisfiesNamedRole } from "./roleFamilies.ts";
 import { geographyVerdict } from "./geographyResolver.ts";
 import { isControlledPhrase, matchBusinessModel } from "./businessModelMatch.ts";
+import { exclusionMatches } from "./exclusionPhrase.ts";
 import {
   decideHasRaised, decideRecentlyFunded, fundingKindOf, fundingPresenceOf, normalizeRoundType, requiredStagesOf, stageRequirement,
 } from "./fundingStageClaim.ts";
@@ -229,6 +230,7 @@ function checkAgainst(c: MissionCriterion, graph: CompanyEvidenceGraph): Criteri
   // a company that resolved to something the user did not supply fails, and
   // one whose identity is not resolved yet stays unknown until it is.
   if (c.dimension === "known_companies") return checkKnownCompanies(c, graph, base);
+  if (excludedTypes(c) && isWorkspaceScreen(c)) return screenWorkspaceExclusion(excludedTypes(c)!, graph, base);
   if (excludedTypes(c)) return checkExcludedTypes(c, excludedTypes(c)!, graph, base);
   const dim = CRITERION_EVIDENCE_DIMENSION[c.dimension];
   if (!dim) {
@@ -658,8 +660,43 @@ function checkExcludedTypes(
     reason: `nothing established yet shows the company is not ${values.join(" or ")}` };
 }
 
+/**
+ * A WORKSPACE exclusion (the Company Brain's own rule or an approved memory; ids brain:/memory:
+ * from missionContract/brain.ts) whose industry the controlled vocabulary cannot read.
+ */
+export function isWorkspaceScreen(c: MissionCriterion): boolean {
+  const v = excludedTypes(c);
+  return !!v && (c as { source?: string }).source === "company_brain_policy" && /^(brain|memory):exclusion:/.test(String(c.id))
+    && v.some((x) => !isControlledPhrase(x));
+}
+
+/**
+ * V5 — A WORKSPACE EXCLUSION SCREENS (2026-11-28). No approved tool can PROVE a company is outside
+ * an industry, so a workspace rule like "never target crypto" used to make every plan
+ * unapprovable. It is enforced against everything ATLAS gathered instead:
+ *   * the company's industry or business-model evidence NAMES the excluded industry (whole words,
+ *     exclusionPhrase.ts) → fail: the company is rejected;
+ *   * evidence exists and none of it names it → pass, saying exactly that (screened, not proven);
+ *   * no industry evidence at all → unknown (an exclusion is never passed by silence).
+ * A user-stated exclusion is unchanged (checkExcludedTypes): this applies to workspace rules only.
+ */
+function screenWorkspaceExclusion(values: readonly string[], graph: CompanyEvidenceGraph,
+  base: Pick<CriterionCheck, "criterion_id" | "dimension" | "kind">): CriterionCheck {
+  const items = graph.claims.filter((x) => x.dimension === "industry" || x.dimension === "business_model")
+    .flatMap((x) => [x.current, ...x.supporting]).filter((e): e is EvidenceItem => !!e && e.status !== "unknown" && typeof e.value === "string" && !!e.value.trim());
+  for (const item of items) {
+    const hit = values.find((v) => exclusionMatches(item.value, v));
+    if (hit) return { ...base, result: "fail", evidence_ids: [item.evidence_id], provenance: provenanceOf(item),
+      reason: `${item.dimension.replace(/_/g, " ")} "${item.value}" names ${hit}, which your Company Brain excludes` };
+  }
+  if (!items.length) return { ...base, result: "unknown", evidence_ids: [], provenance: null, reason: `no industry evidence yet to screen ${values.join(" or ")}` };
+  return { ...base, result: "pass", evidence_ids: [items[0].evidence_id], provenance: provenanceOf(items[0]),
+    reason: `screened: nothing found names ${values.join(" or ")} (${items[0].dimension.replace(/_/g, " ")} "${items[0].value}")` };
+}
+
 /** Q3 — an industry / business-model criterion the controlled vocabulary cannot read. */
 function interpretive(c: MissionCriterion): boolean {
+  if (excludedTypes(c) && isWorkspaceScreen(c)) return false;
   if (excludedTypes(c)) return excludedTypes(c)!.some((v) => !isControlledPhrase(v));
   return (c.dimension === "industry" || c.dimension === "business_model") && !isControlledPhrase(c.value);
 }
