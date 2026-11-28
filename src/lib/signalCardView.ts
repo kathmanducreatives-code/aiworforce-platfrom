@@ -5,6 +5,7 @@
 // Canonical rows (signal_events) carry their provenance in `raw` (signalEventProjection.ts);
 // legacy rows show what they have and say what they lack. Nothing here invents a value.
 import type { FeedSignal } from "./signalFeedModel";
+import { recommendedSignalActions, type CanonicalSignalRow, type SignalAction } from "../../supabase/functions/_shared/signalHandoff";
 
 export type SignalTab = "hiring" | "competitors" | "other";
 export type SignalCategoryFilter =
@@ -93,6 +94,22 @@ export interface SignalView {
   isFixture: boolean;
   /** What this row cannot say, stated rather than left blank. */
   gaps: string[];
+  /** Recommendations only — every one needs a person; none runs from here (signalHandoff.ts). */
+  actions: SignalAction[];
+  actionsHeld: string[];
+}
+
+/** The feed row read back as the canonical row it came from (the projection keeps every field in raw). */
+export function asCanonicalRow(s: FeedSignal): CanonicalSignalRow {
+  const raw = rawOf(s);
+  return {
+    id: s.id, workspace_id: String(raw.workspace_id ?? ""), signal_type: s.signal_type ?? "signal",
+    origin: str(raw.origin), subject_type: str(raw.subject_type), subject_key: str(raw.subject_key),
+    occurred_at: str(raw.occurred_at), occurred_at_basis: str(raw.occurred_at_basis), observed_at: s.created_at,
+    verification_status: s.store === "signal_events" ? str(raw.verification_status) : "unverified",
+    confidence: str(raw.confidence), provider: s.source, source_url: s.source_url,
+    lifecycle_status: str(raw.lifecycle_status), normalized_value: raw,
+  };
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -136,6 +153,7 @@ export function signalView(s: FeedSignal): SignalView {
     recommendedAction: str(rel.recommended_action as unknown) ?? s.next_action ?? null,
     isFixture: (s.source ?? "").toLowerCase() === "fixture" || /\.example\.test\b/.test(s.source_url ?? ""),
     gaps,
+    ...(() => { const a = recommendedSignalActions(asCanonicalRow(s)); return { actions: a.actions, actionsHeld: a.held }; })(),
   };
 }
 

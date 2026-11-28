@@ -182,3 +182,11 @@ Deno.test("an approved plan runs once in fixture mode and records signals throug
   assert(x.a.rpcs.some((r) => r.fn === "lisa_claim_scan_run" && String(r.args.p_run_key).startsWith("plan:33333333-3333-4333-8333-333333333333:")));
   assert(x.a.rpcs.some((r) => r.fn === "lisa_record_signal"), "the fixture expansion event reached the store");
 });
+
+Deno.test("LISA_V2_WORKSPACES scopes LISA to the listed workspaces; others read as disabled", async () => {
+  const x = deps({ ...ON, LISA_V2_WORKSPACES: "99999999-9999-4999-8999-999999999999" }, { u1: "owner" }, "u1");
+  const res = await handleLisa(req({ action: "weekly", workspace_id: WS }), x.d);
+  assertEquals(res.status, 409);
+  assertEquals((await res.json()).error, "lisa_v2_disabled");
+  assertEquals(x.a.rpcs.length, 0);
+});

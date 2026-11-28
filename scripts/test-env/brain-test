@@ -13,6 +13,8 @@
 #   scripts/test-env/brain-test atlas-v5 --workspace <uuid> [--execute --confirm <ref>]
 #                                                            # ATLAS V5 for the integrated test (dry run by default;
 #                                                            # never sets an Apify token)
+#   scripts/test-env/brain-test lisa --workspace <fixture-ws-uuid> [--postflight | --execute --confirm <ref>]
+#                                                            # LISA signals engine, fixture mode, one workspace
 #
 # The target is FIXED here: jekgwafobrzamoupehnn. It is not taken from the
 # environment, a flag or a file, and production (ohsdatpvfdjdemstoiuj), ATLAS
@@ -87,5 +89,9 @@ case "$cmd" in
     tok="$(kc_read agentory.brain-test.supabase-token)" || die "no Brain TEST CLI token in Keychain. Run: brain-test store-keys"
     AGENTORY_TEST_CONF="$CONF" SUPABASE_ACCESS_TOKEN="$tok" "$ENV_TOOL" run -- \
       "$root/scripts/test-project/brain-test/install-atlas-v5.sh" "$@" ;;
-  *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+  lisa)
+    tok="$(kc_read agentory.brain-test.supabase-token)" || die "no Brain TEST CLI token in Keychain. Run: brain-test store-keys"
+    AGENTORY_TEST_CONF="$CONF" SUPABASE_ACCESS_TOKEN="$tok" "$ENV_TOOL" run -- \
+      "$root/scripts/test-project/brain-test/install-lisa.sh" "$@" ;;
+  *) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
 esac

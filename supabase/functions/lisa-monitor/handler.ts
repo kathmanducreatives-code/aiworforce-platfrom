@@ -1,6 +1,7 @@
 // lisa-monitor — the LISA V2 endpoint. DISABLED BY DEFAULT.
 //
-// Every request answers 409 `lisa_v2_disabled` unless LISA_V2_ENABLED=true,
+// Every request answers 409 `lisa_v2_disabled` unless LISA_V2_ENABLED=true (and, when
+// LISA_V2_WORKSPACES is set, the workspace is listed in it),
 // before any credential, row or provider is touched. It must stay off in every
 // hosted environment until the security phase revokes the browser write grants
 // on the signal tables (docs/plans/lisa-v2/README.md → Deployment readiness).
@@ -142,6 +143,10 @@ export async function handleLisa(req: Request, deps: LisaDeps): Promise<Response
   const parsed = parseLisaRequest(body);
   if (!parsed.ok) return json({ error: "invalid_request", reason: parsed.error }, 400);
   const r = parsed.req;
+  // WORKSPACE SCOPE. When LISA_V2_WORKSPACES is set, LISA exists only for the listed workspaces;
+  // every other workspace answers exactly as if LISA were off (Brain TEST installs set it).
+  const scoped = String(deps.env("LISA_V2_WORKSPACES") ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (scoped.length && !scoped.includes(r.workspace_id.toLowerCase())) return json({ error: "lisa_v2_disabled" }, 409);
   const now = deps.now?.() ?? new Date();
   const admin = deps.admin;
   // Which source this request may use — decided BEFORE anything runs (fixtureMode.ts).

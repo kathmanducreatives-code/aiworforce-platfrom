@@ -81,3 +81,17 @@ Deno.test("the executive brief's Markdown is parsed into headings, bold and list
   assertFalse(JSON.stringify(b).includes("##") || JSON.stringify(b).includes("**"));
   assertFalse(looksLikeMarkdown("Plain answer with no formatting."), "plain text stays plain");
 });
+
+// ── recommended actions on the card come from the shared handoff reader ──────────────────────
+import { signalView as viewOf } from "../../src/lib/signalCardView.ts";
+Deno.test("a verified canonical expansion card suggests ATLAS / ORION / content — never outreach; unverified suggests nothing", () => {
+  const row = { id: "e1", workspace_id: "w1", signal_type: "market_expansion", signal_category: "growth", origin: "lisa", subject_type: "company",
+    subject_key: "kestrel.example", occurred_at: "2026-11-20T00:00:00Z", occurred_at_basis: "published", observed_at: "2026-11-25T00:00:00Z",
+    verification_status: "self_reported", confidence: "high", provider: "firecrawl", source_url: "https://kestrel.example/press",
+    lifecycle_status: "active", normalized_value: { lisa: { company: { name: "Kestrel" }, verification: { level: "corroborated" } } } };
+  const v = viewOf(normalizeSignalEventRow(row));
+  assertEquals(v.actions.map((a) => a.kind).sort(), ["atlas_discovery", "content_topic", "orion_brief"]);
+  assertFalse(JSON.stringify(v.actions).toLowerCase().includes("outreach"));
+  const u = viewOf(normalizeSignalEventRow({ ...row, verification_status: "unverified", normalized_value: { company_name: "Kestrel" } }));
+  assertEquals(u.actions.length, 0);
+});

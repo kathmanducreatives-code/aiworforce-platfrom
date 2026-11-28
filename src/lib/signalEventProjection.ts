@@ -121,6 +121,7 @@ export function normalizeSignalEventRow(row: RawSignalEventRow): FeedSignal {
       occurred_at_basis: row.occurred_at_basis ?? null,
       confidence: row.confidence ?? null,
       verification_status: row.verification_status ?? null,
+      lifecycle_status: row.lifecycle_status ?? null,
     },
   };
   // Projected through the legacy shape, but it IS the canonical row — the one

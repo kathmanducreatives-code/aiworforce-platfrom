@@ -73,6 +73,16 @@ export default function CanonicalSignalCard({ signal, reviewStatus, onReview, ac
       </div>
 
       {v.recommendedAction && <p className="mt-2 text-[13px] text-foreground/85"><span className="text-muted-foreground">Recommended: </span>{v.recommendedAction}</p>}
+      {v.actions.length > 0 && (
+        <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Suggested next steps" data-testid="signal-actions">
+          {v.actions.map((a) => (
+            <li key={a.kind} title={`${a.why} Needs your approval; nothing runs automatically.`}
+              className="rounded-md border border-white/10 px-2 py-0.5 text-[11.5px] text-foreground/80" data-action={a.kind}>
+              {a.label}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {open && (
         <div className="mt-3 space-y-1.5 border-t border-white/[0.06] pt-3 text-[12.5px] text-foreground/80" data-testid="signal-detail">
@@ -82,6 +92,7 @@ export default function CanonicalSignalCard({ signal, reviewStatus, onReview, ac
           )}
           {v.eventDateBasis && <p className="text-muted-foreground">Event date basis: {v.eventDateBasis.replace(/_/g, ' ')}</p>}
           {v.gaps.length > 0 && <p className="text-amber-300/80">Not established: {v.gaps.join(', ')}.</p>}
+          {v.actionsHeld.length > 0 && <p className="text-muted-foreground">Held: {v.actionsHeld.join('; ')}.</p>}
           <p className="text-muted-foreground">Stored in: {v.store === 'signal_events' ? 'canonical signal store' : 'legacy radar table'}</p>
         </div>
       )}
