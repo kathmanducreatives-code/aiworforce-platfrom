@@ -17,7 +17,7 @@
 #        20261031120000_lead_pipeline_checkpoints
 #        20261108120000_lead_pipeline_one_lead_per_company
 #      (Not applied: the evidence cache and the V2 smoke-admission migrations.)
-#   3. Functions: lead-pipeline, provider-connections (explicit --project-ref, Docker bundling).
+#   3. Functions: lead-pipeline, provider-connections (explicit --project-ref; one-file bundles via --use-api, no Docker).
 #   4. Flags, allowlisted to ONE workspace:
 #        LEAD_PIPELINE_ENABLED=enabled            LEAD_PIPELINE_WORKSPACES=<uuid>
 #        PROVIDER_DISCOVERY_ENABLED=enabled       PROVIDER_DISCOVERY_WORKSPACES=<uuid>
@@ -81,9 +81,9 @@ done
 echo "  ok: provider_connections + checkpoints tables and the one-lead-per-company index present"
 
 echo "== 3. functions"
-for f in lead-pipeline provider-connections; do
-  echo "  deploying $f → $REF"; supabase functions deploy "$f" --project-ref "$REF" --use-docker >/dev/null
-done
+# No Docker: one-file bundles, deployed with --use-api (deploy-functions.sh).
+. "$root/scripts/test-project/brain-test/deploy-functions.sh"
+brain_test_deploy_functions "$REF" lead-pipeline provider-connections
 
 echo "== 4. flags (one workspace)"
 supabase secrets set --project-ref "$REF" \

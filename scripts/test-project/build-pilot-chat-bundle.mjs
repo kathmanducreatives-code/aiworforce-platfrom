@@ -20,15 +20,16 @@ import { mkdirSync, writeFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 
-//   node scripts/test-project/build-pilot-chat-bundle.mjs <out-dir> [function] [test|production]
+//   node scripts/test-project/build-pilot-chat-bundle.mjs <out-dir> [function] [test|production|brain-test]
 // Defaults: pilot-chat, test. The production target names ONLY the production
 // project in the generated config.toml and is used by scripts/release/.
-const REFS = { test: "tlvnfrxzjhsjgdofwehb", production: "ohsdatpvfdjdemstoiuj" };
+// brain-test: the dedicated Company Brain TEST project (scripts/test-env/brain-test).
+const REFS = { test: "tlvnfrxzjhsjgdofwehb", production: "ohsdatpvfdjdemstoiuj", "brain-test": "jekgwafobrzamoupehnn" };
 const out = process.argv[2];
 const fn = process.argv[3] ?? "pilot-chat";
 const target = process.argv[4] ?? "test";
 if (!out || !/^[a-z0-9-]+$/.test(fn) || !(target in REFS)) {
-  console.error("usage: build-pilot-chat-bundle.mjs <out-dir> [function] [test|production]"); process.exit(2);
+  console.error("usage: build-pilot-chat-bundle.mjs <out-dir> [function] [test|production|brain-test]"); process.exit(2);
 }
 const TEST_REF = REFS[target];
 const fnDir = join(resolve(out), "supabase", "functions", fn);

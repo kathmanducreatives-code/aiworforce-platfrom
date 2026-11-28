@@ -19,7 +19,7 @@ ATLAS V5 G1–G4 (PR #282 at `1e6df6db`, with G1 adopting `excluded_industries_m
 
 ## 1. Terminal: get the release candidate, store the credentials, build, deploy and run the UI
 
-You need macOS, the Supabase CLI, Docker running, psql, Node and Deno.
+You need macOS, the Supabase CLI (2.x with `functions deploy --use-api`), psql, Node and Deno. **Docker is not needed**: each function is bundled locally into one file and deployed with server-side bundling (`--use-api`).
 
 ```bash
 git clone https://github.com/kathmanducreatives-code/aiworforce-platfrom.git agentory-brain-test

@@ -39,7 +39,7 @@ Every step marked ⛔ needs the owner's separate approval. Nothing below has bee
    ```
    The settings file needs `AGENTORY_TEST_REF=<brain-test-ref>`.
 6. ⛔ **Build:** `build-brain-test.sh --confirm <ref>`. Expect four `ok` lines.
-7. ⛔ **Deploy:** `deploy-brain-test.sh --confirm <ref> --spend-ceiling-usd 0.25`. This deploys 7 functions, never `run-agent`, and needs Docker.
+7. ⛔ **Deploy:** `deploy-brain-test.sh --confirm <ref> --spend-ceiling-usd 0.25`. This deploys 7 functions, never `run-agent`. No Docker: one-file bundles deployed with `--use-api`.
 8. **Acceptance:**
    - without the model: `acceptance.ts --confirm <ref>`;
    - then ⛔, as a paid run: `--allow-orion-chat --max-usd 0.25`.

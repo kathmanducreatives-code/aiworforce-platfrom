@@ -42,7 +42,8 @@ else
 fi
 echo "$ceiling" | grep -Eq '^[0-9]*\.?[0-9]+$' && awk -v c="$ceiling" 'BEGIN { exit !(c > 0 && c <= 1) }' \
   || refuse "--spend-ceiling-usd must be a positive amount no larger than 1.00 (e.g. 0.25)"
-command -v supabase >/dev/null && command -v docker >/dev/null && docker info >/dev/null 2>&1 || refuse "the supabase CLI and a running Docker are required"
+command -v supabase >/dev/null || refuse "the supabase CLI is required"
+command -v node >/dev/null || refuse "node is required (functions are bundled locally; Docker is NOT needed)"
 # Credentials: SUPABASE_ACCESS_TOKEN (never printed), or an existing `supabase login`.
 # Either way, the login must be able to see THIS project before anything is changed.
 supabase projects list 2>/dev/null | grep -q "$ref" \
@@ -53,10 +54,9 @@ supabase secrets set --project-ref "$ref" \
   MODEL_SPEND_ENFORCEMENT=enforce MODEL_SPEND_CEILING_USD="$ceiling" MODEL_SPEND_PERIOD_DAYS=30 \
   AGENTORY_ROUTE_MAX_USD_PER_CALL=0.05 AGENTORY_DELEGATION_ENABLED=false >/dev/null
 echo "configured: spend ceiling \$$ceiling per workspace per 30 days; delegation off"
-for f in $FUNCTIONS; do
-  echo "deploying $f → $ref"
-  # --use-docker bundles locally: a plain upload of pilot-chat's ~280 modules is refused (HTTP 413).
-  supabase functions deploy "$f" --project-ref "$ref" --use-docker >/dev/null
-done
+# No Docker: one-file bundles, deployed with --use-api (deploy-functions.sh).
+# shellcheck source=deploy-functions.sh
+. "$root/scripts/test-project/brain-test/deploy-functions.sh"
+brain_test_deploy_functions "$ref" $FUNCTIONS
 echo "secret NAMES on $ref (values are never shown):"
 supabase secrets list --project-ref "$ref" | awk -F'|' 'NR>2 {gsub(/ /,"",$1); if ($1!="") print "  " $1}'
