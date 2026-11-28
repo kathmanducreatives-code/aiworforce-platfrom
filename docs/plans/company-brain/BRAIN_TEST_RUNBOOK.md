@@ -26,7 +26,7 @@ git clone https://github.com/kathmanducreatives-code/aiworforce-platfrom.git age
 ```
 
 ```bash
-cd agentory-brain-test && git fetch origin claude/brain-v2-integration && git checkout --detach <COMMIT> && npm ci
+cd agentory-brain-test && git fetch origin claude/brain-v2-integration && git checkout --detach 807698a0c5b775e44c6232a09a29dfe18a6d757c && npm ci
 ```
 
 Use the host shown under Brain TEST → Connect → *Session pooler* (for example `aws-0-ap-northeast-1.pooler.supabase.com`):
