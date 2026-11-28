@@ -26,3 +26,29 @@ select m.workspace_id, m.kind, m.fact_key, m.value, m.version, m.lifecycle_statu
 \echo == memory proposals (pending until a person approves)
 select p.workspace_id, p.proposed_by_agent, p.kind, p.fact_key, p.value, p.status, p.contradicts_memory_id is not null as replaces_existing, p.updated_at
   from public.company_brain_memory_proposals p order by p.updated_at desc limit 20;
+\echo
+\echo == SIGNALS: which signal tables exist on this project (held LISA / collaboration migrations?)
+select t.table_name from information_schema.tables t
+ where t.table_schema = 'public' and t.table_name in ('signals','signal_events','signal_event_evidence','signal_reviews','signal_cluster_relevance',
+   'monitoring_subjects','monitoring_budgets','lisa_scan_runs','lisa_watch_state','signal_event_transitions','agent_handoffs','agent_collaboration_items')
+ order by 1;
+\echo
+\echo == SIGNALS: rows per workspace (legacy radar table vs canonical table)
+select w.name, (select count(*) from public.signals s where s.workspace_id = w.id) as legacy_signals,
+       (select count(*) from public.signal_events e where e.workspace_id = w.id) as canonical_signal_events,
+       (select count(*) from public.signal_reviews r where r.workspace_id = w.id) as reviews,
+       (select count(*) from public.monitoring_subjects m where m.workspace_id = w.id) as watches,
+       (select count(*) from public.monitoring_subjects m where m.workspace_id = w.id and m.enabled) as enabled_watches
+  from public.workspaces w order by w.created_at;
+\echo
+\echo == SIGNALS: latest stored signals (titles only)
+select 'legacy' as store, s.created_at as at, s.signal_type, left(s.title, 80) as title, s.source from public.signals s
+union all
+select 'canonical', e.observed_at, e.signal_type, left(coalesce(e.normalized_value #>> '{lisa,title}', e.signal_type), 80), e.verification_status from public.signal_events e
+order by 2 desc limit 15;
+\echo
+\echo == SIGNALS: Edit-radar preferences saved in the Company Brain (signal_preferences)
+select b.workspace_id, b.profile->'signal_preferences' as signal_preferences from public.company_brain b;
+\echo
+\echo == SIGNALS: scheduled jobs in this database (must not call a hosted project)
+select jobname, schedule, left(command, 120) as command from cron.job order by 1;

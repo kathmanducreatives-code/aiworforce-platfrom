@@ -20,10 +20,16 @@ logs() {
     --data-urlencode "sql=$1"
   echo
 }
+echo "== 1b. signal-related settings PRESENT on $REF (names only; values are never read)"
+names="$(supabase secrets list --project-ref "$REF" 2>/dev/null | awk -F'|' 'NR>2 {gsub(/ /,"",$1); if ($1!="") print $1}')"
+for k in SIGNALS_V2 LISA_V2_ENABLED AGENT_COLLAB_ENABLED AGENTORY_ORION_EVIDENCE_CONTEXT AGENTORY_EVIDENCE_ANSWERS_ENABLED \
+         FIRECRAWL_API_KEY APIFY_API_TOKEN APIFY_ENABLE_PEOPLE_SEARCH OPENAI_API_KEY ANTHROPIC_API_KEY; do
+  if echo "$names" | grep -qx "$k"; then echo "  $k: set"; else echo "  $k: not set"; fi
+done
 echo "== 2. edge requests to Company Brain functions (newest first)"
 logs "select datetime(timestamp) as at, request.method, response.status_code, request.url, m.execution_time_ms
   from function_edge_logs cross join unnest(metadata) as m cross join unnest(m.request) as request cross join unnest(m.response) as response
-  where request.url like '%company-brain%' or request.url like '%setup-company-brain%'
+  where request.url like '%company-brain%' or request.url like '%radar%' or request.url like '%monitoring%' or request.url like '%pilot-chat%'
   order by timestamp desc limit 40"
 echo "== 3. function errors and warnings (newest first)"
 logs "select datetime(timestamp) as at, m.level, m.function_id, event_message
