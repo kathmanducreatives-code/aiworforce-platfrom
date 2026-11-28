@@ -27,9 +27,19 @@ while [ $# -gt 0 ]; do case "$1" in
   *) echo "unknown argument: $1" >&2; exit 2 ;;
 esac; done
 refuse() { echo "refusing: $*" >&2; exit 1; }
+# THE ONE ALLOWED TARGET: the dedicated Brain TEST project (owner-created 2026-11-28,
+# separate account, Tokyo). Anything else is refused, whatever the deny-list says.
+# Local rehearsal only: BRAIN_TEST_REHEARSAL=1 with ref brainrehearsalzzzzzz and a 127.0.0.1 URL.
+BRAIN_TEST_ALLOWED_REF=jekgwafobrzamoupehnn
 [ -n "$ref" ] || refuse "BRAIN_TEST_PROJECT_REF is empty"
 for r in $REFUSED; do [ "$ref" != "$r" ] || refuse "$ref is never the Brain TEST target"; done
 [ "$confirm" = "$ref" ] || refuse "--confirm must repeat BRAIN_TEST_PROJECT_REF exactly"
+if [ "${BRAIN_TEST_REHEARSAL:-0}" = 1 ]; then
+  [ "$ref" = brainrehearsalzzzzzz ] || refuse "rehearsal mode only accepts ref brainrehearsalzzzzzz"
+  case "${BRAIN_TEST_DB_URL:-}" in *@127.0.0.1:*) ;; *) refuse "rehearsal mode only accepts a 127.0.0.1 database URL" ;; esac
+else
+  [ "$ref" = "$BRAIN_TEST_ALLOWED_REF" ] || refuse "$ref is not the dedicated Brain TEST project ($BRAIN_TEST_ALLOWED_REF)"
+fi
 echo "$ceiling" | grep -Eq '^[0-9]*\.?[0-9]+$' && awk -v c="$ceiling" 'BEGIN { exit !(c > 0 && c <= 1) }' \
   || refuse "--spend-ceiling-usd must be a positive amount no larger than 1.00 (e.g. 0.25)"
 command -v supabase >/dev/null && command -v docker >/dev/null && docker info >/dev/null 2>&1 || refuse "the supabase CLI and a running Docker are required"
