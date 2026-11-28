@@ -82,6 +82,8 @@ function forClient(m: (typeof TITLES)[SectionKey], section: SectionKey, name: st
 export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave, serverUpdatedAt, clientId = null, clientName = null }: Props) {
   const reduce = useReducedMotion();
   const [busy, setBusy] = useState(false);
+  // CB-002: why the last save failed, shown next to Save (the toast alone disappears).
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [state, setState] = useState<any>(null);
   const [activeSection, setActiveSection] = useState<SectionKey | null>(section);
@@ -221,6 +223,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   async function handleSave() {
     if (!activeSection || !state) return;
     setBusy(true);
+    setSaveError(null);
     try {
       await onSave(buildPatch(activeSection, state, brain));
       // The work is on the server now; a kept draft would only be a stale copy.
@@ -230,9 +233,11 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
       setBackgroundUpdate(false);
       setSaved(true);
       setTimeout(() => setSaved(false), reduce ? 0 : 1400);
-    } catch {
-      // The page has already said why. The edit stays in the editor (and its
-      // local draft), so nothing typed is lost to a conflict or a failed save.
+    } catch (e) {
+      // The edit stays in the editor (and its local draft), so nothing typed is
+      // lost to a conflict or a failed save; the reason stays visible here.
+      const m = e instanceof Error ? e.message : '';
+      setSaveError(m && m !== 'save_failed' ? m : 'Not saved. Try again.');
     } finally {
       setBusy(false);
     }
@@ -408,6 +413,9 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
               )}
             </div>
             <div className="flex items-center gap-2">
+              {saveError && !busy && (
+                <p role="alert" data-testid="drawer-save-error" className="max-w-[22rem] text-[12px] text-red-400/90">Not saved: {saveError}</p>
+              )}
               <Button
                 variant="ghost"
                 onClick={() => requestClose(false)}

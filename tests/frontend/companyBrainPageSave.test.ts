@@ -60,7 +60,9 @@ Deno.test("3. the page saves through saveCompanyBrainPatch, sends the patch, cha
   const enq = src.indexOf("const enqueuedFor = currentScopeKey.current;");
   const run = src.indexOf("const run = queue.current.then(");
   assert(enq > 0 && enq < run, "the Brain is captured when the edit is queued, before the queued save runs");
-  assert(/queue\.current\.then\(async \(\) => \{\s*if \(currentScopeKey\.current !== enqueuedFor\) return false;/.test(src), "a queued edit is dropped if the user switched Brain");
+  assert(/queue\.current\.then\(async \(\) => \{\s*if \(currentScopeKey\.current !== enqueuedFor\) \{[^}]*return false;/.test(src), "a queued edit is dropped if the user switched Brain (and says so: CB-002)");
+  // CB-002: one failed link must not stop every later save.
+  assert(/queue\.current = run\.catch\(\(\) => false\);/.test(src), "the queue chains on a promise that never rejects");
   assertFalse(/from\(['"]company_brain['"]\)/.test(src), "the page never touches the row itself");
   assertFalse(/supabase/.test(src), "nor imports the client");
   assertFalse(/saveCompanyBrainPatch\(\{[^}]*merged/.test(src), "the merged profile is for display only");
@@ -70,5 +72,5 @@ Deno.test("4. a failed drawer save throws, so the drawer keeps the user's edit",
   const page = await Deno.readTextFile(new URL("src/pages/CompanyBrainDashboard.tsx", ROOT));
   assert(/if \(!\(await writePatch\(patch\)\)\) throw/.test(page));
   const drawer = await Deno.readTextFile(new URL("src/components/company-brain/CompanyBrainEditDrawer.tsx", ROOT));
-  assert(/\} catch \{[\s\S]{0,200}\} finally \{\s*setBusy\(false\)/.test(drawer), "the drawer swallows the throw and keeps its state");
+  assert(/\} catch \(e\) \{[\s\S]{0,400}setSaveError\([\s\S]{0,200}\} finally \{\s*setBusy\(false\)/.test(drawer), "the drawer keeps its state and shows why it did not save (CB-002)");
 });

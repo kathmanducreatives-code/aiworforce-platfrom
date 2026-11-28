@@ -204,14 +204,34 @@ Deno.test("B2.0 · an editor sees the truthful state, fills goals, accepts and e
   // Goals: open it (a section with a conflict opens first), type two goals, save explicitly.
   if (!(await evaluate(`!!document.querySelector('#bcp-goals')`))) assert(await click(`(${row("Business goals")}).querySelector('.bcp-row-head')`));
   assert(await waitFor(`!!document.querySelector('#bcp-goals input[aria-label="Go-to-market goal"]')`));
+  // CB-002: all five goals, as on Brain TEST.
   await typeInto(`document.querySelector('#bcp-goals input[aria-label="Go-to-market goal"]')`, "10 qualified meetings a month");
   await typeInto(`document.querySelector('#bcp-goals input[aria-label="Outreach goal"]')`, "50 replies a month");
+  await typeInto(`document.querySelector('#bcp-goals input[aria-label="Content goal"]')`, "2 posts a week");
+  await typeInto(`document.querySelector('#bcp-goals input[aria-label="Competitor-tracking goal"]')`, "Watch 3 rivals");
+  await typeInto(`document.querySelector('#bcp-goals input[aria-label="Hiring goal"]')`, "Hire one AE");
   await shot("2-goals-typed");
-  assert(await click(button("Save business goals")), "Save goals");
+
+  // CB-002: a refused save says so NEXT TO THE FORM, keeps what was typed, and Save retries it.
+  // One request is answered with a server refusal (the page's real fetch otherwise).
+  await evaluate(`(() => { const real = window.fetch; let once = true;
+    window.fetch = (u, i) => (once && String(u).includes('/functions/v1/generate-company-brain-draft')
+      ? (once = false, Promise.resolve(new Response(JSON.stringify({ ok: false, rejected_reason: 'invalid_patch', detail: 'simulated refusal for the test' }), { status: 400, headers: { 'Content-Type': 'application/json' } })))
+      : real(u, i)); return true; })()`);
+  assert(await click(button("Save business goals")), "Save goals (refused once)");
+  assert(await waitFor(`document.querySelector('[data-testid="save-status-goals"]')?.innerText.includes('Not saved: simulated refusal for the test')`), "inline failure with the server's reason");
+  assertEquals(await rowStatus("Business goals"), "Missing");
+  assertEquals(await evaluate(`document.querySelector('#bcp-goals input[aria-label="Hiring goal"]').value`), "Hire one AE", "typed values kept");
+  await shot("2b-goals-refused");
+  assert(await click(button("Try again")), "retry");
   assert(await waitFor(`document.body.innerText.includes('Saved to your Company Brain')`), "saved toast");
+  assert(await waitFor(`document.querySelector('[data-testid="save-status-goals"]')?.innerText.includes('Saved to your Company Brain')`), "inline success");
   assert(await waitFor(`(${row("Business goals")})?.querySelector('.bcp-row-flags .brain-status:last-child')?.textContent === 'Complete'`), "goals now complete");
   const g = (await savedInDb((x) => (x.goals as Record<string, unknown>)?.outreach === "50 replies a month")).goals as Record<string, unknown>;
-  assertEquals(g.gtm, "10 qualified meetings a month");
+  assertEquals([g.gtm, g.content, g.competitor_tracking, g.hiring], ["10 qualified meetings a month", "2 posts a week", "Watch 3 rivals", "Hire one AE"]);
+  // The readiness score follows at once (the save also reconciles the stale ICP copy, so more than goals completes).
+  const metrics = () => evaluate(`[...document.querySelectorAll('.bcp-metric')].map((m) => m.innerText.replace(/\\s+/g, ' ').trim())`);
+  assert(await waitFor(`[...document.querySelectorAll('.bcp-metric')].some((m) => /^ESSENTIALS [2-7] of 7$/.test(m.innerText.replace(/\\s+/g, ' ').trim()))`), `readiness counts goals: ${JSON.stringify(await metrics())}`);
   // B2.2: typed by the editor → founder, with the editor as the actor.
   const goalsRev = await lastRevision(ws, "goals");
   assertEquals([goalsRev?.source_kind, goalsRev?.actor_id, goalsRev?.source_ref], ["founder", EDITOR.id, null]);

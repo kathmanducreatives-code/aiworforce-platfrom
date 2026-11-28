@@ -26,7 +26,9 @@ import type { ProvenanceLine } from '@/lib/companyBrain/provenanceView';
 
 type Raw = Record<string, unknown>;
 /** A save; the claim tells the server what the person did (B2.2). The server verifies it. */
-type SaveFn = (patch: Raw, provenance?: ProvenanceClaim) => Promise<boolean>;
+/** CB-002: every save says whether it landed and, if not, why — shown next to the form. */
+export type SaveOutcome = { ok: boolean; message?: string };
+type SaveFn = (patch: Raw, provenance?: ProvenanceClaim) => Promise<SaveOutcome>;
 
 interface Props {
   assessment: BrainAssessment;
@@ -230,16 +232,17 @@ function SectionRow({ section: s, profile, canEdit, open, onToggle, suggestions,
 }
 
 function SuggestionCard({ sug, canEdit, onAccept, onDismiss }: {
-  sug: CompletionSuggestion; canEdit: boolean; onAccept: (value?: CompletionValue) => Promise<boolean>; onDismiss: () => void;
+  sug: CompletionSuggestion; canEdit: boolean; onAccept: (value?: CompletionValue) => Promise<SaveOutcome>; onDismiss: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<CompletionValue>(sug.value);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const accept = async (value?: CompletionValue) => {
-    setSaving(true);
-    const ok = await onAccept(value);
+    setSaving(true); setError(null);
+    const r = await onAccept(value).catch((e): SaveOutcome => ({ ok: false, message: e instanceof Error ? e.message : undefined }));
     setSaving(false);
-    if (ok) setEditing(false);
+    if (r.ok) setEditing(false); else setError(r.message ?? 'Not saved. Try again.');
   };
   return (
     <article className="bcp-sug" aria-label={`Suggestion for ${sug.label}`}>
@@ -259,6 +262,7 @@ function SuggestionCard({ sug, canEdit, onAccept, onDismiss }: {
         ))}
       </p>
       {sug.source.caution && <p className="bcp-caution"><AlertTriangle size={12} aria-hidden />{sug.source.caution}</p>}
+      {error && <p className="bcp-save-error" role="alert"><AlertTriangle size={12} aria-hidden />Not saved: {error}</p>}
       {canEdit && (
         <div className="bcp-actions">
           {editing ? <>
@@ -283,6 +287,8 @@ function CompletionEditor({ sectionKey, profile, canEdit, onSave }: {
   const initial = useMemo(() => Object.fromEntries(spec.fields.map((f) => [f.path, currentValue(profile, f)])) as Record<string, CompletionValue>, [spec, profile]);
   const [values, setValues] = useState<Record<string, CompletionValue>>(initial);
   const [saving, setSaving] = useState(false);
+  // CB-002: what happened to the last Save, next to the button (a toast alone disappears).
+  const [status, setStatus] = useState<{ kind: 'saved' } | { kind: 'error'; message: string } | null>(null);
   // Fields the person has typed in. Every other field follows the saved profile, so a
   // value saved elsewhere (an accepted suggestion, another tab) is shown here and is
   // never sent back as an "edit" that would clear it.
@@ -303,9 +309,13 @@ function CompletionEditor({ sectionKey, profile, canEdit, onSave }: {
     <form className="bcp-form" onSubmit={async (e) => {
       e.preventDefault();
       if (!dirty) return;
-      setSaving(true);
-      if (await onSave(buildCompletionPatch(profile, changed))) touched.current.clear();
+      setSaving(true); setStatus(null);
+      const r = await onSave(buildCompletionPatch(profile, changed))
+        .catch((err): SaveOutcome => ({ ok: false, message: err instanceof Error ? err.message : undefined }));
       setSaving(false);
+      // On failure the typed values stay in the form, so Save retries exactly them.
+      if (r.ok) { touched.current.clear(); setStatus({ kind: 'saved' }); }
+      else setStatus({ kind: 'error', message: r.message ?? 'Not saved. Try again.' });
     }}>
       {spec.fields.map((f) => (
         <div key={f.path} className="bcp-field">
@@ -315,9 +325,15 @@ function CompletionEditor({ sectionKey, profile, canEdit, onSave }: {
         </div>
       ))}
       <div className="bcp-actions">
-        <Button size="sm" type="submit" disabled={!dirty || saving}>{saving ? 'Saving…' : `Save ${spec.title.toLowerCase()}`}</Button>
-        <Button size="sm" type="button" variant="ghost" disabled={!dirty || saving} onClick={() => { touched.current.clear(); setValues(initial); }}>Discard changes</Button>
+        <Button size="sm" type="submit" disabled={!dirty || saving}>{saving ? 'Saving…' : status?.kind === 'error' ? 'Try again' : `Save ${spec.title.toLowerCase()}`}</Button>
+        <Button size="sm" type="button" variant="ghost" disabled={!dirty || saving} onClick={() => { touched.current.clear(); setValues(initial); setStatus(null); }}>Discard changes</Button>
       </div>
+      <p className="bcp-save-status" aria-live="polite" data-testid={`save-status-${sectionKey}`}>
+        {saving ? 'Saving…'
+          : status?.kind === 'saved' && !dirty ? <><Check size={12} aria-hidden /> Saved to your Company Brain</>
+          : status?.kind === 'error' ? <span className="bcp-save-error" role="alert"><AlertTriangle size={12} aria-hidden />Not saved: {status.message}</span>
+          : null}
+      </p>
     </form>
   );
 }
@@ -366,6 +382,7 @@ export function IcpConflictList({ conflicts, canEdit, onSave }: {
 
 function IcpConflictCard({ conflict: c, canEdit, onSave }: { conflict: IcpConflict; canEdit: boolean; onSave: SaveFn }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const same = JSON.stringify(c.authoritative) === JSON.stringify(c.other);
   return (
     <article className="bcp-conflict" aria-label={`Conflict: ${c.message}`} data-conflict={c.id}>
@@ -383,12 +400,19 @@ function IcpConflictCard({ conflict: c, canEdit, onSave }: { conflict: IcpConfli
         <div className="bcp-actions">
           {c.resolutions.map((r, n) => (
             <Button key={r.id} size="sm" variant={n === 0 ? 'default' : 'outline'} disabled={busy !== null}
-              onClick={async () => { setBusy(r.id); await onSave(r.patch, { source: 'resolution', conflict_id: c.id, resolution_id: r.id }); setBusy(null); }}>
+              onClick={async () => {
+                setBusy(r.id); setError(null);
+                const out = await onSave(r.patch, { source: 'resolution', conflict_id: c.id, resolution_id: r.id })
+                  .catch((e): SaveOutcome => ({ ok: false, message: e instanceof Error ? e.message : undefined }));
+                setBusy(null);
+                if (!out.ok) setError(out.message ?? 'Not saved. Try again.');
+              }}>
               {busy === r.id ? 'Saving…' : r.label}
             </Button>
           ))}
         </div>
       )}
+      {error && <p className="bcp-save-error" role="alert"><AlertTriangle size={12} aria-hidden />Not saved: {error}</p>}
     </article>
   );
 }

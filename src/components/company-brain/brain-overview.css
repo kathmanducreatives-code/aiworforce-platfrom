@@ -305,6 +305,8 @@ a.brain-site:hover { color: rgb(var(--ag-text)); }
 .bcp-metric dd.is-caution { color: rgb(251 191 36); }
 .bcp-note, .bcp-issue, .bcp-caution { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgb(var(--ag-text-muted)); }
 .bcp-caution { color: rgb(251 191 36 / .9); }
+.bcp-save-status { display: flex; align-items: center; gap: 6px; min-height: 18px; margin-top: 6px; font-size: 12px; color: rgb(52 211 153 / .9); }
+.bcp-save-error { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgb(248 113 113 / .95); }
 .bcp-group { display: flex; flex-direction: column; gap: 8px; }
 .bcp-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .bcp-group-head h3 { font-size: 13px; font-weight: 600; color: rgb(var(--ag-text)); }

@@ -5,6 +5,7 @@
 #   scripts/test-env/brain-test store-password               # once: DB password → Keychain (prompted)
 #   scripts/test-env/brain-test store-keys                   # once: publishable key + CLI token → Keychain (prompted)
 #   scripts/test-env/brain-test check                        # read-only DB check, no prompt
+#   scripts/test-env/brain-test diagnose                     # read-only: Brain rows, writes, deployed versions, HTTP statuses, errors
 #   scripts/test-env/brain-test build                        # schema: baseline + migrations + Brain V2 chain
 #   scripts/test-env/brain-test deploy                       # 7 functions + $0.25 spend ceiling, delegation off
 #   scripts/test-env/brain-test ui [--discovery]             # local frontend against Brain TEST only
@@ -56,6 +57,13 @@ case "$cmd" in
     echo "saved." ;;
   check)
     AGENTORY_TEST_CONF="$CONF" "$ENV_TOOL" check ;;
+  diagnose)
+    # One READ ONLY transaction (the pooler ignores PGOPTIONS, so it is set in-transaction).
+    AGENTORY_TEST_CONF="$CONF" "$ENV_TOOL" run -- bash -c \
+      '{ echo "begin read only;"; cat "'"$root"'/scripts/test-project/brain-test/diagnose.sql"; echo "rollback;"; } | psql -w "$TEST_DB_URL" -X -q -v ON_ERROR_STOP=1'
+    # Hosted side (read-only): deployed versions, HTTP statuses, function errors.
+    tok="$(kc_read agentory.brain-test.supabase-token)" || die "no Brain TEST CLI token in Keychain. Run: brain-test store-keys"
+    SUPABASE_ACCESS_TOKEN="$tok" "$root/scripts/test-project/brain-test/diagnose-hosted.sh" ;;
   build)
     AGENTORY_TEST_CONF="$CONF" "$ENV_TOOL" run -- bash -c \
       'BRAIN_TEST_PROJECT_REF='"$REF"' BRAIN_TEST_DB_URL="$TEST_DB_URL" exec "'"$root"'/scripts/test-project/brain-test/build-brain-test.sh" --confirm '"$REF" ;;
@@ -79,5 +87,5 @@ case "$cmd" in
     tok="$(kc_read agentory.brain-test.supabase-token)" || die "no Brain TEST CLI token in Keychain. Run: brain-test store-keys"
     AGENTORY_TEST_CONF="$CONF" SUPABASE_ACCESS_TOKEN="$tok" "$ENV_TOOL" run -- \
       "$root/scripts/test-project/brain-test/install-atlas-v5.sh" "$@" ;;
-  *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+  *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
 esac

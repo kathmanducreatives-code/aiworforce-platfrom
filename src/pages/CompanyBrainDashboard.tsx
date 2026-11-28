@@ -27,7 +27,7 @@ import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { BrainEditableContext } from '@/components/company-brain/brainEditable';
 import { BrainMemoryPanel } from '@/components/company-brain/memory/BrainMemoryPanel';
 import { companyBrainWritesBlocked, COMPANY_BRAIN_UNAVAILABLE_MESSAGE, COMPANY_BRAIN_UNAVAILABLE_TITLE } from '@/lib/env/companyBrainAvailability';
-import { BrainCompletionPanel, IcpConflictList } from '@/components/company-brain/completion/BrainCompletionPanel';
+import { BrainCompletionPanel, IcpConflictList, type SaveOutcome } from '@/components/company-brain/completion/BrainCompletionPanel';
 import { fetchStoredResearch } from '@/lib/companyBrain/researchRuns';
 import { assessCompanyBrain, assessIcpConsistency, buildCompletionSuggestions, type AssessmentSectionKey, type ProvenanceClaim, type StoredResearchRun } from '@/lib/companyBrain/completion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -163,8 +163,12 @@ export default function CompanyBrainDashboard() {
    * copy for display only. Queued saves chain the version each save returns, so
    * this page's own consecutive edits never conflict with each other.
    */
+  // Why the last write did not save, in words, for the inline status (CB-002: a
+  // failed save must never look like nothing happened).
+  const lastSaveError = useRef<string | null>(null);
   const writePatch = useCallback((patch: BrainProfile, provenance?: ProvenanceClaim): Promise<boolean> => {
-    if (!workspaceId) { toast.error('No workspace'); return Promise.resolve(false); }
+    lastSaveError.current = null;
+    if (!workspaceId) { lastSaveError.current = 'No workspace is selected. Reload the page.'; toast.error('No workspace'); return Promise.resolve(false); }
     const merged = mergeProfilePatch(latestRaw.current, patch);
     latestRaw.current = merged;
     setOptimistic(merged);
@@ -177,17 +181,34 @@ export default function CompanyBrainDashboard() {
     // optimistic copy.)
     const enqueuedFor = currentScopeKey.current;
     const run = queue.current.then(async () => {
-      if (currentScopeKey.current !== enqueuedFor) return false;
+      if (currentScopeKey.current !== enqueuedFor) {
+        lastSaveError.current = 'You switched Company Brain (workspace, client or sign-in) before this saved. Nothing was saved.';
+        return false;
+      }
       // A save after a failed one was built on top of it — don't save half a batch.
-      if (batchFailed.current) return false;
+      if (batchFailed.current) {
+        lastSaveError.current = 'An earlier change did not save, so this one was not sent. Try again.';
+        return false;
+      }
       const savedFor = enqueuedFor;
-      const result = scope.kind === 'client'
-        ? await saveClientBrainPatch({ workspaceId, scope, patch, expectedVersion: version.current === null ? null : Number(version.current) })
-        : await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: version.current, provenance });
+      let result: Awaited<ReturnType<typeof saveCompanyBrainPatch>> | Awaited<ReturnType<typeof saveClientBrainPatch>>;
+      try {
+        result = scope.kind === 'client'
+          ? await saveClientBrainPatch({ workspaceId, scope, patch, expectedVersion: version.current === null ? null : Number(version.current) })
+          : await saveCompanyBrainPatch({ workspaceId, patch, expectedUpdatedAt: version.current, provenance });
+      } catch (e) {
+        // A network or runtime error is a failed save like any other: reported, rolled back,
+        // and the queue keeps working (CB-002).
+        batchFailed.current = true;
+        lastSaveError.current = `The save could not reach the server${e instanceof Error && e.message ? ` (${e.message})` : ''}. Check your connection and try again.`;
+        toast.error('Save failed', { description: lastSaveError.current });
+        return false;
+      }
       // The user switched Brain while this was saving: its answer is not this Brain's.
       if (currentScopeKey.current !== savedFor) return result.ok;
       if (!result.ok && 'denied' in result && result.denied) {
         batchFailed.current = true;
+        lastSaveError.current = result.message ?? 'Your access to this Company Brain changed.';
         toast.error(result.message ?? 'Access changed');
         accessChanged();
         return false;
@@ -195,6 +216,7 @@ export default function CompanyBrainDashboard() {
       if (!result.ok) {
         batchFailed.current = true;
         lastFailureWasConflict.current = result.conflict === true;
+        lastSaveError.current = result.message || 'The server did not save this change.';
         toast.error(
           'unavailable' in result && result.unavailable ? COMPANY_BRAIN_UNAVAILABLE_TITLE : result.conflict ? 'Company Brain was changed elsewhere'
             : 'contradiction' in result && result.contradiction ? 'This change would contradict your ICP' : 'Save failed',
@@ -218,20 +240,27 @@ export default function CompanyBrainDashboard() {
         void queryClient.invalidateQueries({ queryKey: ['brain-memory', workspaceId] });
       }
     });
-    queue.current = run;
+    // CB-002: chain on a promise that never rejects. A rejected link made every later
+    // `.then` skip its body, so after one failed request no section could save again
+    // (and none said so) until the page was reloaded.
+    queue.current = run.catch(() => false);
     return run;
   }, [workspaceId, refresh, scope, accessChanged, queryClient]);
 
   // A completion save (typed or an accepted suggestion): the same queue and backend `update`.
-  const saveCompletion = useCallback(async (patch: BrainProfile, provenance?: ProvenanceClaim) => {
-    const ok = await writePatch(patch, provenance);
-    if (ok) toast.success('Saved to your Company Brain');
-    return ok;
+  // Resolves with WHY it did not save, so the section shows it next to the form.
+  const saveCompletion = useCallback(async (patch: BrainProfile, provenance?: ProvenanceClaim): Promise<SaveOutcome> => {
+    let ok = false;
+    try { ok = await writePatch(patch, provenance); } catch (e) {
+      lastSaveError.current = e instanceof Error && e.message ? e.message : 'The save could not reach the server.';
+    }
+    if (ok) { toast.success('Saved to your Company Brain'); return { ok: true }; }
+    return { ok: false, message: lastSaveError.current ?? 'The save did not complete. Try again.' };
   }, [writePatch]);
 
   // The drawer keeps its edit when this throws (see CompanyBrainEditDrawer).
   async function saveSection(section: SectionKey, patch: BrainProfile) {
-    if (!(await writePatch(patch))) throw new Error('save_failed');
+    if (!(await writePatch(patch))) throw new Error(lastSaveError.current ?? 'save_failed');
     toast.success('Section saved');
     flash(section);
   }
