@@ -148,7 +148,7 @@ function fakeDb(tables: Record<string, Row[]>) {
       then(res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) { return Promise.resolve({ data: rows, error: null }).then(res, rej); } };
     return q; } };
 }
-Deno.test("Brain → radar: geography and the approved crypto exclusion are used; FINDING: a software seller's ICP becomes SaaS targets", async () => {
+Deno.test("Brain → radar: geography and the approved crypto exclusion are used; FIXED: a software seller's ICP stays its own", async () => {
   const t = seed();
   const r = await loadCompanyBrainContext(fakeDb(t) as unknown as LoaderDb, WORKSPACE, { skipMembershipCheck: true });
   assert(r.ok);
@@ -160,16 +160,15 @@ Deno.test("Brain → radar: geography and the approved crypto exclusion are used
     { firecrawlReady: true });
   const text = JSON.stringify(plan).toLowerCase();
   assert(text.includes("united states"), "geography baked into queries");
-  // FINDING (P0): the seller's own description ("Scheduling SOFTWARE for field-service teams") trips the
-  // compiler's SaaS-context regex, so the radar targets "B2B SaaS" / "AI SaaS" companies and SaaS titles
-  // instead of the saved Manufacturing / Distribution ICP (companyBrainCompiler.ts:263-283).
+  // FIXED (Signals recovery): the seller's own description no longer makes the target a SaaS market.
   const hiring = plan.source_plan.find((x) => x.source === "hiring") as { queries?: string[] } | undefined;
-  assert((hiring?.queries ?? []).some((q) => q.startsWith("B2B SaaS")), `SaaS contamination reproduced: ${JSON.stringify(hiring?.queries?.slice(0, 3))}`);
+  assertFalse(text.includes("saas"), `no SaaS targeting: ${JSON.stringify(hiring?.queries?.slice(0, 3))}`);
+  assert(text.includes("manufacturing"), "the saved target industries drive the queries");
   // (Generic default disqualifiers — construction, logistics, local services … — apply only when the Brain
   // supplies none; here the approved crypto exclusion supplies one, so they do not.)
   assert(text.includes("crypto"), "approved exclusion becomes a negative term");
-  // FINDING: nothing in the plan encodes the 10–200 employee range.
-  assertFalse(/\b10\b.{0,12}\b200\b/.test(text), "size range is not part of the radar plan (documented gap)");
+  // FIXED: the plan's targeting carries the 10–200 employee range.
+  assertEquals(plan.targeting.company_size, { min: 10, max: 200 });
 });
 Deno.test("Brain → radar with no provider: every Firecrawl source is setup_needed (no fake signals)", () => {
   const plan = buildRadarScanPlan(compileCompanyBrainContext({ workspace_id: WORKSPACE, profile: NORTHWIND as never }), { firecrawlReady: false, apifyReady: false });
@@ -219,4 +218,22 @@ Deno.test("FINDING: Signals page identity — copy says Lyra, card resolves lega
 });
 Deno.test("FINDING: the review filter on the Signals page is wired to a no-op", () => {
   assertStringIncludes(read("src/pages/Signals.tsx"), "onReviewFilterChange={() => {}}");
+});
+
+// ── SIGNALS RECOVERY · the radar plan carries the full Brain targeting ───────────────────────
+Deno.test("Radar plan targeting: industries, geography, size, business model, personas, buying signals, jobs, qualification, exclusions, evidence", async () => {
+  const t = seed();
+  const r = await loadCompanyBrainContext(fakeDb(t) as unknown as LoaderDb, WORKSPACE, { skipMembershipCheck: true });
+  assert(r.ok);
+  const profile = r.context.effective_profile as Record<string, unknown>;
+  const plan = buildRadarScanPlan(compileCompanyBrainContext({ workspace_id: WORKSPACE, profile }), { firecrawlReady: true });
+  const tg = plan.targeting;
+  assertEquals(tg.industries, ["Manufacturing", "Distribution", "Contracting", "Field services"]);
+  assertEquals(tg.locations, ["United States"]);
+  assertEquals(tg.company_size, { min: 10, max: 200 });
+  assertEquals(tg.business_models, ["B2B"]);
+  assertEquals(tg.buyer_personas, ["Operations Manager", "Owner"]);
+  assertEquals(tg.buying_signals, ["Hiring growth", "Market expansion", "Technology adoption", "Leadership changes"]);
+  assert(tg.excluded_industries.map((x) => x.toLowerCase()).includes("crypto"), "approved memory exclusion");
+  assert(tg.evidence_requirements.includes("source_url") && tg.evidence_requirements.includes("event_date"));
 });

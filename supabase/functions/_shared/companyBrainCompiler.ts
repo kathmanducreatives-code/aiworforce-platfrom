@@ -47,6 +47,8 @@ export interface CompanyBrainContext {
   };
 
   buying_triggers: {
+    /** The buying signals the workspace itself declared (Company Brain `triggers`). */
+    declared: string[];
     hiring: string[];
     funding: string[];
     technology: string[];
@@ -148,9 +150,23 @@ const HARD_NEGATIVE_TITLES = [
   "General Manager", "Plant Manager", "Facilities Manager", "Warehouse Manager", "Field Operations Manager",
 ];
 
-const SAAS_CONTEXT_RE = /\b(b2b saas|ai saas|saas|software|platform|api|dev tool|revops|revenue operations|sales|gtm|go-?to-?market|outbound|crm|pipeline|automation|enrichment)\b/i;
+// ── THE SELLER IS NOT THE TARGET MARKET (Signals recovery, 2026-11-28) ─────
+// "SaaS context" means the workspace SELLS TO software companies. It used to be
+// read from a blob that included the seller's own description, category, sales
+// motion and promise: "Scheduling software for field-service teams" made a
+// software seller targeting manufacturers look like a SaaS ICP, and the radar
+// searched "B2B SaaS hiring …" instead of Manufacturing / Distribution. It is now
+// read from TARGET fields only (target industries, target business models and
+// segments), with a narrow vocabulary: "sales", "automation", "platform" or
+// "pipeline" describe a lot of non-software buyers.
+const SAAS_CONTEXT_RE = /\b(b2b saas|ai saas|saas|software|dev ?tools?|developer tools|api (?:platform|compan)\w*)\b/i;
 const REVENUE_CONTEXT_RE = /\b(revops|revenue operations|sales operations|sales ops|gtm|go-?to-?market|revenue|sales|growth|account executive|sdr|bdr)\b/i;
 
+// Industry words that name the same market ("contracting" IS construction work).
+const TARGET_OVERLAP: Array<[string, string]> = [
+  ["contract", "construction"], ["distribut", "logistic"], ["distribut", "wholesale"], ["field", "local service"],
+  ["manufactur", "plant"], ["field service", "construction"],
+];
 function str(v: unknown): string | null { return typeof v === "string" && v.trim() ? v.trim() : null; }
 function arr(v: unknown): string[] {
   if (Array.isArray(v)) return v.map((x) => (typeof x === "string" ? x.trim() : "")).filter(Boolean);
@@ -261,21 +277,18 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
   const hasStructuredIcp = structuredIndustries.length > 0 || structuredBuyers.length > 0 || !!sizeLabel;
   if (hasStructuredIcp) derivationSources.push("structured_icp");
 
-  // ---- SaaS / revenue context detection (from real Brain text, not assumed) ----
-  const contextBlob = [
-    str(company["category"]), str(company["industry"]), str(company["description"]),
-    str(gtm["motion"]), str(positioning["promise"]), ...structuredIndustries, ...arr(prefs["keywords"]),
-  ].filter(Boolean).join(" · ");
-  const hasSaasContext = SAAS_CONTEXT_RE.test(contextBlob) || structuredIndustries.some((i) => SAAS_CONTEXT_RE.test(i));
-  const hasRevenueContext = REVENUE_CONTEXT_RE.test(contextBlob) || structuredBuyers.some((b) => REVENUE_CONTEXT_RE.test(b));
+  // ---- SaaS / revenue context: from the TARGET market only, never the seller ----
+  const targetBusinessModels = uniq([...v2.target_customer.business_models]);
+  const targetSegments = uniq(arr(icpRaw["target_customer_segments"]));
+  const targetBlob = [...structuredIndustries, ...targetBusinessModels, ...targetSegments].join(" · ");
+  const hasSaasContext = SAAS_CONTEXT_RE.test(targetBlob);
+  const hasRevenueContext = structuredBuyers.some((b) => REVENUE_CONTEXT_RE.test(b));
 
-  // ---- categories (expand only under SaaS context; otherwise literal) ----
+  // ---- categories: the target market (the seller's own category is not a target) ----
   const categories = uniq([
-    ...(str(company["category"]) ? [str(company["category"])!] : []),
     ...structuredIndustries,
     ...(hasSaasContext ? SAAS_POSITIVE_CATEGORIES : []),
   ]);
-  if (str(company["category"])) mark(str(company["category"])!, "company.category");
   if (hasSaasContext) { markAll(SAAS_POSITIVE_CATEGORIES, "derived:saas_context"); }
 
   // ---- buyer personas ----
@@ -285,17 +298,23 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
   const seniority = uniq(buyerTitles.flatMap(seniorityFor));
   const departments = uniq(buyerTitles.flatMap(departmentFor));
 
-  // Negative titles: hard non-revenue titles always; "Operations Manager" only
-  // when there is no revenue/RevOps context that could make it legitimate.
+  // Negative titles: non-revenue titles are excluded ONLY for a revenue/RevOps ICP,
+  // and never a title the workspace lists as its own buyer ("Operations Manager",
+  // "Plant Manager" are the buyers of a field-service or manufacturing seller).
+  const isBuyer = (t: string) => buyerTitles.some((b) => b.toLowerCase() === t.toLowerCase()
+    || b.toLowerCase().includes(t.toLowerCase()) || t.toLowerCase().includes(b.toLowerCase()));
   const negativeTitleKeywords = uniq([
-    ...HARD_NEGATIVE_TITLES,
-    ...(hasRevenueContext ? [] : ["Operations Manager"]),
-  ]);
+    ...(hasRevenueContext || hasSaasContext ? HARD_NEGATIVE_TITLES : []),
+    ...(hasRevenueContext ? [] : hasSaasContext ? ["Operations Manager"] : []),
+  ].filter((t) => !isBuyer(t)));
 
   // ---- buying triggers ----
+  const declaredTriggers = uniq([...v2.triggers]);
+  markAll(declaredTriggers, "triggers");
   const hiringTriggers = uniq([
     ...(str(goals["hiring"]) ? [str(goals["hiring"])!] : []),
     ...arr(prefs["hiring_roles"]),
+    ...v2.jobs_to_watch,
     ...(hasSaasContext ? SAAS_HIRING_TRIGGERS : []),
   ]);
   const fundingTriggers = uniq(hasSaasContext ? SAAS_FUNDING_TRIGGERS : []);
@@ -310,14 +329,22 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
   if (hasSaasContext) markAll(SAAS_TOOL_WATCHLIST, "derived:saas_context");
 
   // ---- disqualifiers (Brain wins; safe defaults only when Brain has none) ----
-  const usedDefaultDisq = brainDisqualifiers.length === 0;
+  // Generic high-risk defaults apply only to a Brain with NO structured target
+  // industries, and never one that overlaps a target industry ("construction"
+  // for a contracting ICP, "logistics" for distribution, "local services" for
+  // field services). A Brain that states its market has stated what it is not.
+  const overlapsTarget = (d: string) => structuredIndustries.some((i) => {
+    const a = i.toLowerCase(); const b = d.toLowerCase();
+    return a.includes(b) || b.includes(a) || TARGET_OVERLAP.some(([x, y]) => (a.includes(x) && b.includes(y)) || (a.includes(y) && b.includes(x)));
+  });
+  const usedDefaultDisq = brainDisqualifiers.length === 0 && structuredIndustries.length === 0;
   // When the seller's ICP is software/SaaS, always fold in the structural
   // software-ICP rejects (lab/analytical/pharma/chemicals/packaging/staffing) so
   // a bad-fit account hard-rejects even when its buyer title matches. This is
   // merged ON TOP of the Brain's own list — it never replaces it.
   const disqIndustries = uniq([
     ...(usedDefaultDisq ? DEFAULT_DISQUALIFIERS : brainDisqualifiers),
-    ...(hasSaasContext ? SOFTWARE_ICP_DISQUALIFIERS : []),
+    ...(hasSaasContext ? SOFTWARE_ICP_DISQUALIFIERS.filter((d) => !overlapsTarget(d)) : []),
   ]);
   markAll(brainDisqualifiers, "icp.disqualifiers");
   if (usedDefaultDisq) markAll(DEFAULT_DISQUALIFIERS, "default:high_risk");
@@ -372,7 +399,8 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
     icp: {
       industries: structuredIndustries,
       categories,
-      business_models: uniq([...(str(gtm["motion"]) ? [str(gtm["motion"])!] : []), ...(hasSaasContext ? ["B2B SaaS"] : [])]),
+      // The TARGET's business models (the seller's sales motion is not one).
+      business_models: uniq([...targetBusinessModels, ...(hasSaasContext && !targetBusinessModels.length ? ["B2B SaaS"] : [])]),
       company_size_min: size.min ?? undefined,
       company_size_max: size.max ?? undefined,
       locations: geographies,
@@ -387,6 +415,7 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
       negative_title_keywords: negativeTitleKeywords,
     },
     buying_triggers: {
+      declared: declaredTriggers,
       hiring: hiringTriggers,
       funding: fundingTriggers,
       technology: technologyTriggers,
@@ -413,7 +442,7 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
       industries_explicit: brainDisqualifiers,
       industries_generic: uniq([
         ...(usedDefaultDisq ? DEFAULT_DISQUALIFIERS : []),
-        ...(hasSaasContext ? SOFTWARE_ICP_DISQUALIFIERS : []),
+        ...(hasSaasContext ? SOFTWARE_ICP_DISQUALIFIERS.filter((d) => !overlapsTarget(d)) : []),
       ]),
       company_types: uniq([...v2.target_customer.disqualifiers.company_types, ...arr(icpRaw["disqualified_company_types"])]),
       titles: uniq([...v2.target_customer.disqualifiers.titles, ...negativeTitleKeywords]),

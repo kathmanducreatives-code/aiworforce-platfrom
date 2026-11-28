@@ -38,8 +38,9 @@ Deno.test("2. free-text-only Brain works but confidence is weak", () => {
   const c = compileCompanyBrainContext({ workspace_id: "ws", profile: { company: { description: "B2B SaaS platform for founders" } } });
   assertEquals(c.meta.confidence, "weak");
   assert(c.meta.warnings.length > 0);
-  // SaaS context still detected from description → useful expansions, not fabricated ICP industries.
-  assert(has(c.icp.categories, "B2B SaaS"));
+  // Signals recovery (2026-11-28): the SELLER's description never decides the target market,
+  // so no SaaS targeting is derived from it.
+  assert(!has(c.icp.categories, "B2B SaaS"));
   assertEquals(c.icp.industries, []); // never invents structured industries
 });
 
@@ -129,4 +130,44 @@ Deno.test("6. Agentory-style Brain compiles into SaaS/revenue target terms", () 
   assert(has(c.buyer_personas.titles, "Revenue Leader"));
   // matched_from evidence recorded
   assert(Object.keys(c.meta.matched_from).length > 0);
+});
+
+// ── SIGNALS RECOVERY · a software seller targeting a non-software market ─────────────────────
+const NORTHWIND_SELLER = { schema_version: 2,
+  company: { name: "Northwind Field Services (fictional)", category: "Workflow management software", description: "Scheduling software and workflow automation for field-service teams" },
+  gtm: { motion: "outbound sales" }, positioning: { promise: "A SaaS platform that ends missed visits" },
+  target_customer: { industries: ["Manufacturing", "Distribution", "Contracting", "Field services"], geography: ["United States"],
+    business_models: ["B2B"], company_size: { min: 10, max: 200, label: "10-200" } },
+  buyer_personas: ["Operations Manager", "Field Operations Manager", "Owner"],
+  triggers: ["Hiring growth", "Market expansion", "Technology adoption", "Leadership changes"],
+  jobs_to_watch: ["Account Executive", "Dispatcher"],
+  qualification_rules: { required_evidence: ["A dated public source"], reject_if: ["Fewer than 10 employees"], manual_review_if: [] },
+};
+Deno.test("Signals recovery: a software SELLER's own words never make the TARGET a SaaS market", () => {
+  const c = compileCompanyBrainContext({ workspace_id: "ws", profile: NORTHWIND_SELLER });
+  for (const saas of ["B2B SaaS", "AI SaaS", "sales software", "CRM"]) assert(!has(c.icp.categories, saas), `no ${saas} target`);
+  assertEquals(c.icp.categories, ["Manufacturing", "Distribution", "Contracting", "Field services"]);
+  assertEquals(c.icp.business_models, ["B2B"], "the target's business model, not the seller's sales motion");
+  assert(!c.buyer_personas.titles.some((t) => /revops|head of growth|founder/i.test(t)), "no SaaS buyer titles injected");
+  assert(!c.buying_triggers.hiring.some((t) => /founding ae|sdr/i.test(t)), "no SaaS hiring triggers injected");
+  assert(!c.query_strategy.positive_terms.some((t) => /saas/i.test(t)));
+});
+Deno.test("Signals recovery: the declared buying signals, jobs, size, personas and qualification rules are carried", () => {
+  const c = compileCompanyBrainContext({ workspace_id: "ws", profile: NORTHWIND_SELLER });
+  assertEquals(c.buying_triggers.declared, ["Hiring growth", "Market expansion", "Technology adoption", "Leadership changes"]);
+  assert(has(c.buying_triggers.hiring, "Account Executive") && has(c.buying_triggers.hiring, "Dispatcher"));
+  assertEquals([c.icp.company_size_min, c.icp.company_size_max], [10, 200]);
+  assertEquals(c.icp.locations, ["United States"]);
+  assertEquals(c.qualification_rules.required_evidence, ["A dated public source"]);
+});
+Deno.test("Signals recovery: a buyer persona is never a negative title; no contradictory default exclusions", () => {
+  const c = compileCompanyBrainContext({ workspace_id: "ws", profile: NORTHWIND_SELLER });
+  for (const t of ["Operations Manager", "Field Operations Manager"]) assert(!has(c.buyer_personas.negative_title_keywords, t), `${t} is a buyer`);
+  for (const d of ["construction", "logistics", "local services", "manufacturing"]) assert(!has(c.disqualifiers.industries, d), `${d} contradicts the ICP`);
+  assertEquals(c.disqualifiers.industries_generic, []);
+});
+Deno.test("Signals recovery: a workspace that TARGETS software companies keeps the SaaS expansion", () => {
+  const c = compileCompanyBrainContext({ workspace_id: "ws", profile: { schema_version: 2, company: { name: "X", description: "Bookkeeping for agencies" },
+    target_customer: { industries: ["B2B SaaS"], geography: ["United States"] }, buyer_personas: ["Founder"] } });
+  assert(has(c.icp.categories, "AI SaaS"));
 });

@@ -46,6 +46,49 @@ export interface RadarScanPlan {
   setup_required: boolean;
   source_plan: RadarSourcePlan[];
   warnings: string[];
+  /**
+   * THE TARGETING THE WHOLE PLAN WAS BUILT FROM, from the Company Brain only (Signals recovery).
+   * Every consumer — the radar's queries and gates, LISA's ICP watches, a monitoring plan shown
+   * for approval — reads the same definition, so "what are we watching for?" has one answer.
+   */
+  targeting: RadarTargeting;
+}
+
+export interface RadarTargeting {
+  industries: string[];
+  locations: string[];
+  company_size: { min: number | null; max: number | null };
+  business_models: string[];
+  buyer_personas: string[];
+  /** The buying signals the workspace declared ("Hiring growth", "Market expansion"…). */
+  buying_signals: string[];
+  /** Job titles whose hiring is a buying signal. */
+  job_titles: string[];
+  qualification: { required_evidence: string[]; reject_if: string[]; manual_review_if: string[] };
+  /** Excluded industries the workspace stated (profile + approved memory, already folded in). */
+  excluded_industries: string[];
+  /** Every signal must carry at least this proof before it can be shown as verified. */
+  evidence_requirements: string[];
+}
+
+/** The plan's targeting block (pure; shared with LISA's ICP watch and monitoring plans). */
+export function radarTargeting(brain: CompanyBrainContext): RadarTargeting {
+  return {
+    industries: [...brain.icp.industries],
+    locations: [...brain.icp.locations],
+    company_size: { min: brain.icp.company_size_min ?? null, max: brain.icp.company_size_max ?? null },
+    business_models: [...brain.icp.business_models],
+    buyer_personas: [...brain.buyer_personas.titles],
+    buying_signals: [...(brain.buying_triggers.declared ?? [])],
+    job_titles: uniq([...brain.jobs_to_watch, ...brain.buying_triggers.hiring]),
+    qualification: {
+      required_evidence: [...brain.qualification_rules.required_evidence],
+      reject_if: [...brain.qualification_rules.reject_if],
+      manual_review_if: [...brain.qualification_rules.manual_review_if],
+    },
+    excluded_industries: [...brain.disqualifiers.industries_explicit],
+    evidence_requirements: uniq(["source_url", "event_date", ...brain.qualification_rules.required_evidence]),
+  };
 }
 
 export interface ScanPlanOptions {
@@ -91,7 +134,7 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
   const roles = brain.query_strategy.hiring_role_terms.length ? brain.query_strategy.hiring_role_terms : ["Founding Account Executive", "RevOps"];
   const watchlist = brain.competitors_and_tools.watchlist;
   const workflowTerms = uniq([...brain.query_strategy.workflow_terms, ...brain.buying_triggers.content_topics]);
-  const linkedinTerms = uniq([...brain.query_strategy.linkedin_topic_terms, ...brain.buying_triggers.content_topics]);
+  const linkedinTerms = uniq([...brain.query_strategy.linkedin_topic_terms, ...brain.buying_triggers.content_topics, ...(brain.buying_triggers.declared ?? [])]);
   // Explicit geography is a HARD filter — bake it into the query text so no stage
   // (exact/synonym/adjacent) can silently drop it. Empty when the Brain has none.
   const geo = (brain.icp.locations[0] ?? "").trim();
@@ -248,5 +291,6 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
     setup_required: setupRequired,
     source_plan,
     warnings: uniq(warnings),
+    targeting: radarTargeting(brain),
   };
 }

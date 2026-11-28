@@ -217,6 +217,10 @@
         ]
       },
       "buying_triggers": {
+        "declared": [
+          "Hiring first SDR",
+          "Raised seed round"
+        ],
         "hiring": [
           "SDR",
           "first sales hire",
@@ -549,6 +553,12 @@
           ],
           "Sales Operations": [
             "derived:saas_context"
+          ],
+          "Hiring first SDR": [
+            "triggers"
+          ],
+          "Raised seed round": [
+            "triggers"
           ],
           "Clay": [
             "derived:saas_context"
@@ -777,16 +787,10 @@
         "title_keywords": [
           "CFO"
         ],
-        "negative_title_keywords": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ]
+        "negative_title_keywords": []
       },
       "buying_triggers": {
+        "declared": [],
         "hiring": [],
         "funding": [],
         "technology": [],
@@ -809,14 +813,7 @@
         ],
         "industries_generic": [],
         "company_types": [],
-        "titles": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ],
+        "titles": [],
         "keywords": [],
         "domains": []
       },
@@ -828,13 +825,7 @@
           "CFO"
         ],
         "negative_terms": [
-          "Government",
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
+          "Government"
         ],
         "hiring_role_terms": [
           "CFO"
@@ -985,16 +976,10 @@
         "title_keywords": [
           "COO"
         ],
-        "negative_title_keywords": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ]
+        "negative_title_keywords": []
       },
       "buying_triggers": {
+        "declared": [],
         "hiring": [],
         "funding": [],
         "technology": [],
@@ -1017,14 +1002,7 @@
         ],
         "industries_generic": [],
         "company_types": [],
-        "titles": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ],
+        "titles": [],
         "keywords": [],
         "domains": []
       },
@@ -1034,13 +1012,7 @@
           "COO"
         ],
         "negative_terms": [
-          "Tobacco",
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
+          "Tobacco"
         ],
         "hiring_role_terms": [
           "COO"
@@ -1155,16 +1127,10 @@
         "seniority": [],
         "departments": [],
         "title_keywords": [],
-        "negative_title_keywords": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ]
+        "negative_title_keywords": []
       },
       "buying_triggers": {
+        "declared": [],
         "hiring": [],
         "funding": [],
         "technology": [],
@@ -1215,14 +1181,7 @@
           "warehouse operations"
         ],
         "company_types": [],
-        "titles": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ],
+        "titles": [],
         "keywords": [],
         "domains": []
       },
@@ -1243,13 +1202,7 @@
           "local services",
           "plant operations",
           "field operations",
-          "warehouse operations",
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
+          "warehouse operations"
         ],
         "hiring_role_terms": [],
         "funding_terms": [],
@@ -1368,23 +1321,7 @@
       "employee_max": 150,
       "employee_policy": true,
       "excluded_industries_explicit": [],
-      "excluded_industries_generic": [
-        "manufacturing",
-        "construction",
-        "retail",
-        "restaurant",
-        "hospitality",
-        "university",
-        "school",
-        "hospital",
-        "bank",
-        "government",
-        "logistics",
-        "local services",
-        "plant operations",
-        "field operations",
-        "warehouse operations"
-      ]
+      "excluded_industries_generic": []
     },
     "planning_onboarded": {
       "context": {
@@ -1417,23 +1354,7 @@
         "employee_max": 150,
         "employee_policy": true,
         "excluded_industries_explicit": [],
-        "excluded_industries_generic": [
-          "manufacturing",
-          "construction",
-          "retail",
-          "restaurant",
-          "hospitality",
-          "university",
-          "school",
-          "hospital",
-          "bank",
-          "government",
-          "logistics",
-          "local services",
-          "plant operations",
-          "field operations",
-          "warehouse operations"
-        ]
+        "excluded_industries_generic": []
       }
     },
     "planning_not_onboarded": {
@@ -1465,16 +1386,10 @@
         "seniority": [],
         "departments": [],
         "title_keywords": [],
-        "negative_title_keywords": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ]
+        "negative_title_keywords": []
       },
       "buying_triggers": {
+        "declared": [],
         "hiring": [],
         "funding": [],
         "technology": [],
@@ -1489,50 +1404,11 @@
         "watchlist": []
       },
       "disqualifiers": {
-        "industries": [
-          "manufacturing",
-          "construction",
-          "retail",
-          "restaurant",
-          "hospitality",
-          "university",
-          "school",
-          "hospital",
-          "bank",
-          "government",
-          "logistics",
-          "local services",
-          "plant operations",
-          "field operations",
-          "warehouse operations"
-        ],
+        "industries": [],
         "industries_explicit": [],
-        "industries_generic": [
-          "manufacturing",
-          "construction",
-          "retail",
-          "restaurant",
-          "hospitality",
-          "university",
-          "school",
-          "hospital",
-          "bank",
-          "government",
-          "logistics",
-          "local services",
-          "plant operations",
-          "field operations",
-          "warehouse operations"
-        ],
+        "industries_generic": [],
         "company_types": [],
-        "titles": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ],
+        "titles": [],
         "keywords": [],
         "domains": []
       },
@@ -1540,29 +1416,7 @@
         "positive_terms": [
           "Logistics"
         ],
-        "negative_terms": [
-          "manufacturing",
-          "construction",
-          "retail",
-          "restaurant",
-          "hospitality",
-          "university",
-          "school",
-          "hospital",
-          "bank",
-          "government",
-          "logistics",
-          "local services",
-          "plant operations",
-          "field operations",
-          "warehouse operations",
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ],
+        "negative_terms": [],
         "hiring_role_terms": [],
         "funding_terms": [
           "Logistics"
@@ -1590,8 +1444,7 @@
       "meta": {
         "confidence": "medium",
         "warnings": [
-          "No buyer roles in Company Brain.",
-          "Using default high-risk disqualifiers (Brain supplied none)."
+          "No buyer roles in Company Brain."
         ],
         "derivation_sources": [
           "structured_icp"
@@ -1599,51 +1452,6 @@
         "matched_from": {
           "Logistics": [
             "icp.industries"
-          ],
-          "manufacturing": [
-            "default:high_risk"
-          ],
-          "construction": [
-            "default:high_risk"
-          ],
-          "retail": [
-            "default:high_risk"
-          ],
-          "restaurant": [
-            "default:high_risk"
-          ],
-          "hospitality": [
-            "default:high_risk"
-          ],
-          "university": [
-            "default:high_risk"
-          ],
-          "school": [
-            "default:high_risk"
-          ],
-          "hospital": [
-            "default:high_risk"
-          ],
-          "bank": [
-            "default:high_risk"
-          ],
-          "government": [
-            "default:high_risk"
-          ],
-          "logistics": [
-            "default:high_risk"
-          ],
-          "local services": [
-            "default:high_risk"
-          ],
-          "plant operations": [
-            "default:high_risk"
-          ],
-          "field operations": [
-            "default:high_risk"
-          ],
-          "warehouse operations": [
-            "default:high_risk"
           ]
         },
         "setup_required": true,
@@ -1775,16 +1583,10 @@
           "VP Operations",
           "CTO"
         ],
-        "negative_title_keywords": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ]
+        "negative_title_keywords": []
       },
       "buying_triggers": {
+        "declared": [],
         "hiring": [],
         "funding": [],
         "technology": [],
@@ -1807,14 +1609,7 @@
         ],
         "industries_generic": [],
         "company_types": [],
-        "titles": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ],
+        "titles": [],
         "keywords": [],
         "domains": []
       },
@@ -1827,13 +1622,7 @@
           "CTO"
         ],
         "negative_terms": [
-          "Retail",
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
+          "Retail"
         ],
         "hiring_role_terms": [
           "VP Operations",
@@ -2018,16 +1807,10 @@
         "seniority": [],
         "departments": [],
         "title_keywords": [],
-        "negative_title_keywords": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ]
+        "negative_title_keywords": []
       },
       "buying_triggers": {
+        "declared": [],
         "hiring": [],
         "funding": [],
         "technology": [],
@@ -2078,14 +1861,7 @@
           "warehouse operations"
         ],
         "company_types": [],
-        "titles": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ],
+        "titles": [],
         "keywords": [],
         "domains": []
       },
@@ -2106,13 +1882,7 @@
           "local services",
           "plant operations",
           "field operations",
-          "warehouse operations",
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
+          "warehouse operations"
         ],
         "hiring_role_terms": [],
         "funding_terms": [],
@@ -2233,7 +2003,32 @@
       "excluded_industries_explicit": [
         "Gambling"
       ],
-      "excluded_industries_generic": []
+      "excluded_industries_generic": [
+        "lab testing",
+        "laboratory testing",
+        "testing laboratory",
+        "clinical laboratory",
+        "analytical services",
+        "analytical laboratory",
+        "laboratory services",
+        "environmental testing",
+        "pharma",
+        "pharmaceutical",
+        "pharmaceuticals",
+        "biopharma",
+        "life sciences testing",
+        "chemical",
+        "chemicals",
+        "specialty chemicals",
+        "packaging",
+        "contract packaging",
+        "packaging solutions",
+        "staffing",
+        "staffing agency",
+        "recruiting agency",
+        "recruitment agency",
+        "staffing and recruiting"
+      ]
     },
     "planning_onboarded": {
       "context": {
@@ -2268,7 +2063,32 @@
         "excluded_industries_explicit": [
           "Gambling"
         ],
-        "excluded_industries_generic": []
+        "excluded_industries_generic": [
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ]
       }
     },
     "planning_not_onboarded": {
@@ -2287,9 +2107,20 @@
           "Healthcare"
         ],
         "categories": [
-          "Healthcare"
+          "Healthcare",
+          "B2B SaaS",
+          "AI SaaS",
+          "sales software",
+          "revenue operations software",
+          "workflow automation",
+          "data enrichment",
+          "outbound infrastructure",
+          "CRM",
+          "pipeline automation"
         ],
-        "business_models": [],
+        "business_models": [
+          "B2B SaaS"
+        ],
         "company_size_min": 2,
         "company_size_max": 2,
         "locations": [
@@ -2304,24 +2135,49 @@
           "Founder",
           "Head of Sales",
           "RevOps lead",
-          "SDR"
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
         ],
         "seniority": [
           "founder/exec",
           "leadership",
-          "ic/manager"
+          "ic/manager",
+          "unspecified"
         ],
         "departments": [
           "executive",
           "sales",
           "revenue",
-          "operations"
+          "operations",
+          "growth"
         ],
         "title_keywords": [
           "Founder",
           "Head of Sales",
           "RevOps lead",
-          "SDR"
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "Growth Lead"
         ],
         "negative_title_keywords": [
           "General Manager",
@@ -2332,10 +2188,27 @@
         ]
       },
       "buying_triggers": {
-        "hiring": [
-          "SDR"
+        "declared": [
+          "Hiring first SDR",
+          "Raised seed round"
         ],
-        "funding": [],
+        "hiring": [
+          "SDR",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Operations",
+          "Growth Lead"
+        ],
+        "funding": [
+          "recently funded",
+          "seed",
+          "Series A",
+          "founder-led sales"
+        ],
         "technology": [],
         "competitor": [],
         "workflow_pain": [
@@ -2347,16 +2220,75 @@
         "competitors": [],
         "adjacent_tools": [],
         "integration_tools": [],
-        "watchlist": []
+        "watchlist": [
+          "Clay",
+          "Apollo",
+          "Instantly",
+          "Smartlead",
+          "HubSpot",
+          "Salesforce",
+          "Attio",
+          "Common Room",
+          "Unify"
+        ]
       },
       "disqualifiers": {
         "industries": [
-          "Gambling"
+          "Gambling",
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
         ],
         "industries_explicit": [
           "Gambling"
         ],
-        "industries_generic": [],
+        "industries_generic": [
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting"
+        ],
         "company_types": [
           "Agencies"
         ],
@@ -2376,13 +2308,55 @@
       "query_strategy": {
         "positive_terms": [
           "Healthcare",
+          "B2B SaaS",
+          "AI SaaS",
+          "sales software",
+          "revenue operations software",
+          "workflow automation",
+          "data enrichment",
+          "outbound infrastructure",
+          "CRM",
+          "pipeline automation",
           "Founder",
           "Head of Sales",
           "RevOps lead",
-          "SDR"
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
         ],
         "negative_terms": [
           "Gambling",
+          "lab testing",
+          "laboratory testing",
+          "testing laboratory",
+          "clinical laboratory",
+          "analytical services",
+          "analytical laboratory",
+          "laboratory services",
+          "environmental testing",
+          "pharma",
+          "pharmaceutical",
+          "pharmaceuticals",
+          "biopharma",
+          "life sciences testing",
+          "chemical",
+          "chemicals",
+          "specialty chemicals",
+          "packaging",
+          "contract packaging",
+          "packaging solutions",
+          "staffing",
+          "staffing agency",
+          "recruiting agency",
+          "recruitment agency",
+          "staffing and recruiting",
           "General Manager",
           "Plant Manager",
           "Facilities Manager",
@@ -2393,15 +2367,44 @@
           "Founder",
           "Head of Sales",
           "RevOps lead",
-          "SDR"
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations",
+          "first sales hire",
+          "Founding Account Executive",
+          "Founding AE",
+          "Sales Development",
+          "Growth Lead"
         ],
         "funding_terms": [
-          "Healthcare"
+          "raised funding",
+          "seed round",
+          "Series A",
+          "Healthcare",
+          "B2B SaaS",
+          "AI SaaS"
         ],
         "linkedin_topic_terms": [
           "Manual prospecting"
         ],
-        "competitor_terms": [],
+        "competitor_terms": [
+          "Clay",
+          "Apollo",
+          "Instantly",
+          "Smartlead",
+          "HubSpot",
+          "Salesforce",
+          "Attio",
+          "Common Room",
+          "Unify"
+        ],
         "workflow_terms": [
           "Manual prospecting"
         ]
@@ -2411,7 +2414,16 @@
           "Founder",
           "Head of Sales",
           "RevOps lead",
-          "SDR"
+          "SDR",
+          "Co-Founder",
+          "CEO",
+          "Head of Growth",
+          "Revenue Leader",
+          "GTM Operator",
+          "RevOps",
+          "Revenue Operations",
+          "Sales Ops",
+          "Sales Operations"
         ],
         "core_beliefs": [
           "Manual prospecting"
@@ -2440,7 +2452,8 @@
             "icp.industries"
           ],
           "Founder": [
-            "icp.buyer_roles"
+            "icp.buyer_roles",
+            "derived:saas_context"
           ],
           "Head of Sales": [
             "icp.buyer_roles"
@@ -2454,8 +2467,167 @@
           "Manual prospecting": [
             "icp.pain_points"
           ],
+          "B2B SaaS": [
+            "derived:saas_context"
+          ],
+          "AI SaaS": [
+            "derived:saas_context"
+          ],
+          "sales software": [
+            "derived:saas_context"
+          ],
+          "revenue operations software": [
+            "derived:saas_context"
+          ],
+          "workflow automation": [
+            "derived:saas_context"
+          ],
+          "data enrichment": [
+            "derived:saas_context"
+          ],
+          "outbound infrastructure": [
+            "derived:saas_context"
+          ],
+          "CRM": [
+            "derived:saas_context"
+          ],
+          "pipeline automation": [
+            "derived:saas_context"
+          ],
+          "Co-Founder": [
+            "derived:saas_context"
+          ],
+          "CEO": [
+            "derived:saas_context"
+          ],
+          "Head of Growth": [
+            "derived:saas_context"
+          ],
+          "Revenue Leader": [
+            "derived:saas_context"
+          ],
+          "GTM Operator": [
+            "derived:saas_context"
+          ],
+          "RevOps": [
+            "derived:saas_context"
+          ],
+          "Revenue Operations": [
+            "derived:saas_context"
+          ],
+          "Sales Ops": [
+            "derived:saas_context"
+          ],
+          "Sales Operations": [
+            "derived:saas_context"
+          ],
+          "Hiring first SDR": [
+            "triggers"
+          ],
+          "Raised seed round": [
+            "triggers"
+          ],
+          "Clay": [
+            "derived:saas_context"
+          ],
+          "Apollo": [
+            "derived:saas_context"
+          ],
+          "Instantly": [
+            "derived:saas_context"
+          ],
+          "Smartlead": [
+            "derived:saas_context"
+          ],
+          "HubSpot": [
+            "derived:saas_context"
+          ],
+          "Salesforce": [
+            "derived:saas_context"
+          ],
+          "Attio": [
+            "derived:saas_context"
+          ],
+          "Common Room": [
+            "derived:saas_context"
+          ],
+          "Unify": [
+            "derived:saas_context"
+          ],
           "Gambling": [
             "icp.disqualifiers"
+          ],
+          "lab testing": [
+            "derived:software_icp_reject"
+          ],
+          "laboratory testing": [
+            "derived:software_icp_reject"
+          ],
+          "testing laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "clinical laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "analytical services": [
+            "derived:software_icp_reject"
+          ],
+          "analytical laboratory": [
+            "derived:software_icp_reject"
+          ],
+          "laboratory services": [
+            "derived:software_icp_reject"
+          ],
+          "environmental testing": [
+            "derived:software_icp_reject"
+          ],
+          "pharma": [
+            "derived:software_icp_reject"
+          ],
+          "pharmaceutical": [
+            "derived:software_icp_reject"
+          ],
+          "pharmaceuticals": [
+            "derived:software_icp_reject"
+          ],
+          "biopharma": [
+            "derived:software_icp_reject"
+          ],
+          "life sciences testing": [
+            "derived:software_icp_reject"
+          ],
+          "chemical": [
+            "derived:software_icp_reject"
+          ],
+          "chemicals": [
+            "derived:software_icp_reject"
+          ],
+          "specialty chemicals": [
+            "derived:software_icp_reject"
+          ],
+          "packaging": [
+            "derived:software_icp_reject"
+          ],
+          "contract packaging": [
+            "derived:software_icp_reject"
+          ],
+          "packaging solutions": [
+            "derived:software_icp_reject"
+          ],
+          "staffing": [
+            "derived:software_icp_reject"
+          ],
+          "staffing agency": [
+            "derived:software_icp_reject"
+          ],
+          "recruiting agency": [
+            "derived:software_icp_reject"
+          ],
+          "recruitment agency": [
+            "derived:software_icp_reject"
+          ],
+          "staffing and recruiting": [
+            "derived:software_icp_reject"
           ]
         },
         "setup_required": false,
@@ -2671,6 +2843,10 @@
         ]
       },
       "buying_triggers": {
+        "declared": [
+          "Hiring first SDR",
+          "Raised seed round"
+        ],
         "hiring": [
           "SDR",
           "first sales hire",
@@ -3003,6 +3179,12 @@
           ],
           "Sales Operations": [
             "derived:saas_context"
+          ],
+          "Hiring first SDR": [
+            "triggers"
+          ],
+          "Raised seed round": [
+            "triggers"
           ],
           "Clay": [
             "derived:saas_context"
@@ -3332,6 +3514,10 @@
         ]
       },
       "buying_triggers": {
+        "declared": [
+          "Hiring first SDR",
+          "Raised seed round"
+        ],
         "hiring": [
           "SDR",
           "first sales hire",
@@ -3665,6 +3851,12 @@
           "Sales Operations": [
             "derived:saas_context"
           ],
+          "Hiring first SDR": [
+            "triggers"
+          ],
+          "Raised seed round": [
+            "triggers"
+          ],
           "Clay": [
             "derived:saas_context"
           ],
@@ -3880,16 +4072,10 @@
           "COO",
           "Head of Finance"
         ],
-        "negative_title_keywords": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ]
+        "negative_title_keywords": []
       },
       "buying_triggers": {
+        "declared": [],
         "hiring": [],
         "funding": [],
         "technology": [],
@@ -3912,14 +4098,7 @@
         ],
         "industries_generic": [],
         "company_types": [],
-        "titles": [
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
-        ],
+        "titles": [],
         "keywords": [],
         "domains": []
       },
@@ -3930,13 +4109,7 @@
           "Head of Finance"
         ],
         "negative_terms": [
-          "Tobacco",
-          "General Manager",
-          "Plant Manager",
-          "Facilities Manager",
-          "Warehouse Manager",
-          "Field Operations Manager",
-          "Operations Manager"
+          "Tobacco"
         ],
         "hiring_role_terms": [
           "COO",

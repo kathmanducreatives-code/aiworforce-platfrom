@@ -204,11 +204,12 @@ Deno.test("board: answers what/why/evidence/agent/action/approval/done; stale Br
 Deno.test("disqualifiers: a manufacturing ICP is no longer excluded by the generic default; stated exclusions still hold", () => {
   const brain = compileCompanyBrainContext({ workspace_id: WS, profile: { schema_version: 2, company: { name: "Everest" },
     target_customer: { industries: ["Manufacturing", "Logistics"], geography: ["United States"] } } } as never);
-  assert(brain.disqualifiers.industries.map((x) => x.toLowerCase()).includes("manufacturing"), "the merged list is unchanged (compatibility)");
+  // Signals recovery (2026-11-28): a Brain that states its target market gets NO generic defaults.
+  assertFalse(brain.disqualifiers.industries.map((x) => x.toLowerCase()).includes("manufacturing"));
+  assertEquals(brain.disqualifiers.industries_generic, []);
   const eff = effectiveIndustryExclusions(brain);
   assertFalse(eff.industries.map((x) => x.toLowerCase()).includes("manufacturing"));
   assertFalse(eff.industries.map((x) => x.toLowerCase()).includes("logistics"));
-  assert(eff.industries.map((x) => x.toLowerCase()).includes("government"), "unrelated defaults stay");
   const plan = buildRadarScanPlan(brain) as unknown as { negative_terms?: string[] };
   assertFalse(JSON.stringify(plan).toLowerCase().includes("\"manufacturing\"") && (plan.negative_terms ?? []).includes("manufacturing"));
   const stated = compileCompanyBrainContext({ workspace_id: WS, profile: { schema_version: 2, company: { name: "X" },
