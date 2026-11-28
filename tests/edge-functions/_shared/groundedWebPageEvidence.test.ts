@@ -58,10 +58,12 @@ const evidence = () => ({
   evidence_urls: [], missing_fields: [], conflicting_evidence: [],
 }) as never;
 
-// The canary's own moment (a day after the fetch): freshness is measured from it, not from
-// whatever day the suite runs — the pages went "stale" on the calendar, not in the fixture.
+// The registry's clock is pinned one day after the fixture's fetch, so "freshly
+// fetched pages are current" stays true on every date (it went stale 60 days after
+// 2026-09-26 and failed from 2026-11-25 on the real clock).
 const REGISTRY = buildEvidenceRegistry({
-  evidence: evidence(), web_pages: [page("product", PLATFORM), page("pricing", PRICING)], now: Date.parse("2026-09-27T00:00:00Z"),
+  evidence: evidence(), web_pages: [page("product", PLATFORM), page("pricing", PRICING)],
+  now: Date.parse(FETCHED) + 86_400_000,
 } as never);
 const PAGE_ID = (intent: string) => REGISTRY.items.find((i) => i.metadata?.page_intent === intent)!.evidence_id;
 
