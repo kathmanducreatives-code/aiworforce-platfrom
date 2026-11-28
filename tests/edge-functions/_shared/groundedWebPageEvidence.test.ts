@@ -58,8 +58,10 @@ const evidence = () => ({
   evidence_urls: [], missing_fields: [], conflicting_evidence: [],
 }) as never;
 
+// The canary's own moment (a day after the fetch): freshness is measured from it, not from
+// whatever day the suite runs — the pages went "stale" on the calendar, not in the fixture.
 const REGISTRY = buildEvidenceRegistry({
-  evidence: evidence(), web_pages: [page("product", PLATFORM), page("pricing", PRICING)],
+  evidence: evidence(), web_pages: [page("product", PLATFORM), page("pricing", PRICING)], now: Date.parse("2026-09-27T00:00:00Z"),
 } as never);
 const PAGE_ID = (intent: string) => REGISTRY.items.find((i) => i.metadata?.page_intent === intent)!.evidence_id;
 
