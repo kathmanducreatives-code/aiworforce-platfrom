@@ -15,12 +15,12 @@
 // builders the Brain page uses, so an offer and a hand-added preference for the
 // same thing land on the same key. Pure.
 import {
-  companySizeItem, decisionItem, exclusionItem, restrictionItem, toneItem, type ItemPayload,
+  companySizeItem, decisionItem, exclusionItem, factItem, restrictionItem, subjectFactItem, toneItem, type ItemPayload,
 } from "./brainMemoryPayloads.ts";
 import { normalizeCompanyBrain } from "./normalizeCompanyBrain.ts";
 
 export type MemoryOffer =
-  | { kind: "lasting"; item: ItemPayload; summary: string; what: "exclusion" | "company_size" | "tone" | "restriction" | "decision" }
+  | { kind: "lasting"; item: ItemPayload; summary: string; what: "exclusion" | "company_size" | "tone" | "restriction" | "decision" | "fact" }
   | { kind: "temporary"; summary: string };
 
 // "from now on" and friends make a statement standing policy even next to a time word.
@@ -28,6 +28,10 @@ const STRONG = /\b(from now on|going forward|moving forward|permanently|as a (ru
 const LASTING = /\b(always|never|no longer|stop (targeting|contacting|prospecting|including|recommending)|don'?t ever|do not ever|in (the )?future)\b/i;
 const TEMPORARY = /\b(for (this|that|the) (search|list|run|campaign|request|one|batch|week|month|time|call|report)|this (time|week|month|search|run|list|campaign|once)|just (this|for (now|today|this))|for now|for today|today only|right now|temporarily|one[- ]off|only (today|this week|this time))\b/i;
 const DIRECTIVE = /\b(exclude|skip|avoid|never|don'?t|do not|only|stop|focus|leave out|ignore|remove)\b/i;
+// ORION-003: the person asking ORION to remember something is the clearest lasting signal there is.
+const EXPLICIT = /\b(?:please\s+)?(?:remember|keep in mind|note (?:down )?(?:that|this))\b/i;
+const EXPLICIT_LEAD = /^\s*(?:please\s+)?(?:remember|keep in mind|note(?: down)?)\s+(?:that\s+|this:?\s+)?/i;
+const EXPLICIT_TAIL = /\s*(?:please\s+)?(?:remember|keep in mind|note(?: down)?)\s+(?:this|that|it)\b[^.!]*[.!]?\s*$/i;
 const QUESTION = /\?\s*$|^\s*(what|should|could|can|would|do|does|did|is|are|why|how|when|which|who|if)\b/i;
 
 const REGIONS = new Set([
@@ -59,9 +63,12 @@ function classifyExclusion(raw: string): ItemPayload | null {
 
 /** What, if anything, ORION should offer to remember from one user message. */
 export function detectMemoryOffer(message: string): MemoryOffer | null {
-  const text = (message ?? "").trim();
+  const raw = (message ?? "").trim();
+  const explicit = EXPLICIT.test(raw);
+  // "Remember that X" / "X. Please remember this." → read X itself.
+  const text = explicit ? raw.replace(EXPLICIT_TAIL, "").replace(EXPLICIT_LEAD, "").trim() || raw : raw;
   if (!text || text.length > 600 || QUESTION.test(text)) return null;
-  const strong = STRONG.test(text);
+  const strong = STRONG.test(text) || explicit;
   const lasting = strong || LASTING.test(text);
   if (TEMPORARY.test(text) && !strong) {
     return DIRECTIVE.test(text)
@@ -115,6 +122,29 @@ export function detectMemoryOffer(message: string): MemoryOffer | null {
   const outcome = decided ? sentence(tidy(decided[1])) : focusing ? `Focus on ${tidy(focusing[1])}` : "";
   if (outcome.length >= 4 && outcome.length <= 300) {
     return { kind: "lasting", what: "decision", item: decisionItem(outcome, "strategy_selected"), summary: outcome };
+  }
+  // 6. A business fact about the company's OWN subject, keyed by that subject so a correction
+  //    replaces it: "our sales cycle has changed from 45 days to 60 days", "our sales cycle is
+  //    about 45 days", "our average deal size is now $12k".
+  const changed = text.match(/\b(?:our|the)\s+([a-z][a-z \-]{2,40}?)\s+(?:has\s+|have\s+)?changed\s+from\s+((?:[^.;!\n]|\.(?=\d))+?)\s+to\s+((?:[^.;!\n]|\.(?=\d))+)/i);
+  if (changed) {
+    const [, subject, from, to] = changed;
+    const value = tidy(to);
+    if (value && value.length <= 120) {
+      return { kind: "lasting", what: "fact", item: subjectFactItem(subject, value, tidy(from)), summary: `${sentence(tidy(subject))}: ${value} (was ${tidy(from)})` };
+    }
+  }
+  const stated = text.match(/\b(?:our|the)\s+([a-z][a-z \-]{2,40}?)\s+(?:is|are)\s+(?:now\s+)?((?:[^.;!\n]|\.(?=\d))+)/i);
+  if (stated && explicit) {
+    const value = tidy(stated[2]);
+    if (value && value.length <= 120 && !VAGUE.test(value)) {
+      return { kind: "lasting", what: "fact", item: subjectFactItem(stated[1], value), summary: `${sentence(tidy(stated[1]))}: ${value}` };
+    }
+  }
+  // 7. Anything else the person explicitly asked ORION to remember: kept in their words.
+  if (explicit) {
+    const said = sentence(tidy(text));
+    if (said.length >= 4 && said.length <= 300) return { kind: "lasting", what: "fact", item: factItem(said), summary: said };
   }
   return null;
 }

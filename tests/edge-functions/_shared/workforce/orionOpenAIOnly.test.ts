@@ -199,15 +199,20 @@ Deno.test("handler: an ORION business question is understood and answered on Ope
   assertEquals(net.functionCalls.length, 0, "answered in this request — not handed to daily-brief");
 });
 
-Deno.test("handler: outside the evidence pilot workspace a priority question still goes to the brief (unchanged)", async () => {
+// ORION-001 (Brain TEST acceptance, 2026-11-28): asking what to prioritise, and why, is ADVICE.
+// It used to be promoted into the activity brief outside the evidence pilot, which for a
+// workspace with little activity answered "no action needed". It is now ORION's answer from the
+// Company Brain in every workspace; the brief stays the answer to a status ask ("brief me").
+Deno.test("handler: outside the evidence pilot workspace a priority question is ORION's answer, not the activity brief", async () => {
   const tables = pilotTables();
-  const net = installFakeNetwork({ supabaseUrl: SUPABASE_URL, tables, modelReplies: [brainSays(converse)],
+  const net = installFakeNetwork({ supabaseUrl: SUPABASE_URL, tables, modelReplies: [brainSays(converse), { when: (_u, sys) => !isBrain(sys), content: "Grounded advice." }],
     functionReplies: { "daily-brief": { ok: true } } });
   try {
     await withEnv({ MODEL_SPEND_ENFORCEMENT: "observe", AGENTORY_ORION_EVIDENCE_CONTEXT: "true",
       AGENTORY_ORION_EVIDENCE_WORKSPACES: "a71a0000-0000-4000-8000-0000000011a1", ANTHROPIC_API_KEY: null },
       () => sendTurn(QUESTION, tables));
-    assertEquals(net.functionCalls.map((c) => c.fn), ["daily-brief"]);
+    assertEquals(net.functionCalls.map((c) => c.fn), [], "not handed to daily-brief");
+    assert(net.modelCalls.some((c) => !isBrain(c.system) && c.system.includes("You are ORION")), "ORION answered it");
   } finally { net.restore(); }
 });
 

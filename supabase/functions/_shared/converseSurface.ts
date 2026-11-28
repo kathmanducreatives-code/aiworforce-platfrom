@@ -97,7 +97,13 @@ export function converseSystemPrompt(ctx: ConverseContext): string {
   ];
 
   if (ctx.workspaceContext) {
-    parts.push("", "<workspace_profile>", ctx.workspaceContext, "</workspace_profile>");
+    parts.push("", "<workspace_profile>", ctx.workspaceContext, "</workspace_profile>",
+      "",
+      // ORION-001: advice is grounded in the business itself, not only in recent activity.
+      "STRATEGY AND PRIORITIES: when asked what to focus on, prioritise or do next, give concrete recommendations (as many as asked), each with why, grounded in the workspace profile's goals, target customers, positioning, exclusions and remembered decisions. Little or no recorded activity is not \"nothing to do\": say so in one line, then recommend from the profile.",
+      // ORION-004: proof is only what is recorded, and a claim is not verified evidence.
+      "EVIDENCE: testimonials, case studies, ROI figures and proof points exist only if the workspace profile lists them, and listed ones are the company's own claims unless marked verified. Never call proof good or strong when none is verified; say exactly what is missing.",
+    );
   } else {
     parts.push(
       "",

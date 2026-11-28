@@ -137,7 +137,7 @@ function actualModelUsed(): string {
   return turnCollector.getStore()?.lastModel() ?? "deterministic";
 }
 import { isPronounReference, promoteExecutiveQuestion, resolvePronounCompany, departmentForRoute, orionConverseTask } from "../_shared/departmentRouting.ts";
-import { subQuestions, ORION_INTELLIGENCE_VERSION, type OrionRouting } from "../_shared/orionIntelligence.ts";
+import { isAdviceQuestion, subQuestions, ORION_INTELLIGENCE_VERSION, type OrionRouting } from "../_shared/orionIntelligence.ts";
 import { planTurnRouting, ORION_REFERENCE_POLICY_VERSION, type TurnRouting } from "../_shared/orionReferencePolicy.ts";
 import { bindConversationWorkspace, type BindingDb } from "../_shared/conversationBinding.ts";
 import { orionDraftSystemPrompt, draftMaxTokens, withDraftNotice, ORION_DRAFT_VERSION } from "../_shared/orionDraft.ts";
@@ -2557,7 +2557,9 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       // Every later reader sees the policy's request: for an ANSWER, unmatched
       // set references and the model's blocking questions are already notes.
       understood.request = orion.request;
-      const executive = evidenceOn
+      // ORION-001: advice ("what should we focus on this week, and why?") and anything ORION's
+      // routing already took over are never promoted into the activity brief.
+      const executive = evidenceOn || orion.reroute || isAdviceQuestion(message)
         ? { request: orion.request, promoted: false }
         : promoteExecutiveQuestion(orion.request, message);
       if (executive.promoted) {

@@ -294,7 +294,11 @@ export async function loadCompanyBrainContext(
   const [brainR, memoryR, revisionR, proposalR] = await Promise.all([rows(brainQ), rows(memoryQ), rows(revisionQ), rows(proposalQ)]);
   const warnings: string[] = [];
   if (brainR.failed) warnings.push("brain_unavailable");
-  if (memoryR.failed || revisionR.failed || proposalR.failed) warnings.push("memory_unavailable");
+  // ORION-002: only a failed MEMORY read withholds memory. Revision history and the pending count
+  // are bookkeeping; when one of them failed, every approved memory used to vanish from every agent
+  // ("memory_unavailable" drops the whole block) while exclusions still applied through the profile.
+  if (memoryR.failed) warnings.push("memory_unavailable");
+  if (revisionR.failed || proposalR.failed) warnings.push("memory_history_unavailable");
 
   const brainRow = brainR.data[0] ?? null;
   const profile = obj(brainRow?.profile);

@@ -45,6 +45,7 @@ export default function MemoryOfferCard({ metadata }: { metadata: unknown }) {
       }
       return reviewProposal(workspaceId as string, proposalId as string, decision, {
         correctedValue: corrected, idempotencyKey: idem[decision], confirmConflict: confirm,
+        expectedMemoryVersion: live.data?.contradicts_version ?? null,
         note: decision === 'reject' ? 'Declined in chat' : 'Approved in chat',
       });
     },

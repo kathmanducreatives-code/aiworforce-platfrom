@@ -16,6 +16,11 @@
 #   MODEL_SPEND_PERIOD_DAYS=30            checks it before every model call
 #   AGENTORY_ROUTE_MAX_USD_PER_CALL=0.05  worst-case admission per call
 #   AGENTORY_DELEGATION_ENABLED=false     ORION delegation stays off
+#   AGENTORY_ORION_EVIDENCE_CONTEXT=true  ORION answers business questions from the Company Brain,
+#                                         approved memory and held evidence — as the production
+#                                         release sets it (scripts/release/deploy-production-release.sh).
+#                                         Without it ORION ran its pre-evidence routing on Brain TEST
+#                                         (ORION-001/002/004). No paid call: it only reads what is held.
 # OPENAI_API_KEY is a secret value: the owner sets it in the dashboard, or leaves
 # it unset and runs acceptance without --allow-orion-chat. This script never reads it.
 set -euo pipefail
@@ -52,8 +57,9 @@ root="$(cd "$(dirname "$0")/../../.." && pwd)"; cd "$root"
 FUNCTIONS="generate-company-brain-draft setup-company-brain company-brain-memory pilot-chat daily-brief run-radar-scan run-monitoring-scan"
 supabase secrets set --project-ref "$ref" \
   MODEL_SPEND_ENFORCEMENT=enforce MODEL_SPEND_CEILING_USD="$ceiling" MODEL_SPEND_PERIOD_DAYS=30 \
-  AGENTORY_ROUTE_MAX_USD_PER_CALL=0.05 AGENTORY_DELEGATION_ENABLED=false >/dev/null
-echo "configured: spend ceiling \$$ceiling per workspace per 30 days; delegation off"
+  AGENTORY_ROUTE_MAX_USD_PER_CALL=0.05 AGENTORY_DELEGATION_ENABLED=false \
+  AGENTORY_ORION_EVIDENCE_CONTEXT=true >/dev/null
+echo "configured: spend ceiling \$$ceiling per workspace per 30 days; delegation off; ORION evidence context on"
 # No Docker: one-file bundles, deployed with --use-api (deploy-functions.sh).
 # shellcheck source=deploy-functions.sh
 . "$root/scripts/test-project/brain-test/deploy-functions.sh"

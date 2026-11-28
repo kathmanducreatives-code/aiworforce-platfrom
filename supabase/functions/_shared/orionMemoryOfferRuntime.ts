@@ -84,6 +84,7 @@ export function memoryOfferMessage(r: MemoryOfferRecord): { content: string; met
     ? `Noted for this request only. ${r.summary.replace(/^Applied to this request only\.\s*/, "")}`
     : r.status === "already_known"
     ? `Your Company Brain already has this: ${r.summary}. Every agent follows it.`
-    : `That sounds like a lasting ${r.kind === "decision" ? "business decision" : "preference"}: “${r.summary}”. Should I remember it for every agent?${r.conflict ? ` Note: ${r.conflict}` : ""}`;
+    : `That sounds like a lasting ${r.kind === "decision" ? "business decision" : r.kind === "fact" ? "business fact" : "preference"}: “${r.summary}”. Should I remember it for every agent?${
+        r.replaces_memory_id ? " It replaces what your Company Brain remembers now; the old value stays in history." : ""}${r.conflict ? ` Note: ${r.conflict}` : ""} Nothing is stored until you approve.`;
   return { content, metadata: { memory_offer: r } };
 }

@@ -18,3 +18,11 @@ select b.workspace_id, b.onboarding_completed, b.updated_at,
 \echo == last 20 writes (who, which sections, when)
 select r.workspace_id, r.revision, r.written_at, r.actor_kind, r.permission, r.source_kind, r.changed_sections
   from public.company_brain_revisions r order by r.written_at desc limit 20;
+\echo
+\echo == approved / active memory (what every agent reads)
+select m.workspace_id, m.kind, m.fact_key, m.value, m.version, m.lifecycle_status, m.approval_status, m.created_by_kind, m.updated_at
+  from public.company_brain_memory m order by m.updated_at desc limit 30;
+\echo
+\echo == memory proposals (pending until a person approves)
+select p.workspace_id, p.proposed_by_agent, p.kind, p.fact_key, p.value, p.status, p.contradicts_memory_id is not null as replaces_existing, p.updated_at
+  from public.company_brain_memory_proposals p order by p.updated_at desc limit 20;

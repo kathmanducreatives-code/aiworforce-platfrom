@@ -40,6 +40,7 @@
 
 import type { RequestPart, RequestV1 } from "./requestV1.ts";
 import { orionAnswersCompoundRead } from "./departmentRouting.ts";
+import { planRead } from "./readSurface.ts";
 
 export const ORION_INTELLIGENCE_VERSION = "orion-intelligence-v1" as const;
 
@@ -92,7 +93,11 @@ const CONSTRAINT_RE = /^(?:answer\b|do not\b|don't\b|use only\b|use (?:our |actu
 export function subQuestions(message: string): string[] {
   const text = String(message ?? "").replace(/\s+/g, " ").trim();
   if (!text) return [];
-  const sentences = text.split(/(?<=[.?!])\s+(?=[A-Z])/).flatMap((s) => s.split(/[;,]?\s+(?=then\b)/i));
+  const sentences = text.split(/(?<=[.?!])\s+(?=[A-Z])/)
+    .flatMap((s) => s.split(/[;,]?\s+(?=then\b)/i))
+    // ORION-002: "What industries should we avoid, and what is our typical sales cycle?" is two
+    // questions. A clause joined by "and"/"also" that opens with its own question word is its own ask.
+    .flatMap((s) => s.split(/[,;]\s*(?:and\s+(?:also\s+)?|also\s+)(?=(?:what|which|who|whom|whose|when|where|why|how|do|does|did|is|are|was|were|can|could|should|would|will)\b)/i));
   const out: string[] = [];
   for (const raw of sentences) {
     const s = raw.trim().replace(/^then\s+/i, "").replace(/^and\s+/i, "");
@@ -207,6 +212,41 @@ export function asConverse(request: RequestV1): RequestV1 {
   };
 }
 
+// ── ORION-001/002/004 · WHAT THE READ SURFACE CANNOT ANSWER IS ORION'S ─────
+//
+// The read surface answers questions about RECORDED activity — runs, leads,
+// signals, watched companies, approvals — from templates. Two kinds of "read"
+// reached it that it can never answer, in either flag state:
+//   * a read with NO read surface for its entity (a question about the
+//     workspace's own knowledge filed under content, market, competitor or job)
+//     ended in "I don't have a way to look that up yet", even though the
+//     Company Brain and approved memory that answer it are in ORION's context;
+//   * ADVICE filed as the workspace brief ("what should we focus on this week,
+//     and why?") was answered with a report of recent activity — "no action
+//     needed" for a new workspace — instead of recommendations from its goals,
+//     ICP and positioning.
+// Both are answered by ORION's grounded conversation (Company Brain + approved
+// memory, plus the evidence digest where that is on). Structural, not phrasing:
+// "no surface" is the read planner's own verdict; "advice" is the judgement /
+// explanation / comparison reasoning the read rule already recognises.
+const ADVICE_SIGNALS = new Set(["judgement", "explanation", "comparison"]);
+/** Is this an ask for advice or reasons (not a status report)? */
+export function isAdviceQuestion(message: string): boolean {
+  return readReasoningSignals(message).some((s) => ADVICE_SIGNALS.has(s));
+}
+/** Why the read surface cannot answer this request, or null when it can. */
+export function readSurfaceMisfit(request: RequestV1, message: string): "no_read_surface" | "advice_not_brief" | null {
+  if (request.parts.some((p) => PAID.has(p.objective))) return null;
+  const reads = request.parts.filter((p) => p.objective === "read");
+  if (!reads.length) return null;
+  for (const p of reads) {
+    const plan = planRead({ ...request, parts: [p] });
+    if (!plan.target) return "no_read_surface";
+    if (plan.target === "brief" && isAdviceQuestion(message)) return "advice_not_brief";
+  }
+  return null;
+}
+
 /**
  * THE ONE ROUTING STEP pilot-chat applies after understanding and before the
  * router. `evidenceEnabled` is AGENTORY_ORION_EVIDENCE_CONTEXT for this
@@ -226,6 +266,10 @@ export function orionRoute(request: RequestV1, message: string, o: { evidenceEna
       return { ...unchanged, draft: { kinds: kinds.length ? kinds : ["other"] } };
     }
   }
+
+  // Flag-independent: a dead end or a status report for advice is never the right answer.
+  const misfit = readSurfaceMisfit(request, message);
+  if (misfit) return { request: asConverse(request), reroute: "analytical_read", reasons: [misfit], draft: null };
 
   if (!o.evidenceEnabled) {
     // R1 behaviour without the evidence context: only the compound rule existed,

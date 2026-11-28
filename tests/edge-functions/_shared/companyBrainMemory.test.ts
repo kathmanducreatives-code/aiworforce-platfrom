@@ -255,7 +255,8 @@ Deno.test("loader: memory tables absent (held migration not applied) → profile
   const r = await loadCompanyBrainContext(
     fakeDb(world(), ["company_brain_memory", "company_brain_revisions", "company_brain_memory_proposals"]), A, { skipMembershipCheck: true, now: NOW });
   assert(r.ok);
-  assertEquals(r.context.warnings, ["memory_unavailable"]);
+  // The memory read failed (memory withheld) and so did the bookkeeping reads (reported apart: ORION-002).
+  assertEquals(r.context.warnings, ["memory_unavailable", "memory_history_unavailable"]);
   assertEquals(r.context.canonical.target_customer.company_size, { min: 10, max: 50 }, "profile value, unchanged behaviour");
   assertEquals(r.context.preferences, []);
 });

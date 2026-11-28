@@ -103,7 +103,8 @@ Deno.test("buildCompanyBrainContext: extended fields render", () => {
   assert(ctx.includes("primary cold call"));
   assert(ctx.includes("bottleneck: writing outreach"));
   assert(ctx.includes("Offer: AI workforce subscription ($99/mo)"));
-  assert(ctx.includes("Proof: 3x faster pipeline"));
+  // ORION-004: a listed proof point is the company's own claim, and says so.
+  assert(ctx.includes("Proof points (the company's own claims, not independently verified): 3x faster pipeline"));
   assert(ctx.includes("Avoid positioning: replace humans"));
   assert(ctx.includes("Voice avoid: hype words"));
   assert(ctx.includes("Priority workflows: find_hiring_signal_accounts"));

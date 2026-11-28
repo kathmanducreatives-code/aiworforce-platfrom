@@ -181,7 +181,7 @@ export async function proposeFromApprovedContent(workspaceId: string, contentIte
 
 /** B2.3: one proposal's live state (the chat's offer card reads it, so a reload shows what happened). */
 export async function fetchProposal(workspaceId: string, proposalId: string):
-  Promise<(MemoryProposal & { remembered?: { value_type: string; value: unknown } | null }) | null> {
+  Promise<(MemoryProposal & { remembered?: { value_type: string; value: unknown } | null; contradicts_version?: number | null }) | null> {
   const { data, error } = await from('company_brain_memory_proposals')
     .select('id, proposed_by_agent, kind, category, fact_key, value_type, value, rationale, evidence, source_type, confidence, status, contradicts_memory_id, resulting_memory_id, created_at, updated_at')
     .eq('workspace_id', workspaceId).eq('id', proposalId).maybeSingle();
@@ -195,7 +195,15 @@ export async function fetchProposal(workspaceId: string, proposalId: string):
     const m = await from('company_brain_memory').select('value_type, value').eq('workspace_id', workspaceId).eq('id', rid).maybeSingle();
     remembered = (m.data ?? null) as { value_type: string; value: unknown } | null;
   }
-  return { ...(data as MemoryProposal), remembered };
+  // ORION-003: approving a CORRECTION replaces the active memory it contradicts, and the review
+  // must name that memory's current version (the database refuses a blind replace).
+  let contradicts_version: number | null = null;
+  const cid = (data as { contradicts_memory_id?: string | null }).contradicts_memory_id;
+  if (cid) {
+    const c = await from('company_brain_memory').select('version').eq('workspace_id', workspaceId).eq('id', cid).maybeSingle();
+    contradicts_version = typeof (c.data as { version?: unknown } | null)?.version === 'number' ? (c.data as { version: number }).version : null;
+  }
+  return { ...(data as MemoryProposal), remembered, contradicts_version };
 }
 
 /** B2.3: how many agent suggestions wait for review (the dashboard). Null where memory is not enabled. */

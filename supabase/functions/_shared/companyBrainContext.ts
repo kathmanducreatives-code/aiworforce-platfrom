@@ -181,8 +181,11 @@ export function buildCompanyBrainContext(p: Profile, opts: { integrationStatus?:
   const promise = str(positioning.promise);
   if (diffs.length) lines.push(`Positioning: ${diffs.join("; ")}`);
   else if (promise && !desc) lines.push(`Positioning: ${promise}`);
+  // ORION-004: what the company SAYS about itself is not verified evidence, and silence is not proof.
   const proof = arr(positioning.proof_points);
-  if (proof.length) lines.push(`Proof: ${proof.join("; ")}`);
+  lines.push(proof.length
+    ? `Proof points (the company's own claims, not independently verified): ${proof.join("; ")}`
+    : "Proof points: none recorded (no testimonials, case studies or ROI figures on file)");
   const avoidPos = arr(positioning.avoid_positioning);
   if (avoidPos.length) lines.push(`Avoid positioning: ${avoidPos.join("; ")}`);
 

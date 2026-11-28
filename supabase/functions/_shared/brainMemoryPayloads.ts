@@ -39,6 +39,22 @@ export const factItem = (text: string): ItemPayload => ({
   kind: "fact", category: "company_facts", fact_key: `fact.${memorySlug(text).slice(0, 60)}`, value_type: "text", value: text,
 });
 
+/**
+ * A business fact keyed by its SUBJECT ("sales cycle", "average deal size"), not by its wording,
+ * so a later value for the same subject REPLACES the earlier one (the writer updates the active
+ * item on the same key; history keeps the old value). ORION-003: "45 days" and later "60 days"
+ * must be one memory with two versions, never two contradictory memories.
+ */
+export const subjectFactItem = (subject: string, value: string, previous?: string | null): ItemPayload => {
+  const label = subject.trim().replace(/\s+/g, " ");
+  const head = label ? label[0].toUpperCase() + label.slice(1) : label;
+  return {
+    kind: "fact", category: "company_facts", fact_key: `fact.${memorySlug(label).slice(0, 60)}`,
+    value_type: "text", value: `${head}: ${value.trim()}`,
+    ...(previous ? { reason: `Replaces: ${head}: ${previous.trim()}`.slice(0, 500) } : {}),
+  };
+};
+
 /** A standing business decision. Workspace-wide decisions are limited to these categories (the database enforces it). */
 export const WORKSPACE_DECISION_CATEGORIES = ["strategy_selected", "icp_changed", "brand_preference", "exclusion_added", "correction"] as const;
 export type WorkspaceDecisionCategory = typeof WORKSPACE_DECISION_CATEGORIES[number];
