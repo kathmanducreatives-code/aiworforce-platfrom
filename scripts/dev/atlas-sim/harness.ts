@@ -304,7 +304,8 @@ function asyncRig(s: Scenario, ap: ReturnType<typeof simApify>, base: ReturnType
   return { api, calls, apifyRuns: { transport, ledger, deadlineMs: a.deadlineMs ?? 90_000, now: api.now, sleep: api.sleep } };
 }
 
-export async function runScenario(s: Scenario): Promise<SimResult> {
+/** The REAL lead-pipeline service's dependencies for one scenario, every provider faked (offline). */
+export async function buildSim(s: Scenario) {
   const signer = await planSigner("offline-sim-secret-0123456789abcdef");
   const env: Record<string, string> = { LEAD_PIPELINE_ENABLED: "true", LEAD_PIPELINE_WORKSPACES: SIM_WS, PROVIDER_DISCOVERY_ENABLED: "true", PROVIDER_APIFY_DISCOVERY_ENABLED: "true",
     ...(s.leadocean ? { PROVIDER_LEADOCEAN_ENABLED: "true", LEADOCEAN_COMMERCIAL_TERMS_CONFIRMED: "true" } : {}), ...(s.flags ?? {}) };
@@ -370,6 +371,11 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
     ...(s.grounding === false ? {} : { groundBusinessModel: modelGrounder(simModel(s, grounding) as never, s.query) }),
   } as StrategyDeps;
 
+  return { d, ap, rig, loCalls, mem, planRecords, grounding };
+}
+
+export async function runScenario(s: Scenario): Promise<SimResult> {
+  const { d, ap, rig, loCalls, mem, planRecords, grounding } = await buildSim(s);
   const ws = s.workspace === "not_member" ? OTHER_WS : SIM_WS;
   const correlationId = `sim-${s.name}`;
   const req = (b: Record<string, unknown>, walk = correlationId) =>

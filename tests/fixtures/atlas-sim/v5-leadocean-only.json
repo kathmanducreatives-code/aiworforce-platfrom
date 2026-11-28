@@ -114,7 +114,8 @@
    "leadocean: used"
   ],
   "provenance": [
-   "request: Hiring: sales roles"
+   "request: Hiring: sales roles",
+   "system: hiring: last 30 days (default)"
   ],
   "kept": null
  }

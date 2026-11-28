@@ -133,7 +133,8 @@
    "request: Hiring: sales roles",
    "brain_default: Company size: 10–200 employees (workspace rule)",
    "brain_default: Geography preference: United States",
-   "brain_default: Industry preference: B2B SaaS"
+   "brain_default: Industry preference: B2B SaaS",
+   "system: hiring: last 30 days (default)"
   ],
   "kept": null
  }

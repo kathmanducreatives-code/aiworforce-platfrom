@@ -78,6 +78,8 @@ function groupOf(c: Crit, policyOf: (id: string) => string | null): ProvenanceGr
 export function planProvenance(i: {
   spec: DiscoverySpec; before: DiscoverySpec; brain: BrainReport;
   memoryIdsOf?: (id: string) => string[]; policyOf?: (id: string) => string | null;
+  /** Named system defaults the contract assumed ("hiring: last 30 days"), shown as system rules. */
+  assumptions?: { requirementId: string; policy: string; text: string }[];
 }): PlanProvenance {
   const policyOf = i.policyOf ?? (() => null);
   const wasHard = new Map(i.before.requirements.criteria.map((c) => [c.id, c.kind === "hard"]));
@@ -93,6 +95,10 @@ export function planProvenance(i: {
       relaxed: hardBefore && c.kind !== "hard", memoryIds, alsoFrom: m && m.sources.length > 1 ? m.sources : [],
     };
   });
+  for (const a of i.assumptions ?? []) {
+    if (entries.some((e) => e.group === "system" && e.label === a.text)) continue;
+    entries.push({ id: `assumption:${a.requirementId}:${a.policy}`, label: a.text, value: a.policy, group: "system", necessity: "mandatory", relaxed: false, memoryIds: [], alsoFrom: [] });
+  }
   const notApplied: NotAppliedEntry[] = (i.brain?.rejected ?? []).flatMap((r) => {
     const o = r as { dimension?: unknown; field?: unknown; values?: unknown; reason?: unknown };
     const values = Array.isArray(o.values) ? o.values.map(String) : [];

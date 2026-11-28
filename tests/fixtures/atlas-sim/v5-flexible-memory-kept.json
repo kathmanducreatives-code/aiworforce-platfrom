@@ -146,7 +146,8 @@
   "provenance": [
    "request: Industry: fintech (relaxed)",
    "request: Hiring: sales roles",
-   "brain_memory: Excluding: crypto (approved memory)"
+   "brain_memory: Excluding: crypto (approved memory)",
+   "system: hiring: last 30 days (default)"
   ],
   "kept": [
    "Excluding: crypto (approved memory)"

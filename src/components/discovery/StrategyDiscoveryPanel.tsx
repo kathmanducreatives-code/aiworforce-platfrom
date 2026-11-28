@@ -21,7 +21,7 @@ import {
   strategyDiscoveryUiEnabled, strategyLabel, worstCaseLine,
   type CompanyRow, type ComparisonRow, type DiscoveryMode, type FlexibleMatchView, type MatchTier, type Invoke, type OutcomeView, type StrategyChoice, type StrategyPlanView, type StrategyRunView,
 } from '@/lib/strategyDiscovery';
-import { simulatedInvoke, strategyDiscoveryMockMode, type Simulation } from '@/lib/strategyDiscoveryMock';
+import { serverInvoke, simulatedInvoke, strategyDiscoveryMockMode, type Simulation } from '@/lib/strategyDiscoveryMock';
 import simulation from '@/lib/__fixtures__/strategyDiscoverySimulation.json';
 import { localSimulation } from './devSimulation';
 import { ProviderRunSummaryCard } from './ProviderRunSummaryCard';
@@ -29,7 +29,8 @@ import { ProviderRunSummaryCard } from './ProviderRunSummaryCard';
 // Development-only simulation (strategyDiscoveryMock.ts): never active in a production build.
 const MOCK = strategyDiscoveryMockMode();
 // A scenario from `npm run dev:atlas -- <scenario> --preview` replaces the committed simulation.
-const invoke: Invoke = MOCK === 'off' ? invokeFunction as unknown as Invoke : simulatedInvoke(MOCK, (localSimulation ?? simulation) as unknown as Simulation);
+const invoke: Invoke = MOCK === 'off' ? invokeFunction as unknown as Invoke : MOCK === 'server' ? serverInvoke()
+  : simulatedInvoke(MOCK, (localSimulation ?? simulation) as unknown as Simulation);
 const nameOf = (p: string) => PROVIDER_LABEL[p] ?? p;
 const VERDICT_TONE = { qualified: 'text-emerald-300/90', pending: 'text-amber-200/80', rejected: 'text-[#8B8F96]' } as const;
 
@@ -154,8 +155,8 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
 
       {state === 'planning' && <p className="mt-2 text-[12px] text-[#8B8F96] flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Planning…</p>}
       {state === 'running' && <p className="mt-2 text-[12px] text-[#8B8F96] flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running — this can take a few minutes…</p>}
-      {runStatus && (
-        <div className={`mt-2 rounded-md border px-2.5 py-1.5 text-[11.5px] ${runStatus.state === 'completed' ? 'border-emerald-300/25 text-emerald-100/90' : runStatus.state === 'still_running' ? 'border-sky-300/25 text-sky-100/90' : 'border-amber-300/30 text-amber-100/90'}`}
+      {runStatus && runStatus.state !== 'completed' && (
+        <div className={`mt-2 rounded-md border px-2.5 py-1.5 text-[11.5px] ${runStatus.state === 'still_running' ? 'border-sky-300/25 text-sky-100/90' : 'border-amber-300/30 text-amber-100/90'}`}
           data-testid="strategy-run-status" data-state={runStatus.state}>
           {runStatus.label}
           {staleApproval && (

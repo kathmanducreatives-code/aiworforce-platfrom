@@ -154,7 +154,8 @@
   "provenance": [
    "request: Hiring: sales roles",
    "brain_memory: Excluding: crypto (approved memory)",
-   "brain_memory: Excluding: oil (approved memory)"
+   "brain_memory: Excluding: oil (approved memory)",
+   "system: hiring: last 30 days (default)"
   ],
   "kept": null
  }

@@ -493,6 +493,8 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     brain: workspaceExclusions ? { ...(brainReport ?? {}), rejected: [...((brainReport as { rejected?: unknown[] } | null)?.rejected ?? []), ...workspaceExclusions.resolution.notApplied],
       merged: workspaceExclusions.resolution.merged, refusedMemory: workspaceExclusions.resolution.refusedMemory } : brainReport as never,
     memoryIdsOf: (id) => reqOf.get(id)?.origin.memoryIds ?? [], policyOf: (id) => reqOf.get(id)?.origin.policy ?? null,
+    // Only true system defaults: a Brain policy is already its own entry.
+    assumptions: (mc?.assumptions ?? []).filter((a) => !/^(brain|memory):/.test(a.requirementId)),
   });
   const budgetView = { requested: req.budget, totalUsd: req.totalUsd ?? null, effective: ctx.budget, allocation: allocationOf(plan, ctx.budget, req.user?.strategy ?? null) };
   if (req.action === "strategy_plan" || plan.status === "blocked") {
@@ -654,9 +656,14 @@ export function allocationOf(plan: Pick<StrategyPlan, "steps" | "strategy">, bud
   const explanation = !names.length ? "No provider is called."
     : choice === "apify_only" ? "Apify only: LeadOcean gets 0 records and 0 calls."
     : choice === "leadocean_only" ? "LeadOcean only: Apify gets $0 and 0 calls."
-    : `${choice ? "You chose" : "Auto chose"} ${plan.strategy ?? "no strategy"}: ${names.join(" and ")}${names.length === 1 ? ` only; ${names[0] === "Apify" ? "LeadOcean" : "Apify"} gets nothing` : ""}.`;
+    : `${choice ? "You chose" : "Auto chose"} ${STRATEGY_WORDS[plan.strategy ?? ""] ?? plan.strategy ?? "no strategy"}${names.length === 1 ? `; ${names[0] === "Apify" ? "LeadOcean" : "Apify"} gets nothing` : `: ${names.join(" and ")}, each within its own limit`}.`;
   return { providers, explanation };
 }
+
+const STRATEGY_WORDS: Record<string, string> = {
+  apify_only: "Apify only", leadocean_only: "LeadOcean only", apify_leadocean_concurrent: "Apify and LeadOcean together",
+  leadocean_plus_apify: "LeadOcean, then Apify", apify_plus_leadocean: "Apify, then LeadOcean", apollo_plus_apify: "Apollo, then Apify",
+};
 
 /** The approval failure, as a code the UI can act on (planToken.ts reasons). */
 export function approvalCode(reason: string): "approval_expired" | "approval_other_workspace" | "approval_other_walk" | "approval_other_plan" | "approval_invalid" {
