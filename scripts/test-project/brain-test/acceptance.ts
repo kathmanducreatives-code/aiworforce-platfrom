@@ -50,6 +50,8 @@ export interface Check { id: string; area: string; ok: boolean; detail: string }
 export interface AcceptanceReport { run_id: string; started_at: string; finished_at: string; passed: number; failed: number; checks: Check[]; notes: string[] }
 
 export const REFUSED_REFS = ["ohsdatpvfdjdemstoiuj", "tlvnfrxzjhsjgdofwehb", "luvostyizefajbltukkc"];
+/** The ONE allowed hosted target: the dedicated Brain TEST project. */
+export const ALLOWED_REF = "jekgwafobrzamoupehnn";
 
 // ── fixture data (fictional) ─────────────────────────────────────────────────
 const RUN_PAGES = ["https://northwind-clinics.example/", "https://northwind-clinics.example/pricing"];
@@ -335,6 +337,7 @@ if (import.meta.main) {
   if (!ref) refuse("BRAIN_TEST_URL must be https://<ref>.supabase.co");
   if (REFUSED_REFS.includes(ref)) refuse(`${ref} is production, the ATLAS TEST project or the AgriDrone project — never a Brain acceptance target`);
   if (arg("--confirm") !== ref) refuse("--confirm must repeat the project ref exactly");
+  if (ref !== ALLOWED_REF) refuse(`${ref} is not the dedicated Brain TEST project (${ALLOWED_REF})`);
   const anonKey = Deno.env.get("BRAIN_TEST_ANON_KEY") ?? "", serviceKey = Deno.env.get("BRAIN_TEST_SERVICE_ROLE_KEY") ?? "";
   if (!anonKey || !serviceKey) refuse("BRAIN_TEST_ANON_KEY and BRAIN_TEST_SERVICE_ROLE_KEY are required (never printed)");
   const allowOrionChat = args.includes("--allow-orion-chat");
