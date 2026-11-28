@@ -21,7 +21,8 @@
 //     applies them in BOTH modes (contract and legacy), whole-word matched, as narrowing
 //     workspace policy; a request asking for that industry becomes a question. Pending,
 //     expired, disputed or unapproved memory serves nothing (the loader's rule, re-checked
-//     by ATLAS). `memoryExclusionKey` lets a run detect memory changed since approval.
+//     by ATLAS). A run re-reads this through the same loader and ATLAS G4
+//     (`workspaceRulesFingerprint`) refuses an approval whose memories changed since.
 //     A memory read failure leaves planning exactly as before.
 
 import { compileCompanyBrainContext } from "../companyBrainCompiler.ts";
@@ -123,18 +124,6 @@ export function memoryIndustryExclusions(items: readonly MemoryItem[]): BrainMem
 export function withMemoryExclusions(base: BrainPlanningContext, items: readonly BrainMemoryExclusion[]): BrainPlanningContext {
   if (base.status !== "used" || !base.contractInput || !items.length) return base;
   return { ...base, contractInput: { ...base.contractInput, excluded_industries_memory: [...items] } };
-}
-
-/**
- * WHICH APPROVED MEMORY SHAPED A PLAN, as one stable key: every memory id at its version.
- * A plan signs it at plan time; a run recomputes it from the CURRENT Brain and refuses
- * when it differs ("workspace memory changed since approval"). Editing (new version),
- * retracting, expiring or adding an exclusion memory all change it; an unrelated memory
- * does not. Empty memory → "" (no memory involved, nothing to invalidate).
- */
-export function memoryExclusionKey(input: { excluded_industries_memory?: readonly MemoryIndustryExclusion[] } | null | undefined): string {
-  const items = (input?.excluded_industries_memory ?? []) as readonly Partial<BrainMemoryExclusion>[];
-  return [...new Set(items.map((m) => `${m.memory_id}@${m.version ?? "?"}`))].sort().join(",");
 }
 
 /** The servable exclusion memory of one workspace (shared loader). Never throws; failure → none. */

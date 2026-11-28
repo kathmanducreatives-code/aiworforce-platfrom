@@ -5,9 +5,9 @@
 // question; pending / expired / retracted memory serves nothing; a memory read failure
 // leaves planning exactly as before. Fictional data; fake DB through the REAL loader.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { brainPlanningContext, loadBrainPlanningContext, memoryExclusionKey, memoryIndustryExclusions, withMemoryExclusions } from "../../../../supabase/functions/_shared/leadPipeline/brainContext.ts";
+import { brainPlanningContext, loadBrainPlanningContext, memoryIndustryExclusions, withMemoryExclusions } from "../../../../supabase/functions/_shared/leadPipeline/brainContext.ts";
 import { legacyWorkspaceExclusions } from "../../../../supabase/functions/_shared/leadPipeline/workspaceExclusions.ts";
-import { applyCompanyBrain } from "../../../../supabase/functions/_shared/missionContract/brain.ts";
+import { applyCompanyBrain, workspaceRulesFingerprint } from "../../../../supabase/functions/_shared/missionContract/brain.ts";
 import { contractFromProposal } from "../../../../supabase/functions/_shared/missionContract/interpret.ts";
 
 const A = "aaaaaaaa-0000-4000-8000-0000000000a1";
@@ -155,15 +155,17 @@ Deno.test("G1: a memory read failure leaves planning exactly as before", async (
     brainPlanningContext({ profile: PROFILE, onboarding_completed: true }));
 });
 
-Deno.test("G1 invalidation key: editing, retracting or adding an exclusion memory changes it; unrelated memory does not", async () => {
-  const keyOf = async (memory: Row[]) => memoryExclusionKey((await loadBrainPlanningContext(ws(memory), A)).contractInput);
+Deno.test("G1 + G4: an approved memory that is edited, retracted or added changes the signed fingerprint; pending or unrelated memory does not", async () => {
+  // The exact path lead-pipeline uses at plan AND run time (index.ts brainFingerprint).
+  const fp = async (memory: Row[]) => workspaceRulesFingerprint((await loadBrainPlanningContext(ws(memory), A)).contractInput ?? null, { workspaceId: A });
   const crypto = exclusion("Crypto", { ...approvedByReview, id: "m-crypto" });
-  const k0 = await keyOf([crypto]);
-  assertEquals(k0, "m-crypto@1");
-  assert(await keyOf([{ ...crypto, version: 2 }]) !== k0, "edited (new version)");
-  assertEquals(await keyOf([{ ...crypto, lifecycle_status: "retracted" }]), "", "retracted");
-  assert(await keyOf([crypto, exclusion("Mining", { ...approvedByReview, id: "m-mining" })]) !== k0, "added");
+  const signed = await fp([crypto]);
+  assert(signed !== await fp([]), "the approved memory is part of what was signed");
+  assert(await fp([{ ...crypto, version: 2, value: { type: "industry", value: "Gambling" } }]) !== signed, "edited value");
+  assert(await fp([{ ...crypto, lifecycle_status: "retracted" }]) !== signed, "retracted");
+  assert(await fp([{ ...crypto, expires_at: iso(-1) }]) !== signed, "expired");
+  assert(await fp([crypto, exclusion("Mining", { ...approvedByReview, id: "m-mining" })]) !== signed, "another approved exclusion");
+  assertEquals(await fp([crypto, exclusion("Mining", { ...approvedByReview, id: "m-pend", approval_status: "pending" })]), signed, "a pending proposal acts on nothing");
   const unrelated = { ...crypto, id: "m-tone", category: "brand_voice", fact_key: "tone", value_type: "text", value: "plain" };
-  assertEquals(await keyOf([crypto, unrelated]), k0, "a non-exclusion memory does not invalidate");
-  assertEquals(memoryExclusionKey(null), "");
+  assertEquals(await fp([crypto, unrelated]), signed, "a non-exclusion memory does not invalidate");
 });
