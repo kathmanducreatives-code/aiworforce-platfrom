@@ -50,6 +50,8 @@ export interface IndustryMap {
 export interface FlexibleSpec {
   version: typeof FLEXIBLE_DISCOVERY_VERSION;
   relaxed: RelaxedCriterion[];
+  /** Workspace exclusions (Brain rule or approved memory) that stay REQUIRED, shown beside what was relaxed. */
+  kept?: { criterionId: string; label: string; why: string }[];
   industries: IndustryMap;
 }
 
@@ -59,7 +61,15 @@ const excludedTypes = (c: MissionCriterion): string[] | null => {
   return (Array.isArray(v.value) ? v.value : [v.value]).map((x) => String(x ?? "").trim()).filter(Boolean);
 };
 
-const relaxable = (c: MissionCriterion) => c.kind === "hard" && (c.dimension === "industry" || excludedTypes(c) !== null);
+/**
+ * A WORKSPACE exclusion — the Company Brain's own rule or an approved memory — is never relaxed:
+ * Flexible Discovery relaxes only what THIS request asked for. The user can change a Brain rule
+ * in the Company Brain; a search mode must not quietly override it.
+ */
+export const isWorkspaceExclusion = (c: MissionCriterion) =>
+  excludedTypes(c) !== null && ((c as { source?: string }).source === "company_brain_policy" || /^(brain|memory):/.test(String(c.id)));
+
+const relaxable = (c: MissionCriterion) => c.kind === "hard" && (c.dimension === "industry" || (excludedTypes(c) !== null && !isWorkspaceExclusion(c)));
 
 /** The industries the request names (any necessity), for relevance ranking. */
 export function requestedIndustries(spec: DiscoverySpec): string[] {
@@ -94,7 +104,11 @@ export function relaxForFlexible(spec: DiscoverySpec, industries: IndustryMap): 
   });
   const relaxedIds = new Set(spec.requirements.criteria.filter(relaxable).map((c) => c.id));
   const movedHard = spec.requirements.hard.filter((h) => relaxedIds.has(h.criterionId));
-  const flexible: FlexibleSpec = { version: FLEXIBLE_DISCOVERY_VERSION, relaxed, industries };
+  const kept = spec.requirements.criteria.filter((c) => c.kind === "hard" && isWorkspaceExclusion(c)).map((c) => ({
+    criterionId: c.id, label: String(c.label ?? c.dimension),
+    why: /^memory:/.test(c.id) || (c.label ?? "").includes("approved memory") ? "an approved Company Brain memory; change it in the Company Brain" : "your Company Brain's own rule; change it in the Company Brain",
+  }));
+  const flexible: FlexibleSpec = { version: FLEXIBLE_DISCOVERY_VERSION, relaxed, industries, ...(kept.length ? { kept } : {}) };
   return {
     relaxed,
     spec: {

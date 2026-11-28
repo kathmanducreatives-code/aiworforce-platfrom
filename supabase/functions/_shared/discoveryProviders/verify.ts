@@ -31,6 +31,7 @@
 // Pure.
 
 import type { SiteEvidence } from "./adapters/apify.ts";
+import { exclusionMatches } from "../exclusionPhrase.ts";
 import { TRUSTED_PROVIDER_FILTERS } from "./providers.ts";
 import { geoLevel, normCountry } from "./adapter.ts";
 import { normDomain, type CanonicalCompany, type CanonicalPerson, type MergeResult } from "./normalize.ts";
@@ -173,9 +174,11 @@ function checkCompany(h: HardRequirement, c: CanonicalCompany, site: SiteEvidenc
         ...c.keywords.flatMap((cl) => cl.value.map((v) => ({ text: v, claim: cl as Claim, field: "keywords" }))),
         ...c.name.map((cl) => ({ text: cl.value, claim: cl as Claim, field: "name" })),
       ];
-      const hit = hay.filter((x) => list.some((e) => mentions(x.text, e)));
+      // WHOLE WORDS (exclusionPhrase.ts): "oil" never rejects a "toilet" maker, "ai" never a retailer,
+      // and a two-letter exclusion ("AI") is no longer silently ignored.
+      const hit = hay.filter((x) => list.some((e) => exclusionMatches(x.text, e)));
       if (hit.length) return { outcome: "contradicted", evidence: hit.map((x) => evidenceOf(x.claim, x.field)), note: `matches an excluded type (${list.join(", ")})` };
-      const siteHit = siteText.find((x) => list.some((e) => x.text!.toLowerCase().includes(e.toLowerCase().replace(/ies$/, "y").replace(/s$/, ""))));
+      const siteHit = siteText.find((x) => list.some((e) => exclusionMatches(x.text, e)));
       if (siteHit) return { outcome: "contradicted", evidence: [siteEv(siteHit)], note: "the company's own site describes it as an excluded type" };
       if (c.industry.length) return { outcome: "matched", evidence: c.industry.map((cl) => evidenceOf(cl, "industry")), note: "reported industry is not an excluded type" };
       if (siteText.length) return { outcome: "matched", evidence: [siteEv(siteText[0])], note: "the company's own site does not describe an excluded type" };

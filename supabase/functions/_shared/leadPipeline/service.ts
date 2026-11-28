@@ -26,6 +26,8 @@ import { summarizeProviderRun } from "./providerRunSummary.ts";
 import { criteriaFreezeState } from "../missionCriteriaReader.ts";
 import { approvability, contractHash, disclosures, MISSION_CONTRACT_VERSION, type MissionContract } from "../missionContract/contract.ts";
 import { missionOutcome } from "./outcome.ts";
+import { legacyWorkspaceExclusions } from "./workspaceExclusions.ts";
+import type { ContractBrainInput } from "../missionContract/brain.ts";
 import type { PersistResult } from "./persistRows.ts";
 import { checkApproved, checkCompiled, checkPlanRequirements, checkVerdicts, requirementVerdicts, type InvariantViolation } from "../missionContract/invariants.ts";
 
@@ -286,6 +288,12 @@ export interface Interpreted {
   brain?: { status: string; fields: string[]; applied: unknown[]; rejected: unknown[] };
   /** What a strategy_run needs to rebuild this interpretation without the model. */
   replay?: Omit<PlanReplay, "advice">;
+  /**
+   * LEGACY PATH ONLY (no contract): the workspace's industry exclusions — the Company Brain
+   * profile's and approved memory's. Applied by the same resolver as contract mode, so the
+   * legacy path can no longer ignore them. Contract mode carries them as requirements instead.
+   */
+  workspaceExclusions?: ContractBrainInput | null;
 }
 
 /**
@@ -394,7 +402,20 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   if (unsupported.length && contract.enforced) {
     return { status: 422, body: { error: "the request was read with a requirement ATLAS cannot place and you did not state; rephrase the request or remove it", contract } };
   }
-  let spec = specFromMission(interpreted.mission as never, { defaultCount: req.requestedCount ?? 25 });
+  // LEGACY EXCLUSION GAP (2026-11-28): without the contract, the workspace's exclusions used to
+  // be read and then ignored. They now apply as REQUIRED, workspace-authority criteria, by the
+  // same resolver as contract mode (missionContract/brain.ts); a conflict is a question.
+  let mission = interpreted.mission;
+  let workspaceExclusions: ReturnType<typeof legacyWorkspaceExclusions> | null = null;
+  if (!mc && interpreted.workspaceExclusions) {
+    workspaceExclusions = legacyWorkspaceExclusions(mission, interpreted.workspaceExclusions, { workspaceId: req.workspaceId, now: now() });
+    if (workspaceExclusions.resolution.conflicts.length) {
+      const qs = workspaceExclusions.resolution.conflicts.map((c) => c.question);
+      return { status: 422, body: { status: "needs_clarification", questions: qs, error: qs.join(" ") } };
+    }
+    mission = workspaceExclusions.mission;
+  }
+  let spec = specFromMission(mission as never, { defaultCount: req.requestedCount ?? 25 });
   if (mc) {
     const v = checkPlanRequirements(mc, spec.requirements.criteria as unknown as { id: string; kind: string }[]);
     if (v.length) return { status: 409, body: { error: "the plan's requirements differ from the approved contract; nothing ran", invariantViolations: v } };
@@ -408,7 +429,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     spec = relaxForFlexible(spec, industries).spec;
   }
   const flexibleView = spec.flexible ? {
-    mode: "flexible" as const, relaxed: spec.flexible.relaxed,
+    mode: "flexible" as const, relaxed: spec.flexible.relaxed, kept: spec.flexible.kept ?? [],
     industries: { requested: spec.flexible.industries.requested, related: spec.flexible.industries.related, source: spec.flexible.industries.source, note: spec.flexible.industries.error },
   } : null;
 

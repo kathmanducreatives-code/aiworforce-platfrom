@@ -21,7 +21,7 @@ import { handleLeadPipeline, handleStrategyRequest, parsePipelineRequest, parseS
 import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
 import { MissionNeedsClarificationError } from "../_shared/leadMissionCompiler.ts";
 import { gptContractGenerate, interpretContract } from "../_shared/missionContract/gptInterpreter.ts";
-import { applyCompanyBrain } from "../_shared/missionContract/brain.ts";
+import { applyCompanyBrain, workspaceExclusionsOf } from "../_shared/missionContract/brain.ts";
 import { compileContract, ContractInvalidError } from "../_shared/missionContract/compile.ts";
 import { contractHash, type MissionContract } from "../_shared/missionContract/contract.ts";
 import { createStrategyAdvisorGenerateJson } from "../_shared/leadPipeline/strategyAdvisorModel.ts";
@@ -103,7 +103,7 @@ Deno.serve(withBuildStamp(async (req) => {
           const r = await interpretContract(query, gptContractGenerate());
           if (!r.ok) return { error: r.error };
           const brain = await loadBrainPlanningContext(admin as never, ws);
-          const { contract, report } = applyCompanyBrain(r.contract, brain.contractInput ?? null);
+          const { contract, report } = applyCompanyBrain(r.contract, brain.contractInput ?? null, { workspaceId: ws });
           if (contract.ambiguities.length) {
             // A Brain rule that conflicts with the request is a question, never a silent winner.
             return { error: "needs_clarification", clarification: { questions: contract.ambiguities.map((a) => a.question), message: contract.ambiguities.map((a) => a.question).join(" ") } };
@@ -134,8 +134,11 @@ Deno.serve(withBuildStamp(async (req) => {
           }
           return {
             mission: c.mission, brain: { status: brain.status, fields: brain.fields, applied: c.brainApplied, rejected: c.brainRejected },
+            // LEGACY EXCLUSION GAP (2026-11-28): the workspace's industry exclusions — profile and
+            // approved memory — apply here too (service.ts, resolveWorkspaceExclusions).
+            workspaceExclusions: workspaceExclusionsOf(brain.contractInput),
             // Signed into the approval token: a run rebuilds exactly this, with no model call.
-            replay: { proposal, brain: { status: brain.status, fields: brain.fields, context: brain.context } },
+            replay: { proposal, brain: { status: brain.status, fields: brain.fields, context: brain.context, exclusions: workspaceExclusionsOf(brain.contractInput) } },
           };
         },
         // strategy_run: the signed proposal and Brain context, compiled again (deterministic).
@@ -147,7 +150,8 @@ Deno.serve(withBuildStamp(async (req) => {
         } : (query, requestedCount, replay) => {
           const brain = { status: replay.brain.status as never, fields: replay.brain.fields, context: replay.brain.context as never };
           const c = compileWithBrain({ query, proposal: replay.proposal, requestedCount, brain });
-          return Promise.resolve({ mission: c.mission, brain: { status: brain.status, fields: brain.fields, applied: c.brainApplied, rejected: c.brainRejected } });
+          return Promise.resolve({ mission: c.mission, brain: { status: brain.status, fields: brain.fields, applied: c.brainApplied, rejected: c.brainRejected },
+            workspaceExclusions: workspaceExclusionsOf(replay.brain.exclusions as never) });
         },
         // Approval tokens are MAC'd with a key derived from the service-role key (no new secret).
         signer: await planSigner(env("SUPABASE_SERVICE_ROLE_KEY") ?? ""),
