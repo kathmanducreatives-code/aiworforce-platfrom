@@ -17,7 +17,7 @@ import { invokeFunction } from '@/lib/agentoryApi';
 import { useOptionalChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { PROVIDER_LABEL, usd } from '@/lib/providerRunSummary';
 import {
-  ATTRIBUTE_LABEL, BUSINESS_MODEL_LABEL, OUTCOME_LABEL, STRATEGY_CHOICES, TIER_LABEL, VERDICT_LABEL, comparisonRow, overlapView, planStrategy, routeLine, runStrategy, spendLine,
+  ATTRIBUTE_LABEL, BUSINESS_MODEL_LABEL, PROVENANCE_QUESTION, runStateOf, type BudgetInput, type RunState, OUTCOME_LABEL, STRATEGY_CHOICES, TIER_LABEL, VERDICT_LABEL, comparisonRow, overlapView, planStrategy, routeLine, runStrategy, spendLine,
   strategyDiscoveryUiEnabled, strategyLabel, worstCaseLine,
   type CompanyRow, type ComparisonRow, type DiscoveryMode, type FlexibleMatchView, type MatchTier, type Invoke, type OutcomeView, type StrategyChoice, type StrategyPlanView, type StrategyRunView,
 } from '@/lib/strategyDiscovery';
@@ -58,22 +58,40 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
   const [acceptLikely, setAcceptLikely] = useState(false);
   // Strict (default, unchanged) or Flexible Discovery: a different plan, approved separately.
   const [mode, setMode] = useState<DiscoveryMode>('strict');
+  // G3: the user's spending limits; bound into the plan hash, so changing them re-plans (and re-approves).
+  const [budget, setBudget] = useState<BudgetInput>({});
+  const [draft, setDraft] = useState<{ totalUsd: string; apifyUsd: string; leadoceanRecords: string }>({ totalUsd: '', apifyUsd: '', leadoceanRecords: '' });
+  // What happened to the last approved run, by the server's own stage/code (never guessed from HTTP).
+  const [runStatus, setRunStatus] = useState<{ state: RunState; label: string } | null>(null);
+  // An approval the server refused (stale, expired, plan changed…): it cannot be sent again.
+  const [staleApproval, setStaleApproval] = useState(false);
 
-  const request = (c: StrategyChoice, ro = reviewOnly, al = acceptLikely, m = mode) => ({ workspaceId: workspaceId ?? '', messageId, query, choice: c, requestedCount, reviewOnly: ro, acceptLikely: al, mode: m });
+  const request = (c: StrategyChoice, ro = reviewOnly, al = acceptLikely, m = mode, b = budget) => ({ workspaceId: workspaceId ?? '', messageId, query, choice: c, requestedCount, reviewOnly: ro, acceptLikely: al, mode: m, budget: b });
 
-  const makePlan = async (c: StrategyChoice, ro = false, al = acceptLikely, m = mode) => {
+  const makePlan = async (c: StrategyChoice, ro = false, al = acceptLikely, m = mode, b = budget) => {
     if (!workspaceId) return;
-    setChoice(c); setReviewOnly(ro); setAcceptLikely(al); setMode(m); setState('planning'); setError(null); setApproved(false); setRun(null); setPlan(null);
-    const r = await planStrategy(invoke, request(c, ro, al, m));
+    setChoice(c); setReviewOnly(ro); setAcceptLikely(al); setMode(m); setBudget(b); setState('planning'); setError(null); setApproved(false); setRun(null); setPlan(null);
+    setRunStatus(null); setStaleApproval(false);
+    const r = await planStrategy(invoke, request(c, ro, al, m, b));
     setState('idle');
     if (r.ok) setPlan(r.value); else setError(r.error);
   };
 
+  const applyLimits = () => {
+    const n = (x: string) => (x.trim() === '' ? null : Number(x));
+    const b: BudgetInput = { totalUsd: n(draft.totalUsd), apifyUsd: n(draft.apifyUsd), leadoceanRecords: n(draft.leadoceanRecords) };
+    if ([b.totalUsd, b.apifyUsd, b.leadoceanRecords].some((x) => x !== null && x !== undefined && (!Number.isFinite(x) || x < 0))) { setError('Limits must be numbers of 0 or more.'); return; }
+    void makePlan(choice, reviewOnly, acceptLikely, mode, b);
+  };
+
   const start = async () => {
     if (!workspaceId || !plan) return;
-    setState('running'); setError(null);
+    setState('running'); setError(null); setRunStatus(null);
     const r = await runStrategy(invoke, request(choice), plan);
     setState('idle');
+    const st = runStateOf(r);
+    setRunStatus({ state: st.state, label: st.label });
+    if (st.needsReapproval) { setApproved(false); setStaleApproval(true); }
     if (!r.ok) { setError(r.error); return; }
     setRun(r.value);
     const row = comparisonRow(r.value);
@@ -91,7 +109,7 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
   // Flexible asked for, but the backend planned strictly (it predates Flexible Discovery): say so
   // and never let that plan be approved as if it were Flexible.
   const flexibleUnsupported = mode === 'flexible' && !!plan && plan.discoveryMode !== 'flexible';
-  const canRun = plan?.status === 'ready' && approved && state === 'idle' && !run && !flexibleUnsupported;
+  const canRun = plan?.status === 'ready' && approved && state === 'idle' && !run && !flexibleUnsupported && !staleApproval;
   const overlap = overlapView(run?.summary ?? null);
 
   return (
@@ -118,10 +136,34 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
           >{o.label}</button>
         ))}
       </div>
+      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[11px] text-[#8B8F96]" role="group" aria-label="Spending limits" data-testid="strategy-limits">
+        <span>Limits:</span>
+        {([['totalUsd', 'Total $', 'Most the whole discovery may cost in USD (today only Apify is priced in USD)'],
+          ['apifyUsd', 'Apify $', 'Apify ceiling in USD (default 0.25)'],
+          ['leadoceanRecords', 'LeadOcean records', 'LeadOcean ceiling in records (default 50)']] as const).map(([k, label, hint]) => (
+          <label key={k} className="flex items-center gap-1" title={hint}>
+            {label}
+            <input type="number" min={0} step={k === 'leadoceanRecords' ? 1 : 0.01} inputMode="decimal" value={draft[k]} placeholder="default"
+              onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))} disabled={state !== 'idle'} data-testid={`strategy-limit-${k}`}
+              className="h-6 w-[72px] rounded border border-white/[0.08] bg-transparent px-1.5 text-[11px] text-[#ECE9E4]" />
+          </label>
+        ))}
+        <button type="button" onClick={applyLimits} disabled={state !== 'idle'} data-testid="strategy-limits-apply"
+          className="h-6 px-2 rounded border border-white/[0.08] text-[#C9CCD1] hover:bg-white/[0.06]">Apply and re-plan</button>
+      </div>
 
       {state === 'planning' && <p className="mt-2 text-[12px] text-[#8B8F96] flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Planning…</p>}
       {state === 'running' && <p className="mt-2 text-[12px] text-[#8B8F96] flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running — this can take a few minutes…</p>}
-      {error && <p className="mt-2 text-[12px] text-red-300/90" data-testid="strategy-discovery-error">{error}</p>}
+      {runStatus && (
+        <div className={`mt-2 rounded-md border px-2.5 py-1.5 text-[11.5px] ${runStatus.state === 'completed' ? 'border-emerald-300/25 text-emerald-100/90' : runStatus.state === 'still_running' ? 'border-sky-300/25 text-sky-100/90' : 'border-amber-300/30 text-amber-100/90'}`}
+          data-testid="strategy-run-status" data-state={runStatus.state}>
+          {runStatus.label}
+          {staleApproval && (
+            <button type="button" className="ml-2 underline" data-testid="strategy-replan" onClick={() => void makePlan(choice, reviewOnly, acceptLikely, mode)}>Re-plan</button>
+          )}
+        </div>
+      )}
+      {error && runStatus?.state !== 'approval_rejected' && <p className="mt-2 text-[12px] text-red-300/90" data-testid="strategy-discovery-error">{error}</p>}
 
       {plan && state === 'idle' && !run && (
         <div className="mt-2.5 space-y-2 text-[12px]" data-testid="strategy-plan">
@@ -140,6 +182,8 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
               ))}
             </ul>
           )}
+          {plan.provenance && <ProvenanceCard provenance={plan.provenance} />}
+          {plan.budget && <AllocationLine budget={plan.budget} />}
           {plan.flexible && (
             <div className="rounded-lg border border-emerald-300/25 bg-emerald-300/[0.04] px-3 py-2 space-y-1" data-testid="strategy-relaxed">
               <div className="text-[#ECE9E4] font-medium">Flexible Discovery relaxes {plan.flexible.relaxed.length === 1 ? 'one requirement' : `${plan.flexible.relaxed.length} requirements`}</div>
@@ -277,7 +321,7 @@ function Panel({ messageId, query, requestedCount, conversationId }: { messageId
   );
 }
 
-const ROUTE_TONE = { checked: 'text-[#A3A7AD]', ranked_only: 'text-[#6E7278]', not_checkable: 'text-amber-200/80' } as const;
+const ROUTE_TONE = { checked: 'text-[#A3A7AD]', ranked_only: 'text-[#6E7278]', not_checkable: 'text-amber-200/80', screened: 'text-[#A3A7AD]' } as const;
 
 /** What Agentory will check, requirement by requirement, before anything is bought. */
 function RequirementList({ plan }: { plan: StrategyPlanView }) {
@@ -421,6 +465,67 @@ function FlexibleMatches({ matches, originalRequest }: { matches: FlexibleMatchV
           </section>
         );
       })}
+    </div>
+  );
+}
+
+/** G3: who gets what, within which limits — one compact line per provider. */
+function AllocationLine({ budget }: { budget: NonNullable<StrategyPlanView['budget']> }) {
+  return (
+    <div className="text-[11px] text-[#8B8F96] space-y-0.5" data-testid="strategy-allocation">
+      {budget.providers.map((p) => (
+        <div key={p.provider} data-testid={`strategy-allocation-${p.provider}`} data-used={p.used ? 'true' : 'false'}>
+          <span className="text-[#C9CCD1]">{p.provider === 'apify' ? 'Apify' : 'LeadOcean'}</span>{': '}
+          {!p.used ? (p.provider === 'apify' ? 'not used — $0, 0 calls' : 'not used — 0 records, 0 calls')
+            : p.provider === 'apify' ? `up to $${p.worstCase.apifyUsd.toFixed(4)} of a $${(p.ceiling.apifyUsd ?? 0).toFixed(2)} limit · ${p.steps} step${p.steps === 1 ? '' : 's'}`
+            : `up to ${p.worstCase.leadoceanRecords} of ${p.ceiling.leadoceanRecords ?? 0} records · ${p.steps} step${p.steps === 1 ? '' : 's'}`}
+        </div>
+      ))}
+      {budget.totalUsd !== null && <div>Total limit: ${budget.totalUsd.toFixed(2)} (caps Apify; LeadOcean is billed in records)</div>}
+      {budget.explanation && <div className="text-[#6E7278]">{budget.explanation}</div>}
+    </div>
+  );
+}
+
+/**
+ * G2: where this search comes from — one line per source, only the sources that contributed,
+ * then what ATLAS will actually search for. Compact on purpose: no warning cards.
+ */
+function ProvenanceCard({ provenance }: { provenance: NonNullable<StrategyPlanView['provenance']> }) {
+  const groups = (['request', 'brain_default', 'brain_memory', 'gpt_inferred', 'system'] as const)
+    .map((g) => [g, provenance.entries.filter((e) => e.group === g)] as const).filter(([, es]) => es.length > 0);
+  const tag = (e: (typeof provenance.entries)[number]) =>
+    [e.necessity === 'mandatory' ? null : e.necessity, e.relaxed ? 'relaxed to a preference' : null,
+      e.alsoFrom.length ? `also ${e.alsoFrom.filter((x) => x !== e.group).map((x) => x.replace(/_/g, ' ')).join(', ')}` : null].filter(Boolean).join(' · ');
+  return (
+    <div className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 space-y-1 text-[11.5px]" data-testid="strategy-provenance">
+      {groups.map(([g, es]) => (
+        <div key={g} data-testid={`strategy-provenance-${g}`}>
+          <span className="text-[#8B8F96]">{PROVENANCE_QUESTION[g]}: </span>
+          {es.map((e, i) => (
+            <span key={e.id} className="text-[#ECE9E4]" data-testid="strategy-provenance-item" data-necessity={e.necessity} data-relaxed={e.relaxed ? 'true' : 'false'}>
+              {i > 0 && <span className="text-[#6E7278]">; </span>}
+              {e.label}
+              {tag(e) && <span className="text-[#6E7278]"> ({tag(e)})</span>}
+            </span>
+          ))}
+        </div>
+      ))}
+      {provenance.notApplied.length > 0 && (
+        <div className="text-[#8B8F96]" data-testid="strategy-provenance-not-applied">
+          Not applied: {provenance.notApplied.map((n) => `${n.values.join(', ')} — ${n.reason}`).join('; ')}
+        </div>
+      )}
+      {provenance.refusedMemory.length > 0 && (
+        <div className="text-[#6E7278]" data-testid="strategy-provenance-refused-memory">
+          Memories not used: {provenance.refusedMemory.map((r) => `${r.value} (${r.reason})`).join('; ')}
+        </div>
+      )}
+      <div className="pt-0.5 text-[#A3A7AD]" data-testid="strategy-search-for">
+        <span className="text-[#8B8F96]">ATLAS will search for: </span>
+        {provenance.searchFor.required.length ? provenance.searchFor.required.join(' · ') : 'no required filters'}
+        {provenance.searchFor.preferred.length > 0 && <span className="text-[#6E7278]"> · ranked by {provenance.searchFor.preferred.join(', ')}</span>}
+      </div>
     </div>
   );
 }

@@ -26,6 +26,9 @@ const REQUIRED_COVERAGE = [
   "provider timeout", "invalid Actor input", "HTTP errors", "empty dataset", "duplicate delivery", "budget-limit rejection", "unknown actual spend",
   "async runs", "run adoption", "interrupted connection", "provider receipts",
   "existing company", "existing holds", "repeated run", "workspace isolation", "Workbench plan_id association", "database write failure",
+  // V5 (2026-11-28)
+  "requirement provenance", "approved memory exclusion", "memory exclusion conflict", "apify-only isolation", "leadocean-only isolation",
+  "budget too low", "changed provider after approval", "changed budget after approval", "expired approval", "duplicate execution",
 ];
 
 Deno.test("every requested scenario category is covered by a fixture", () => {
@@ -55,6 +58,16 @@ for (const s of scenarios) {
       relaxed: ((r.plan.body as { flexible?: { relaxed?: { label: string }[] } }).flexible?.relaxed ?? null)?.map((x) => x.label) ?? null,
       flexibleTiers: ((b as { flexible?: { matches?: { name: string; tier: string }[] } }).flexible?.matches ?? null)?.map((m) => `${m.name}: ${m.tier}`) ?? null,
       purchases: r.purchases, spendBasis: b.outcome?.spend?.basis ?? null, chargeStates: (b as { chargeStates?: unknown }).chargeStates ?? null,
+      // V5: the server's stage/code per run, LeadOcean calls, who-gets-what, and where each requirement came from.
+      planCode: (r.plan.body as { code?: string }).code ?? null,
+      runCodes: r.runs.map((x) => `${x.status} ${(x.body as { stage?: string }).stage ?? "-"}/${(x.body as { code?: string }).code ?? "-"}`),
+      leadoceanCalls: r.leadoceanCalls.length,
+      allocationUsed: ((r.plan.body as { budget?: { allocation?: { providers?: { provider: string; used: boolean }[] } } }).budget?.allocation?.providers ?? null)
+        ?.map((p) => `${p.provider}: ${p.used ? "used" : "not used"}`) ?? null,
+      provenance: ((r.plan.body as { provenance?: { entries?: { group: string; label: string; necessity: string; relaxed: boolean }[] } }).provenance?.entries ?? null)
+        ?.map((e) => `${e.group}: ${e.label}${e.relaxed ? " (relaxed)" : ""}`) ?? null,
+      kept: ((r.plan.body as { flexible?: { kept?: { label: string }[] } }).flexible?.kept ?? null)?.map((k) => k.label) ?? null,
+      planError: (r.plan.body as { error?: string }).error ?? null,
     };
     for (const [k, v] of Object.entries(s.expect ?? {})) assertEquals(got[k], v, `${s.name}: ${k}`);
 

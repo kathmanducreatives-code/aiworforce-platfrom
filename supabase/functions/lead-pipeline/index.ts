@@ -111,7 +111,8 @@ Deno.serve(withBuildStamp(async (req) => {
           const hash = await contractHash(contract);
           return {
             mission: await compileContract(contract), contract,
-            brain: { status: brain.status, fields: brain.fields, applied: report.applied, rejected: report.notApplied },
+            brain: { status: brain.status, fields: brain.fields, applied: report.applied, rejected: report.notApplied,
+              ...(report.merged ? { merged: report.merged } : {}), ...(report.refusedMemory ? { refusedMemory: report.refusedMemory } : {}) },
             // The approval token replays THE CONTRACT ITSELF: a run executes exactly what was approved.
             replay: { proposal: { contract, contractHash: hash }, brain: { status: brain.status, fields: brain.fields, context: null } },
           };

@@ -18,6 +18,7 @@
 
 import type { MissionCriterion } from "../missionCriteria.ts";
 import { isControlledPhrase } from "../businessModelMatch.ts";
+import { isWorkspaceScreen } from "../candidateEligibility.ts";
 
 /** What a capability can establish about a company (strategy.ts `Provable`, plus verification routes). */
 export type ProofDimension =
@@ -32,7 +33,11 @@ export interface RequirementRoute {
   dimension: string;
   /** What must be proven for this criterion to pass or fail. Empty when nothing can. */
   needs: ProofDimension[];
-  route: "checked" | "ranked_only" | "not_checkable";
+  /**
+   * `screened` (V5): a WORKSPACE exclusion — required, enforced against the industry evidence
+   * every chain gathers (a company it names is rejected), never proven absent, never blocking.
+   */
+  route: "checked" | "ranked_only" | "not_checkable" | "screened";
   /** The capabilities in the chain that prove it (ids), when checked. */
   checkedBy: string[];
   /** Plain words for the approval card. */
@@ -91,6 +96,10 @@ export function resolveRequirementRoutes(
     const by = needs.flatMap((d) => [...(proves.get(d) ?? [])]);
     const checkable = needs.length > 0 && needs.every((d) => (proves.get(d)?.length ?? 0) > 0);
     const label = String(c.label ?? c.dimension);
+    if (required && isWorkspaceScreen(c)) {
+      return { criterionId: c.id, label, necessity: "required", dimension: String(c.dimension), needs, route: "screened", checkedBy: [],
+        explanation: "your Company Brain's exclusion: a company whose industry names it is rejected; ATLAS cannot prove a company is outside an industry, so this screens and never blocks" };
+    }
     if (!required) {
       return { criterionId: c.id, label, necessity: "preferred", dimension: String(c.dimension), needs, route: "ranked_only", checkedBy: checkable ? [...new Set(by)] : [],
         explanation: "a preference: it orders the results and never rejects a company" };

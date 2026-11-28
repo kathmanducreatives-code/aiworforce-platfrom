@@ -27,6 +27,7 @@ import { criteriaFreezeState } from "../missionCriteriaReader.ts";
 import { approvability, contractHash, disclosures, MISSION_CONTRACT_VERSION, type MissionContract } from "../missionContract/contract.ts";
 import { missionOutcome } from "./outcome.ts";
 import { legacyWorkspaceExclusions } from "./workspaceExclusions.ts";
+import { planProvenance } from "./provenance.ts";
 import type { ContractBrainInput } from "../missionContract/brain.ts";
 import type { PersistResult } from "./persistRows.ts";
 import { checkApproved, checkCompiled, checkPlanRequirements, checkVerdicts, requirementVerdicts, type InvariantViolation } from "../missionContract/invariants.ts";
@@ -239,6 +240,12 @@ export interface StrategyRequest {
   requestedCount: number | null;
   user: StrategyContext["user"];
   budget: StrategyContext["budget"];
+  /**
+   * G3: the most the whole discovery may cost in USD (optional). Today only Apify is priced in
+   * USD — LeadOcean is billed in records with no USD price (Free plan) and keeps its own record
+   * limit — so it caps the Apify ceiling: effective max_apify_usd = min(max_apify_usd, this).
+   */
+  totalUsd?: number | null;
   approval: { planHash: string; leadoceanRecords: number; apifyUsd: number; token: string | null } | null;
   /** FLEXIBLE DISCOVERY (flexibleDiscovery.ts): the user's choice; absent = strict, unchanged. */
   mode?: DiscoveryMode;
@@ -258,6 +265,8 @@ export function parseStrategyRequest(b: Record<string, unknown>): StrategyReques
   const maxLo = b.max_leadocean_records === undefined ? 50 : num(b.max_leadocean_records, 500);
   const maxUsd = b.max_apify_usd === undefined ? 0.25 : num(b.max_apify_usd, 5);
   if (maxLo === null || maxUsd === null || !Number.isInteger(maxLo)) return null;
+  const total = b.max_total_usd === undefined || b.max_total_usd === null ? null : num(b.max_total_usd, 5);
+  if (b.max_total_usd !== undefined && b.max_total_usd !== null && total === null) return null;
   if (b.discovery_mode !== undefined && b.discovery_mode !== "strict" && b.discovery_mode !== "flexible") return null;
   const a = b.approval as Record<string, unknown> | null | undefined;
   let approval: StrategyRequest["approval"] = null;
@@ -272,6 +281,7 @@ export function parseStrategyRequest(b: Record<string, unknown>): StrategyReques
     user: { ...(b.strategy ? { strategy: b.strategy as DiscoveryStrategyId } : {}), excludeProviders: exclude as ProviderId[], allowReviewOnly: b.allow_review_only === true,
       ...(b.accept_likely === true ? { acceptLikely: true } : {}) },
     budget: { maxLeadoceanRecords: maxLo, maxApifyUsd: maxUsd }, approval,
+    ...(total !== null ? { totalUsd: total } : {}),
     ...(b.discovery_mode === "flexible" ? { mode: "flexible" as const } : {}),
   };
 }
@@ -285,7 +295,7 @@ export interface Interpreted {
    * checked at compile, plan, approval and evaluation.
    */
   contract?: MissionContract;
-  brain?: { status: string; fields: string[]; applied: unknown[]; rejected: unknown[] };
+  brain?: { status: string; fields: string[]; applied: unknown[]; rejected: unknown[]; merged?: { requirementId: string | null; value: string; sources: string[]; memoryIds: string[] }[]; refusedMemory?: { memory_id: string; value: string; reason: string }[] };
   /** What a strategy_run needs to rebuild this interpretation without the model. */
   replay?: Omit<PlanReplay, "advice">;
   /**
@@ -345,7 +355,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   if (!d.flags.workspaces.has(req.workspaceId)) return { status: 403, body: { error: "the lead pipeline is not enabled for this workspace" } };
   const role = await d.store.memberRole(d.userId, req.workspaceId);
   if (!role) return { status: 403, body: { error: "not a member of this workspace" } };
-  if (req.action === "strategy_run" && !ADMIN.has(role)) return { status: 403, body: { error: "only a workspace owner or admin can approve a paid run" } };
+  if (req.action === "strategy_run" && !ADMIN.has(role)) return { status: 403, body: { error: "only a workspace owner or admin can approve a paid run", stage: "approval", code: "not_authorized" } };
   // AN EXPLICIT "VERIFIED" IS NEVER SILENTLY WEAKENED: counting likely matches is refused when
   // the request itself asks for verified / confirmed companies.
   if (req.user?.acceptLikely && VERIFIED_WORDS.test(req.query)) {
@@ -359,11 +369,11 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   // must have the approved hash (which binds meaning, ceilings and workspace).
   let token: PlanTokenPayload | null = null;
   if (req.action === "strategy_run") {
-    if (!req.approval) return { status: 400, body: { error: "a run needs an approval" } };
-    if (!d.signer || !d.recompile) return { status: 503, body: { error: "signed plan approvals are not available; nothing ran" } };
-    if (!req.approval.token) return { status: 400, body: { error: "a run needs the approval_token returned by strategy_plan; plan again and approve that plan" } };
+    if (!req.approval) return { status: 400, body: { error: "a run needs an approval", stage: "approval", code: "approval_missing" } };
+    if (!d.signer || !d.recompile) return { status: 503, body: { error: "signed plan approvals are not available; nothing ran", stage: "approval", code: "approvals_unavailable" } };
+    if (!req.approval.token) return { status: 400, body: { error: "a run needs the approval_token returned by strategy_plan; plan again and approve that plan", stage: "approval", code: "approval_missing" } };
     const v = await d.signer.verify(req.approval.token, { workspaceId: req.workspaceId, planHash: req.approval.planHash, walkId: req.walkId }, now());
-    if (!v.ok) return { status: 409, body: { error: v.reason } };
+    if (!v.ok) return { status: 409, body: { error: v.reason, stage: "approval", code: approvalCode(v.reason) } };
     token = v.payload;
   }
   const interpreted = token
@@ -386,7 +396,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     if (!ok.ok) return { status: 422, body: { status: "not_approvable", reasons: ok.reasons, error: ok.reasons.join("; ") } };
     const violations: InvariantViolation[] = [...checkCompiled(mc, interpreted.mission)];
     if (token) violations.push(...await checkApproved(mc, (token.replay.proposal as { contractHash?: string } | null)?.contractHash ?? null));
-    if (violations.length) return { status: 409, body: { error: "the mission's meaning did not survive intact; nothing ran", invariantViolations: violations } };
+    if (violations.length) return { status: 409, body: { error: "the mission's meaning did not survive intact; nothing ran", invariantViolations: violations, stage: token ? "approval" : "plan", code: "meaning_changed" } };
   }
   // CLOSED REQUIREMENT VOCABULARY (Option E Stage 6; requirementVocabulary.ts). It VALIDATES
   // and never renames, so an accepted request means exactly what it meant before. A proposed
@@ -418,10 +428,11 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   let spec = specFromMission(mission as never, { defaultCount: req.requestedCount ?? 25 });
   if (mc) {
     const v = checkPlanRequirements(mc, spec.requirements.criteria as unknown as { id: string; kind: string }[]);
-    if (v.length) return { status: 409, body: { error: "the plan's requirements differ from the approved contract; nothing ran", invariantViolations: v } };
+    if (v.length) return { status: 409, body: { error: "the plan's requirements differ from the approved contract; nothing ran", invariantViolations: v, stage: token ? "approval" : "plan", code: "meaning_changed" } };
   }
   // FLEXIBLE DISCOVERY: the user's explicit choice to rank by industry and consumer-only instead
   // of gating on them. GPT names related industries at PLAN time only; a run replays the signed list.
+  const strictSpec = spec;
   let industries: IndustryMap | null = null;
   if (req.mode === "flexible") {
     const asked = requestedIndustries(spec);
@@ -443,7 +454,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       apify: { enabled: f.enabled && f.provider.apify, connected: !!d.apify, authorized: true },
       apollo: { enabled: f.enabled && f.provider.apollo && f.commercialTerms.apollo, connected: ap?.status === "connected", authorized: true },
     },
-    budget: req.budget, user: req.user, businessModelGrounding: !!d.groundBusinessModel, companySearch: !!d.flags.companySearch,
+    budget: effectiveBudget(req), user: req.user, businessModelGrounding: !!d.groundBusinessModel, companySearch: !!d.flags.companySearch,
     // The plan hash binds the workspace and the interpretation contract it was read under.
     // Contract mode: the plan hash binds the contract's own hash, so an approval names one exact meaning.
     binding: { workspaceId: req.workspaceId, contractVersion: mc ? `${MISSION_CONTRACT_VERSION}:${mcHash}` : d.contractVersion ?? activeMissionContract() },
@@ -470,17 +481,35 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     understanding: understandingReport(interpreted.mission, mc ? MISSION_CONTRACT_VERSION : d.contractVersion ?? activeMissionContract()),
     ...(mc ? { missionContract: { version: MISSION_CONTRACT_VERSION, hash: mcHash, contract: mc, assumptions: mc.assumptions, disclosures: disclosures(mc).map((r) => r.display.label), mergedDuplicates: mc.mergedDuplicates ?? [] } } : {}),
   };
+  // G3 PROVIDER ISOLATION: a chosen provider is the only provider. Never a silent fallback —
+  // the planner does not switch an explicit choice, and this refuses any plan that would.
+  const isolation = providerIsolation(req.user?.strategy, plan);
+  if (isolation) return { status: 409, body: { error: isolation, stage: req.action === "strategy_run" ? "approval" : "plan", code: "provider_isolation", plan } };
+  // G2: where every requirement of this plan came from (a view; not in the plan hash).
+  const brainReport = "brain" in interpreted ? interpreted.brain ?? null : null;
+  const reqOf = new Map((mc?.requirements ?? []).map((r) => [r.id, r]));
+  const provenance = planProvenance({
+    spec, before: strictSpec,
+    brain: workspaceExclusions ? { ...(brainReport ?? {}), rejected: [...((brainReport as { rejected?: unknown[] } | null)?.rejected ?? []), ...workspaceExclusions.resolution.notApplied],
+      merged: workspaceExclusions.resolution.merged, refusedMemory: workspaceExclusions.resolution.refusedMemory } : brainReport as never,
+    memoryIdsOf: (id) => reqOf.get(id)?.origin.memoryIds ?? [], policyOf: (id) => reqOf.get(id)?.origin.policy ?? null,
+  });
+  const budgetView = { requested: req.budget, totalUsd: req.totalUsd ?? null, effective: ctx.budget, allocation: allocationOf(plan, ctx.budget, req.user?.strategy ?? null) };
   if (req.action === "strategy_plan" || plan.status === "blocked") {
     // The approval token: what an owner/admin approves, and all a run may execute.
     const approval_token = req.action === "strategy_plan" && plan.status === "ready" && d.signer && interpreted.replay
       ? await d.signer.sign({ workspaceId: req.workspaceId, walkId: req.walkId, plannedBy: d.userId, planHash: plan.planHash, query: req.query, requestedCount: req.requestedCount, replay: { ...interpreted.replay, advice, ...(industries ? { flexible: industries } : {}) } }, now())
       : null;
-    return { status: plan.status === "blocked" ? 409 : 200, body: { status: plan.status, plan, worstCase: plan.estimate, interpretation, discoveryMode: flexibleView ? "flexible" : "strict", ...(flexibleView ? { flexible: flexibleView } : {}), ...(approval_token ? { approval_token } : {}) } };
+    // A run whose re-plan is blocked never executed: that is the APPROVAL being refused, not a run failure.
+    const stage = req.action === "strategy_run" ? "approval" : "plan";
+    return { status: plan.status === "blocked" ? 409 : 200, body: { status: plan.status, plan, worstCase: plan.estimate, interpretation, budget: budgetView, provenance, discoveryMode: flexibleView ? "flexible" : "strict", ...(flexibleView ? { flexible: flexibleView } : {}), ...(approval_token ? { approval_token } : {}),
+      stage, code: plan.status === "blocked" ? "plan_blocked" : "plan_ready" } };
   }
-  if (!req.approval) return { status: 400, body: { error: "a run needs an approval", plan } };
-  if (req.approval.planHash !== plan.planHash) return { status: 409, body: { error: "plan changed since it was approved (re-interpretation or new limits); review the new plan", plan } };
+  if (!req.approval) return { status: 400, body: { error: "a run needs an approval", plan, stage: "approval", code: "approval_missing" } };
+  if (req.approval.planHash !== plan.planHash) return { status: 409, body: { error: "plan changed since it was approved (re-interpretation or new limits); review the new plan", plan, stage: "approval", code: "plan_changed" } };
 
   const key = plan.steps.some((s) => s.provider === "leadocean") ? await d.store.secret(req.workspaceId, "leadocean") : null;
+  const usesApify = plan.steps.some((s) => s.provider === "apify");
   const connections: ProviderConnectionState[] = [{
     provider: "leadocean", connected: lo?.status === "connected", enabled: !!ctx.providers.leadocean?.enabled,
     commercialTermsConfirmed: f.commercialTerms.leadocean, remainingCredits: lo?.usage?.remaining ?? null,
@@ -489,12 +518,14 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
   const run: StrategyRun | RunPending = await runDiscoveryStrategy({
     workspaceId: req.workspaceId, walkId: req.walkId, spec, plan,
     approval: { planHash: req.approval.planHash, leadoceanRecords: req.approval.leadoceanRecords, apifyUsd: req.approval.apifyUsd, approvedBy: d.userId, approvedAt: now().toISOString() },
-    leadocean: key ? d.leadoceanFor(key).adapter : null, apify: d.apify, connections,
+    // G3: a provider with no step in the APPROVED plan is never handed to the executor, so it
+    // cannot be called — zero calls, zero records, zero charges — whatever the executor does.
+    leadocean: key ? d.leadoceanFor(key).adapter : null, apify: usesApify ? d.apify : null, connections,
     ledger: d.ledger, checkpoints: d.checkpoints, existing: new ExclusionIndex(await d.loadExisting(req.workspaceId), now), now,
     evidenceCache: d.evidenceCache ?? null,
     groundBusinessModel: d.groundBusinessModel ?? null,
     acceptLikely: req.user?.acceptLikely === true,
-    apifyRuns: d.apifyRuns ?? null,
+    apifyRuns: usesApify ? d.apifyRuns ?? null : null,
   }).catch((e) => {
     // A RUN STILL GOING (Phase C): nothing is lost and nothing is bought again — the run id is
     // recorded on its reservation, and calling strategy_run again with the SAME approval token
@@ -503,7 +534,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     throw e;
   });
   if (run instanceof RunPending) {
-    return { status: 202, body: { status: "running", plan: { planHash: plan.planHash },
+    return { status: 202, body: { status: "running", stage: "execution", code: "running", plan: { planHash: plan.planHash },
       running: { actor: run.actorKey, runId: run.runId, state: run.status, reservedUsd: run.reservedUsd },
       next: "Call strategy_run again with the same approval token: the run in progress is adopted, never bought again.",
       outcome: { status: "running", summary: `Still running: ${run.actorKey.replace(/^apify_/, "").replace(/_/g, " ")} (${run.status.toLowerCase()}). Check again shortly — nothing will be bought twice.`,
@@ -516,6 +547,8 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     const outcome = missionOutcome({ requested: spec.requestedCount, qualified: 0, pending: 0, rejected: 0, runStatus: spent ? "failed" : "blocked", reason: run.reason,
       spend: { ...run.spend, basis: charged?.basis ?? "estimate" } });
     return { status: 409, body: { error: run.reason, plan, outcome, steps: run.steps, spend: run.spend,
+      // The approval was accepted and execution started; it then stopped. Spent → failed; nothing spent → refused.
+      stage: "execution", code: spent ? "execution_failed" : "execution_refused",
       ...(run.charges ? { charges: run.charges.map((c) => ({ actor: c.actorKey, runId: c.runId, state: c.state, usd: c.usd, reservedUsd: c.reservedUsd, build: c.build, status: c.status })), chargeStates: charged?.states ?? {} } : {}) } };
   }
   // The run's own plan: what the Workbench reads (`lead_candidates.plan_id`). Recorded before
@@ -537,6 +570,7 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     status: 200,
     body: {
       status: saved.status, reason: saved.reason, strategy: run.strategy, steps: run.steps, spend: run.spend, limitations: run.limitations,
+      stage: "execution", code: "completed", budget: budgetView,
       // Where the saved leads appear: the Workbench Leads table for this plan (null = not linked).
       workbench: runPlanId ? { planId: runPlanId } : null,
       // What the REQUEST got (outcome.ts): only qualified companies count toward the number asked for.
@@ -577,4 +611,58 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
       })() : {}),
     },
   };
+}
+
+// ── G3: budgets, provider isolation, allocation ─────────────────────────────
+
+/** The ceilings the planner works within: the total USD budget caps the (USD-priced) Apify ceiling. */
+export function effectiveBudget(req: Pick<StrategyRequest, "budget" | "totalUsd">): StrategyContext["budget"] {
+  const t = req.totalUsd;
+  return t === null || t === undefined ? req.budget : { ...req.budget, maxApifyUsd: Math.min(req.budget.maxApifyUsd, t) };
+}
+
+/** A plan that would use a provider the user's choice rules out (never expected; refused if it happens). */
+export function providerIsolation(choice: DiscoveryStrategyId | undefined, plan: Pick<StrategyPlan, "steps">): string | null {
+  const used = new Set(plan.steps.map((s) => s.provider));
+  if (choice === "apify_only" && used.has("leadocean")) return "Apify only was chosen, but the plan includes LeadOcean; nothing will run";
+  if (choice === "leadocean_only" && used.has("apify")) return "LeadOcean only was chosen, but the plan includes Apify; nothing will run";
+  return null;
+}
+
+export interface ProviderAllocation {
+  provider: ProviderId;
+  /** In the plan at all. A provider not in the plan gets 0 calls, 0 records, $0. */
+  used: boolean;
+  steps: number;
+  /** The plan's worst case for this provider, and the ceiling it was planned within. */
+  worstCase: { apifyUsd: number; leadoceanRecords: number };
+  ceiling: { apifyUsd: number | null; leadoceanRecords: number | null };
+  unit: "usd" | "records";
+}
+
+/** Per-provider allocation, so Auto and Both explain who gets what before approval. */
+export function allocationOf(plan: Pick<StrategyPlan, "steps" | "strategy">, budget: StrategyContext["budget"], choice: DiscoveryStrategyId | null): { providers: ProviderAllocation[]; explanation: string } {
+  const sum = (p: ProviderId) => plan.steps.filter((s) => s.provider === p).reduce((a, s) => ({ apifyUsd: a.apifyUsd + s.estimate.apifyUsd, leadoceanRecords: a.leadoceanRecords + s.estimate.leadoceanRecords }), { apifyUsd: 0, leadoceanRecords: 0 });
+  const round = (x: { apifyUsd: number; leadoceanRecords: number }) => ({ apifyUsd: Math.round(x.apifyUsd * 1e5) / 1e5, leadoceanRecords: x.leadoceanRecords });
+  const providers: ProviderAllocation[] = (["apify", "leadocean"] as const).map((p) => {
+    const n = plan.steps.filter((s) => s.provider === p).length;
+    return { provider: p, used: n > 0, steps: n, worstCase: round(sum(p)),
+      ceiling: p === "apify" ? { apifyUsd: n ? budget.maxApifyUsd : 0, leadoceanRecords: null } : { apifyUsd: null, leadoceanRecords: n ? budget.maxLeadoceanRecords : 0 },
+      unit: p === "apify" ? "usd" : "records" };
+  });
+  const names = providers.filter((p) => p.used).map((p) => (p.provider === "apify" ? "Apify" : "LeadOcean"));
+  const explanation = !names.length ? "No provider is called."
+    : choice === "apify_only" ? "Apify only: LeadOcean gets 0 records and 0 calls."
+    : choice === "leadocean_only" ? "LeadOcean only: Apify gets $0 and 0 calls."
+    : `${choice ? "You chose" : "Auto chose"} ${plan.strategy ?? "no strategy"}: ${names.join(" and ")}${names.length === 1 ? ` only; ${names[0] === "Apify" ? "LeadOcean" : "Apify"} gets nothing` : ""}.`;
+  return { providers, explanation };
+}
+
+/** The approval failure, as a code the UI can act on (planToken.ts reasons). */
+export function approvalCode(reason: string): "approval_expired" | "approval_other_workspace" | "approval_other_walk" | "approval_other_plan" | "approval_invalid" {
+  if (/expired/.test(reason)) return "approval_expired";
+  if (/another workspace/.test(reason)) return "approval_other_workspace";
+  if (/another walk/.test(reason)) return "approval_other_walk";
+  if (/different plan/.test(reason)) return "approval_other_plan";
+  return "approval_invalid";
 }

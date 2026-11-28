@@ -10,7 +10,7 @@ import { summarizeProviderRun } from "../../supabase/functions/_shared/leadPipel
 import { parseStrategyRequest } from "../../supabase/functions/_shared/leadPipeline/service.ts";
 import {
   comparisonRow, overlapView, safeHref, planStrategy, readStrategyPlan, readStrategyRun, runStrategy, strategyDiscoveryUiEnabled,
-  walkIdFor, worstCaseLine, readFlexibleMatches, type Invoke,
+  walkIdFor, worstCaseLine, readFlexibleMatches, readProvenance, runStateOf, type Invoke,
 } from "../../src/lib/strategyDiscovery.ts";
 
 /** A strategy_run response body built the way service.ts builds it. */
@@ -235,4 +235,44 @@ Deno.test("FLEXIBLE UI: relaxed criteria are read from the plan; tiers and statu
   assertEquals(m.length, 1, "an unknown tier is dropped");
   assertEquals(m[0].attributes, [{ name: "headquarters", status: "verified", value: "US" }], "an unknown status is dropped, never shown as verified");
   assertEquals(m[0].sources, ["https://co.example/"]);
+});
+
+// ── V5 (2026-11-28): budgets, run states, provenance ─────────────────────────
+
+
+Deno.test("G3 UI: limits are sent IDENTICALLY on plan and run (they are in the plan hash); empty limits are not sent", async () => {
+  const sent: Record<string, unknown>[] = [];
+  const invoke: Invoke = (_n, body) => { sent.push(body as Record<string, unknown>); return Promise.resolve({ data: null, error: null }); };
+  const r = { workspaceId: "w", messageId: "m1", query: "q", choice: "apify_only" as const, budget: { totalUsd: 0.1, apifyUsd: 0.2, leadoceanRecords: null } };
+  await planStrategy(invoke, r);
+  const plan = readStrategyPlan({ plan: { status: "ready", planHash: "h", estimate: { apifyUsd: 0.06, leadoceanRecords: 0 }, steps: [] }, approval_token: "t" })!;
+  await runStrategy(invoke, r, plan, { attempts: 1 });
+  for (const b of sent) assertEquals([b.max_total_usd, b.max_apify_usd, "max_leadocean_records" in b], [0.1, 0.2, false]);
+  assertEquals(parseStrategyRequest(sent[0])?.totalUsd, 0.1, "the server reads the total");
+  assertEquals(parseStrategyRequest({ ...sent[0], max_total_usd: -1 }), null, "a negative limit is refused");
+});
+
+Deno.test("APPROVAL UI: the server's stage/code decide what the panel says — never the HTTP status alone", () => {
+  const err = (stage: string, code: string) => ({ ok: false as const, error: "e", stage, code });
+  assertEquals(runStateOf(err("approval", "approval_expired")), { state: "approval_rejected", needsReapproval: true, label: "Approval expired — nothing ran. Re-plan and approve again." });
+  assertEquals(runStateOf(err("approval", "plan_changed")).needsReapproval, true);
+  assertEquals(runStateOf(err("approval", "not_authorized")).needsReapproval, false, "re-approving does not fix a role");
+  assertEquals(runStateOf(err("execution", "running")).state, "still_running");
+  assertEquals(runStateOf({ ok: true, value: { stage: "execution", code: "execution_failed" } as never }).state, "execution_failed");
+  assertEquals(runStateOf({ ok: true, value: { stage: "execution", code: "execution_refused" } as never }).state, "execution_refused");
+  assertEquals(runStateOf({ ok: true, value: { stage: "execution", code: "completed" } as never }).state, "completed");
+  assertEquals(runStateOf({ ok: false, error: "network" }).state, "unknown", "no answer is never success");
+});
+
+Deno.test("G2 UI: provenance groups are read; unknown groups and necessities are dropped, never guessed", () => {
+  const p = readProvenance({ entries: [
+    { id: "a", label: "Hiring: AE", value: "", group: "request", necessity: "mandatory", relaxed: false, memoryIds: [], alsoFrom: [] },
+    { id: "m", label: "Excluding: crypto (approved memory)", value: "crypto", group: "brain_memory", necessity: "mandatory", relaxed: false, memoryIds: ["m1"], alsoFrom: [] },
+    { id: "x", label: "?", group: "made_up", necessity: "mandatory" },
+    { id: "y", label: "?", group: "request", necessity: "sometimes" },
+  ], notApplied: [{ group: "brain_default", values: ["Canada"], reason: "the request already states this" }], refusedMemory: [{ value: "gambling", reason: "memory is pending" }],
+  searchFor: { required: ["Hiring: AE"], preferred: [] } })!;
+  assertEquals(p.entries.map((e) => [e.group, e.memoryIds]), [["request", []], ["brain_memory", ["m1"]]]);
+  assertEquals([p.notApplied.length, p.refusedMemory[0].reason, p.searchFor.required], [1, "memory is pending", ["Hiring: AE"]]);
+  assertEquals(readProvenance({ nope: true }), null);
 });
