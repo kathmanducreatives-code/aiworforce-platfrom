@@ -8,7 +8,7 @@
 // Save emits a partial patch that the parent shallow-merges onto the raw
 // profile, so we never overwrite fields we don't render.
 
-import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Brain, Check, Crosshair, Loader2, Megaphone, Radar, ShieldAlert, Users, X } from 'lucide-react';
@@ -87,7 +87,17 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   const [saved, setSaved] = useState(false);
   const [state, setState] = useState<any>(null);
   const [activeSection, setActiveSection] = useState<SectionKey | null>(section);
+  // THE SAVED BASELINE (serialised server values) — what `dirty` compares against.
+  // CB-003: it lived only in a ref, and `dirty` was memoised on `state` alone, so
+  // moving the baseline after a successful save never recomputed `dirty`: the editor
+  // kept saying "Unsaved changes" (and asked to confirm on close) after "Section saved".
+  // The ref stays for effects that must read the newest value; the state drives renders.
   const initialRef = useRef<string>('');
+  const [baseline, setBaselineState] = useState<string>('');
+  const setBaseline = useCallback((serialised: string) => {
+    initialRef.current = serialised;
+    setBaselineState(serialised);
+  }, []);
 
   // Sync active section when opening or when parent changes it.
   useEffect(() => {
@@ -128,7 +138,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
     }
     // The BASE stays the server values either way, so `dirty` keeps meaning
     // "differs from what is saved".
-    initialRef.current = JSON.stringify(serverValues);
+    setBaseline(JSON.stringify(serverValues));
     setBackgroundUpdate(false);
     setSaved(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,8 +146,8 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
 
   const dirty = useMemo(() => {
     if (!state) return false;
-    return JSON.stringify(state) !== initialRef.current;
-  }, [state]);
+    return JSON.stringify(state) !== baseline;
+  }, [state, baseline]);
 
   // A CLEAN editor may accept fresh server values. A dirty one must not be
   // touched — it reports that the Brain changed and keeps the user's work.
@@ -148,7 +158,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
     if (serialised === initialRef.current) return;   // nothing actually changed
     if (dirty) { setBackgroundUpdate(true); return; }
     setState(serverValues);
-    initialRef.current = serialised;
+    setBaseline(serialised);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brain]);
 
@@ -192,7 +202,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
     if (activeSection) {
       const serverValues = initialFor(activeSection, brainRef.current);
       setState(serverValues);
-      initialRef.current = JSON.stringify(serverValues);
+      setBaseline(JSON.stringify(serverValues));
     }
     setRestored(false);
     setBackgroundUpdate(false);
@@ -228,7 +238,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
       await onSave(buildPatch(activeSection, state, brain));
       // The work is on the server now; a kept draft would only be a stale copy.
       clearDraft({ userId, workspaceId, sectionId: activeSection });
-      initialRef.current = JSON.stringify(state);
+      setBaseline(JSON.stringify(state));
       setRestored(false);
       setBackgroundUpdate(false);
       setSaved(true);

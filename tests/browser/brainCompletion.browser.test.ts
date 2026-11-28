@@ -335,6 +335,64 @@ await sql`insert into public.company_brain (workspace_id, profile, onboarding_co
 const profile2 = async () => (await sql`select profile, updated_at from public.company_brain where workspace_id = ${ws2}`)[0] as { profile: Record<string, unknown>; updated_at: string };
 const conflict = (id: string) => `document.querySelector('[data-conflict="${id}"]')`;
 
+Deno.test("CB-003 · section editor: edit → save → success → clean editor → close without warning → reopen with the persisted values", opts, async () => {
+  const dialog = `document.querySelector('[role="dialog"]')`;
+  const footer = () => evaluate(`document.querySelector('[data-testid="cb-editor-footer"]')?.innerText ?? ''`) as Promise<string>;
+  const promiseField = `[...document.querySelectorAll('[role="dialog"] p')].find((p) => p.textContent === 'Positioning promise')?.parentElement?.querySelector('textarea')`;
+  const openMessaging = async () => {
+    // After a reload the page settles first (a click during its layout can miss): wait, then retry once.
+    assert(await waitFor(`!!document.querySelector('[aria-label="Edit company identity"]')`, 10000), "edit button");
+    await sleep(500);
+    for (let i = 0; i < 2 && !(await evaluate(`!!${dialog}`)); i++) {
+      await click(`document.querySelector('[aria-label="Edit company identity"]')`);
+      await waitFor(`!!${dialog}`, 4000);
+    }
+    assert(await evaluate(`!!${dialog}`), "editor open");
+    assert(await click(`[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent?.trim() === 'Messaging Fit')`), "Messaging Fit");
+    const ready = `${dialog}?.innerText.includes('Edit Messaging & Positioning') && !!(${promiseField})`;
+    if (!(await waitFor(ready, 4000))) {
+      // The section chips render with the editor; a click during its open animation can miss.
+      await click(`[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent?.trim() === 'Messaging Fit')`);
+    }
+    assert(await waitFor(ready, 5000), `messaging editor: ${String(await evaluate(`${dialog}?.innerText.slice(0, 300)`))}`);
+  };
+  await signIn(EDITOR.email);
+  assert(await waitFor(`!!document.querySelector('#brain-completion')`, 30000));
+  await openMessaging();
+  const before = await evaluate(`(${promiseField}).value`) as string;
+  await typeInto(promiseField, " CB-003 promise");
+  assert(await waitFor(`document.querySelector('[data-testid="cb-editor-footer"]')?.innerText.includes('Unsaved changes')`, 3000), "dirty after typing");
+
+  assert(await click(`[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent?.trim() === 'Save changes')`), "Save changes");
+  assert(await waitFor(`document.body.innerText.includes('Section saved')`, 10000), "success notification");
+  // Persisted, checked in the database itself, not from the toast.
+  const stored = await savedInDb((x) => String((x.positioning as Record<string, unknown> | undefined)?.promise ?? "").includes("CB-003 promise"));
+  assertEquals((stored.positioning as Record<string, unknown>).promise, `${before} CB-003 promise`.trimStart());
+  // Past the 1.4 s "saved" flash and the page's refetch: still clean (the bug: back to "Unsaved changes").
+  await sleep(2500);
+  const f = await footer();
+  assert(f.includes("All changes saved") && !f.includes("Unsaved changes"), `clean after save: ${f}`);
+  assert(await evaluate(`[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent?.trim() === 'Save changes')?.disabled === true`), "nothing left to save");
+
+  // Close: no "your edits are kept…" confirmation.
+  assert(await click(`document.querySelector('[aria-label="Close editor"]')`), "close");
+  assert(await waitFor(`!document.querySelector('[role="dialog"]')`, 3000), "closed without a confirmation");
+  assertEquals(await evaluate(`document.body.innerText.includes('They are not saved to Company Brain yet')`), false);
+
+  // Reload and reopen: the stored value is what the editor shows, and it is clean.
+  await mount();
+  if (await evaluate(`!!document.querySelector('#signed-out')`)) await signIn(EDITOR.email);
+  assert(await waitFor(`!!document.querySelector('#brain-completion')`, 30000));
+  // Let the reloaded page finish its reads (workspace, role, Brain) before opening.
+  await sleep(3000);
+  await openMessaging();
+  assertEquals(await evaluate(`(${promiseField}).value`), `${before} CB-003 promise`.trimStart());
+  assert((await footer()).includes("All changes saved"), "reopened clean");
+  await click(`document.querySelector('[aria-label="Close editor"]')`);
+  assert(await waitFor(`!document.querySelector('[role="dialog"]')`, 3000));
+  await signOut();
+});
+
 Deno.test("B2.1 · disagreeing ICP copies are shown with what each says, resolved in one click, and lead search then reads the ICP", opts, async () => {
   await signIn(OWNER2.email);
   assert(await waitFor(`!!document.querySelector('#brain-completion')`, 30000));
