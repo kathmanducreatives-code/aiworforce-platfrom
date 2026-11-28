@@ -1,33 +1,37 @@
-// SignalsFilters — collapsible compact filter row for the Signals workspace.
-// Contains search, secondary category (More), review status, and verified toggle.
+// SignalsFilters — search, category, review status and verification, all of which FILTER
+// (Signals recovery): categories and review statuses come from the shared presenter
+// (lib/signalCardView.ts), the same one the tabs and counters use. No placeholder controls.
 
 import { useState } from 'react';
 import { Search, SlidersHorizontal, ChevronDown, Check, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { ReviewFilter } from '@/lib/signalReviewModel';
+import type { ReviewFilter, SignalCategoryFilter } from '@/lib/signalCardView';
 import { GLASS_CHIP, GLASS_INPUT, GLASS_PANEL } from '@/components/layout/workspaceStyles';
 
-export type SecondaryCategory =
-  | 'all'
-  | 'funding'
-  | 'linkedin'
-  | 'comments'
-  | 'workflows'
-  | 'people'
-  | 'saved'
-  | 'reviewed'
-  | 'ignored';
+/** Kept as the page's name for the category filter. */
+export type SecondaryCategory = SignalCategoryFilter;
 
-const SECONDARY_OPTIONS: { id: SecondaryCategory; label: string }[] = [
+const CATEGORY_OPTIONS: { id: SignalCategoryFilter; label: string }[] = [
   { id: 'all', label: 'All categories' },
+  { id: 'hiring', label: 'Hiring' },
+  { id: 'expansion', label: 'Expansion' },
   { id: 'funding', label: 'Funding' },
-  { id: 'linkedin', label: 'LinkedIn posts' },
+  { id: 'leadership', label: 'Leadership changes' },
+  { id: 'technology', label: 'Technology adoption' },
+  { id: 'launch', label: 'Product launches' },
+  { id: 'competitor', label: 'Competitor moves' },
+  { id: 'linkedin', label: 'LinkedIn activity' },
   { id: 'comments', label: 'Comments' },
   { id: 'workflows', label: 'Workflow trends' },
   { id: 'people', label: 'Decision-makers' },
-  { id: 'saved', label: 'Saved' },
+];
+
+const REVIEW_OPTIONS: { id: ReviewFilter; label: string }[] = [
+  { id: 'all', label: 'All (hide ignored)' },
+  { id: 'unreviewed', label: 'Not reviewed' },
   { id: 'reviewed', label: 'Reviewed' },
+  { id: 'saved', label: 'Saved' },
   { id: 'ignored', label: 'Ignored' },
 ];
 
@@ -44,15 +48,10 @@ interface Props {
 }
 
 export default function SignalsFilters({
-  query,
-  onQueryChange,
-  secondary,
-  onSecondaryChange,
-  showUnverified,
-  onShowUnverifiedChange,
-  accentHex,
+  query, onQueryChange, secondary, onSecondaryChange, reviewFilter, onReviewFilterChange,
+  showUnverified, onShowUnverifiedChange, accentHex,
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(reviewFilter !== 'all');
 
   return (
     <div className={cn('rounded-xl', GLASS_PANEL)}>
@@ -62,20 +61,21 @@ export default function SignalsFilters({
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Search signals…"
+            placeholder="Search signals, companies, sources…"
+            aria-label="Search signals"
             className={cn('h-8 w-full rounded-lg py-1.5 pl-8 pr-3 text-[13px]', GLASS_INPUT)}
           />
         </div>
 
         <Popover>
           <PopoverTrigger asChild>
-            <button className={cn('inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]', GLASS_CHIP)}>
-              <span>{SECONDARY_OPTIONS.find((o) => o.id === secondary)?.label ?? 'More'}</span>
+            <button className={cn('inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]', GLASS_CHIP)} aria-label="Category">
+              <span>{CATEGORY_OPTIONS.find((o) => o.id === secondary)?.label ?? 'All categories'}</span>
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-56 p-1">
-            {SECONDARY_OPTIONS.map((o) => (
+            {CATEGORY_OPTIONS.map((o) => (
               <button
                 key={o.id}
                 onClick={() => onSecondaryChange(o.id)}
@@ -108,17 +108,28 @@ export default function SignalsFilters({
         <button
           onClick={() => setExpanded((v) => !v)}
           className={cn('inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]', GLASS_CHIP)}
-          data-active={expanded || undefined}
+          data-active={expanded || reviewFilter !== 'all' || undefined}
           aria-expanded={expanded}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
-          Filters
+          Review status{reviewFilter !== 'all' ? ` · ${REVIEW_OPTIONS.find((o) => o.id === reviewFilter)?.label}` : ''}
         </button>
       </div>
 
       {expanded && (
-        <div className="border-t border-white/[0.05] px-3 py-2 text-[12px] text-muted-foreground/70">
-          Additional filters coming from your saved views live here — for now, use the search and category selector above.
+        <div className="flex flex-wrap gap-1.5 border-t border-white/[0.05] px-3 py-2" role="radiogroup" aria-label="Review status">
+          {REVIEW_OPTIONS.map((o) => (
+            <button
+              key={o.id}
+              role="radio"
+              aria-checked={reviewFilter === o.id}
+              onClick={() => onReviewFilterChange(o.id)}
+              className={cn('inline-flex h-7 items-center rounded-md px-2.5 text-[12px]', GLASS_CHIP)}
+              style={reviewFilter === o.id ? { color: accentHex, borderColor: `${accentHex}55` } : undefined}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       )}
     </div>

@@ -87,9 +87,14 @@ export function emptyCounts(): PassCounts {
     dropped: {}, events: 0, new: 0, updated: 0, duplicate: 0, persist_failed: 0, credits: 0 };
 }
 
-export function collectContext(brain: SharedBrainContext | null, now: Date): CollectContext {
+export function collectContext(brain: SharedBrainContext | null, now: Date, subject?: WatchSubject): CollectContext {
   const tc = brain && brain.status !== "missing" ? brain.canonical.target_customer : null;
-  return { industries: tc?.industries ?? [], geographies: tc?.geography ?? [], year: now.getUTCFullYear() };
+  const scope = subject?.kind === "market" ? subject.scope : undefined;
+  return {
+    industries: scope?.industries.length ? scope.industries : (tc?.industries ?? []),
+    geographies: scope?.geographies.length ? scope.geographies : (tc?.geography ?? []),
+    year: now.getUTCFullYear(),
+  };
 }
 
 /** Group observations into events by dedupe identity and build normalized signals. PURE. */
@@ -154,7 +159,7 @@ async function withTimeout<T>(ms: number, fn: (signal: AbortSignal) => Promise<T
 export async function runPass(input: PassInput): Promise<PassResult> {
   const counts = emptyCounts();
   const errors: string[] = [];
-  const plan = planQueries(input.subject, collectContext(input.brain, input.now));
+  const plan = planQueries(input.subject, collectContext(input.brain, input.now, input.subject));
   counts.queries_planned = plan.length;
   const observations: Observation[] = [];
 

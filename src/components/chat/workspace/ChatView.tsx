@@ -1,3 +1,4 @@
+import MarkdownText from './MarkdownText';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
@@ -201,7 +202,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                     )}
                     style={{ maxWidth: 'min(720px, 86%)' }}
                   >
-                    {m.content}
+                    <MarkdownText text={m.content} />
                   </div>
                 )}
                 {meta?.orion_draft && <OrionDraftChip metadata={meta} />}

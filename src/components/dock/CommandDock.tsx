@@ -152,9 +152,12 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
       <div
         className={cn(
           'fixed z-40 pointer-events-none transition-[left] [transition-duration:240ms] [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]',
-          isMobile ? 'left-0 right-0 flex justify-center' : sidebarCollapsed ? 'left-[68px] right-4 flex justify-end' : 'left-[260px] right-4 flex justify-end',
+          // Signals recovery: bottom-LEFT of the content, never over the department rail's own composer
+          // (the rail is the right 360–380px; the pill used to sit exactly on its Send button).
+          isMobile ? 'left-0 right-0 flex justify-center' : sidebarCollapsed ? 'left-[68px] right-4 flex justify-start pl-4' : 'left-[260px] right-4 flex justify-start pl-4',
         )}
         style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}
+        data-testid="dept-chat-pill"
       >
         <button
           onClick={() => setDeptCollapsed(false)}
@@ -188,7 +191,9 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
         data-tour="command-dock"
         className={cn(
           "fixed z-40 flex justify-center px-4 pointer-events-none transition-[left] [transition-duration:240ms] [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]",
-          isMobile ? "left-0 right-0" : sidebarCollapsed ? "left-[68px] right-0" : "left-[260px] right-0"
+          isMobile ? "left-0 right-0" : sidebarCollapsed ? "left-[68px] right-0" : "left-[260px] right-0",
+          // On a department page the expanded dock stops short of the agent rail (360px / 380px at xl).
+          isDeptPage && !isMobile && "lg:right-[380px] xl:right-[400px]"
         )}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',

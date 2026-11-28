@@ -18,6 +18,9 @@ import { useSignalReviews } from '@/hooks/useSignalReviews';
 import { useMonitoringPlans } from '@/hooks/useMonitoringPlans';
 import { useDepartmentAgentStatus } from '@/hooks/useDepartmentAgentStatus';
 import { deriveRadarBrief, type BriefSignal } from '@/lib/radarBrief';
+import { matchesCategory, matchesReview, signalCounters, signalTab, type ReviewFilter } from '@/lib/signalCardView';
+import { radarScanOutcome } from '@/lib/radarScanOutcome';
+import MonitoringPlansPanel from '@/components/signals/workspace/MonitoringPlansPanel';
 import { resolveAgent } from '@/lib/agentResolver';
 import { getDeptTheme } from '@/lib/departmentTheme';
 import { AmbientBackdrop } from '@/components/layout/AmbientBackdrop';
@@ -33,38 +36,16 @@ const PRIMARY_TABS: DeptTab<PrimaryTab>[] = [
   { id: 'other', label: 'Other' },
 ];
 
+// One classifier for tabs, counters and filters (lib/signalCardView.ts), so they cannot disagree.
 function matchesPrimary(s: FeedSignal, tab: PrimaryTab): boolean {
-  const t = s.signal_type;
-  switch (tab) {
-    case 'hiring':
-      return t === 'hiring' || t === 'hiring_signal';
-    case 'competitors':
-      return t === 'competitor' || t === 'competitor_engagement';
-    case 'other':
-      return !['hiring', 'hiring_signal', 'competitor', 'competitor_engagement'].includes(t);
-    default:
-      return true;
-  }
-}
-
-function matchesSecondary(s: FeedSignal, cat: SecondaryCategory): boolean {
-  if (cat === 'all') return true;
-  const t = s.signal_type;
-  switch (cat) {
-    case 'funding': return t === 'funding';
-    case 'linkedin': return t === 'linkedin_intent' || t === 'linkedin_engagement' || t === 'linkedin_post';
-    case 'comments': return t === 'linkedin_comment' || t === 'comments';
-    case 'workflows': return t === 'workflow_trend';
-    case 'people': return t === 'people' || t === 'people_profile' || t === 'decision_maker';
-    default: return true;
-  }
+  return tab === 'today' || signalTab(s) === tab;
 }
 
 export default function Signals() {
   const { workspaceId } = useWorkspace();
   const { data: brainData, refresh: refreshBrain } = useCompanyBrain();
   const { signals, clusters, relevance, loading, runRadarScan, scanning } = useSignalFeed(workspaceId);
-  const { reviewsBySignal } = useSignalReviews(workspaceId);
+  const { reviewsBySignal, setReview } = useSignalReviews(workspaceId);
   const monitoring = useMonitoringPlans(workspaceId);
   // LISA's live state — the Signals specialist (agentRegistry `lisa`), as on her dashboard card.
   const lisaStatus = useDepartmentAgentStatus(workspaceId, 'lisa');
@@ -73,6 +54,7 @@ export default function Signals() {
   const [secondary, setSecondary] = useState<SecondaryCategory>('all');
   const [query, setQuery] = useState('');
   const [showUnverified, setShowUnverified] = useState(false);
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
   const [editRadarOpen, setEditRadarOpen] = useState(false);
 
   // The canonical Signals agent is LISA (agentRegistry / departments.ts). Legacy 'scout' is ATLAS.
@@ -80,17 +62,14 @@ export default function Signals() {
   const theme = getDeptTheme('growth');
   const accent = theme.hex;
 
-  // Metrics
+  // Metrics — from the same classifier as the tabs and filters.
   const metrics = useMemo(() => {
-    const verified = signals.filter((s) => s.show_by_default);
-    const hiring = signals.filter((s) => s.signal_type === 'hiring' || s.signal_type === 'hiring_signal').length;
-    const competitor = signals.filter((s) => s.signal_type === 'competitor' || s.signal_type === 'competitor_engagement').length;
-    const reviewed = Object.values(reviewsBySignal).filter((r) => r.status && r.status !== 'ignored').length;
+    const c = signalCounters(signals, (id) => reviewsBySignal[id]?.status ?? null);
     return [
-      { label: 'Verified signals', value: verified.length },
-      { label: 'Hiring', value: hiring },
-      { label: 'Competitor', value: competitor },
-      { label: 'Reviewed', value: reviewed },
+      { label: 'Verified signals', value: c.verified },
+      { label: 'Hiring', value: c.hiring },
+      { label: 'Competitor', value: c.competitor },
+      { label: 'Reviewed', value: c.reviewed },
     ];
   }, [signals, reviewsBySignal]);
 
@@ -113,15 +92,17 @@ export default function Signals() {
     return signals.filter((s) => {
       if (!showUnverified && !s.show_by_default) return false;
       if (!matchesPrimary(s, tab)) return false;
-      if (!matchesSecondary(s, secondary)) return false;
+      if (!matchesCategory(s, secondary)) return false;
       if (q) {
-        const hay = `${s.title} ${s.description ?? ''} ${s.account_name ?? ''}`.toLowerCase();
+        const raw = (s.raw ?? {}) as Record<string, unknown>;
+        const lisa = (raw.lisa ?? {}) as { company?: { name?: string } };
+        const hay = `${s.title} ${s.description ?? ''} ${s.account_name ?? ''} ${lisa.company?.name ?? ''} ${raw.subject_key ?? ''} ${s.source_url ?? ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (reviewsBySignal[s.id]?.status === 'ignored') return false;
+      if (!matchesReview(reviewsBySignal[s.id]?.status ?? null, reviewFilter)) return false;
       return true;
     });
-  }, [signals, tab, secondary, query, showUnverified, reviewsBySignal]);
+  }, [signals, tab, secondary, query, showUnverified, reviewsBySignal, reviewFilter]);
 
   const primaryTabs = useMemo<DeptTab<PrimaryTab>[]>(
     () =>
@@ -132,16 +113,16 @@ export default function Signals() {
     [brief.usefulCount],
   );
 
+  // An honest result: "nothing ran" when no source is configured — never "added 0".
   const handleRunScan = async () => {
     try {
       const res = await runRadarScan({ mode: 'default' });
-      if (res?.inserted !== undefined) {
-        toast.success(`LISA added ${res.inserted} new ${res.inserted === 1 ? 'signal' : 'signals'}`);
-      } else {
-        toast.success('Radar scan complete');
-      }
+      const out = radarScanOutcome(res, lisa.name);
+      if (out.kind === 'nothing_ran') toast.warning('Scan did not run', { description: out.message });
+      else if (out.kind === 'added') toast.success(out.message);
+      else toast.message(out.message);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Radar scan failed');
+      toast.error('Radar scan failed', { description: e instanceof Error ? e.message : 'Nothing was saved. Try again.' });
     }
   };
 
@@ -181,8 +162,8 @@ export default function Signals() {
             onQueryChange={setQuery}
             secondary={secondary}
             onSecondaryChange={setSecondary}
-            reviewFilter="all"
-            onReviewFilterChange={() => {}}
+            reviewFilter={reviewFilter}
+            onReviewFilterChange={setReviewFilter}
             showUnverified={showUnverified}
             onShowUnverifiedChange={setShowUnverified}
             accentHex={accent}
@@ -222,10 +203,16 @@ export default function Signals() {
           relevance={relevance}
           onFocus={(c) => setQuery(c.subject_key ?? '')}
         />
+        <MonitoringPlansPanel workspaceId={workspaceId} monitoring={monitoring} accentHex={accent} agentName={lisa.name} />
         <SignalsFeedList
           signals={filtered}
           loading={loading}
           accentHex={accent}
+          reviewStatusOf={(id) => reviewsBySignal[id]?.status ?? null}
+          onReview={async (id, st) => {
+            try { await setReview(id, st); toast.success(st === 'ignored' ? 'Signal ignored' : st === 'saved' ? 'Signal saved' : 'Marked reviewed'); }
+            catch (e) { toast.error('Review not saved', { description: e instanceof Error ? e.message : 'Nothing was changed.' }); }
+          }}
           emptyLabel={
             tab === 'today'
               ? 'No verified signals yet — run a scan to populate the radar.'

@@ -53,6 +53,8 @@ export interface WatchSubject {
   categories: LisaCategory[];
   /** Minutes between scans (default weekly). */
   cadence_minutes: number;
+  /** Market watches from an approved ICP plan: the plan's own target, which overrides the Brain's. */
+  scope?: { industries: string[]; geographies: string[] };
 }
 
 /** A claim extracted from one source. Never invented: every field comes from the hit text. */

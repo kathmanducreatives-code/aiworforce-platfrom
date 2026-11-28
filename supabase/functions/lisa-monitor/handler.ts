@@ -9,10 +9,16 @@
 //   signals     member (read)          LISA signals with the downstream contract (verification, lifecycle, relevance)
 //   scan_now    editor/admin/owner     on-demand scan of ≤ 3 watches; credits reserved per call;
 //                                      a request_id makes a retry idempotent (same run keys → already_done)
+//   run_plan    editor/admin/owner     ONE-TIME run of an APPROVED/active monitoring plan (Signals recovery);
+//                                      drafts never run; request_id makes a retry idempotent
 //   transition  editor/admin/owner     dismiss / dispute / retract / restore, through lisa_signal_transition
 //                                      (session + membership locked, role re-checked in the transaction)
 //   tick        service key only       one scheduled sweep for one workspace; ALSO needs
 //                                      LISA_V2_SCHEDULE_ENABLED=true. No cron is created anywhere.
+//
+// Sources (fixtureMode.ts): Firecrawl when FIRECRAWL_API_KEY is set; synthetic fixtures ONLY when
+// LISA_FIXTURE_MODE=true AND the workspace is in LISA_FIXTURE_WORKSPACES; otherwise scan_now and
+// run_plan answer 409 provider_not_configured — nothing runs, nothing is charged.
 //
 // Roles come from the same rule as the Company Brain (brainRole.ts). A viewer
 // can read; only an editor or above can spend credits or change a lifecycle.
@@ -30,6 +36,7 @@ import { firecrawlSource, ledgerBudget } from "../_shared/lisa/providers.ts";
 import { toAgentSignal, weeklyDigest } from "../_shared/lisa/weekly.ts";
 import { loadBrain, storedLisaRows } from "../_shared/lisa/reads.ts";
 import type { SearchSource } from "../_shared/lisa/types.ts";
+import { selectLisaSource, watchFromPlan, type PlanRow } from "../_shared/lisa/fixtureMode.ts";
 
 export const MAX_ON_DEMAND_WATCHES = 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,7 +59,8 @@ export type LisaRequest =
   | { action: "weekly" | "signals"; workspace_id: string }
   | { action: "scan_now"; workspace_id: string; request_id: string; subject_key?: string }
   | { action: "transition"; workspace_id: string; signal_event_id: string; transition: "dismiss" | "dispute" | "retract" | "restore"; reason?: string }
-  | { action: "tick"; workspace_id: string };
+  | { action: "tick"; workspace_id: string }
+  | { action: "run_plan"; workspace_id: string; plan_id: string; request_id: string };
 
 export function parseLisaRequest(b: unknown): { ok: true; req: LisaRequest } | { ok: false; error: string } {
   const o = (b ?? {}) as Record<string, unknown>;
@@ -66,6 +74,13 @@ export function parseLisaRequest(b: unknown): { ok: true; req: LisaRequest } | {
       if (!rid) return { ok: false, error: "request_id (8–80 chars, [A-Za-z0-9_-]) is required so a retry cannot double-spend" };
       const sk = typeof o.subject_key === "string" ? o.subject_key.slice(0, 200) : undefined;
       return { ok: true, req: { action: "scan_now", workspace_id: ws, request_id: rid, ...(sk ? { subject_key: sk } : {}) } };
+    }
+    case "run_plan": {
+      const id = typeof o.plan_id === "string" && UUID.test(o.plan_id) ? o.plan_id : null;
+      const rid = typeof o.request_id === "string" && /^[A-Za-z0-9_-]{8,80}$/.test(o.request_id) ? o.request_id : null;
+      if (!id) return { ok: false, error: "plan_id must be a uuid" };
+      if (!rid) return { ok: false, error: "request_id (8–80 chars, [A-Za-z0-9_-]) is required so a retry cannot double-spend" };
+      return { ok: true, req: { action: "run_plan", workspace_id: ws, plan_id: id, request_id: rid } };
     }
     case "transition": {
       const id = typeof o.signal_event_id === "string" && UUID.test(o.signal_event_id) ? o.signal_event_id : null;
@@ -129,6 +144,8 @@ export async function handleLisa(req: Request, deps: LisaDeps): Promise<Response
   const r = parsed.req;
   const now = deps.now?.() ?? new Date();
   const admin = deps.admin;
+  // Which source this request may use — decided BEFORE anything runs (fixtureMode.ts).
+  const choice = selectLisaSource((k) => deps.env(k), r.workspace_id, deps.source);
   const source = deps.source ?? firecrawlSource(deps.env("FIRECRAWL_API_KEY"));
   const price = priceFor("signal_search");
 
@@ -185,6 +202,28 @@ export async function handleLisa(req: Request, deps: LisaDeps): Promise<Response
       return json({ ok: outcome === "ok", outcome, lifecycle_status: row?.lifecycle_status ?? null }, status);
     }
 
+    // A scan that cannot collect anything is refused, never reported as an empty success.
+    if (!choice.ok) return json({ ok: false, error: choice.reason, detail: choice.detail }, 409);
+    if (r.action === "run_plan") {
+      // ONE-TIME execution of an APPROVED (or active) monitoring plan. Drafts never run.
+      const { data: planRow } = await admin.from("monitoring_plans")
+        .select("id, workspace_id, kind, status, title, target, signal_categories")
+        .eq("id", r.plan_id).eq("workspace_id", r.workspace_id).maybeSingle();
+      if (!planRow) return json({ ok: false, error: "plan_not_found" }, 404);
+      const plan = planRow as PlanRow;
+      if (plan.status !== "approved" && plan.status !== "active") return json({ ok: false, error: "plan_not_approved", status: plan.status }, 409);
+      const w = watchFromPlan(plan);
+      if (!w.ok) return json({ ok: false, error: "plan_not_collectable", detail: w.reason }, 409);
+      const brain = await loadBrain(admin, r.workspace_id, now);
+      const run_key = `plan:${plan.id}:${r.request_id}`;
+      const res = await runWatch({
+        db: admin, workspace_id: r.workspace_id, watch: w.watch, brain, source: choice.source(w.watch, brain, now),
+        store: rpcSignalStore(admin), now, trigger: "on_demand", run_key,
+        budget: ledgerBudget({ db: admin as unknown as CreditDb, workspace_id: r.workspace_id, run_key,
+          mode: resolveCreditEnforcement((k) => deps.env(k)), scheduled: false, remainingPeriodCredits: null, price }),
+      });
+      return json({ ok: true, mode: choice.mode, plan_id: plan.id, result: summarize(res), not_collected: w.not_collected });
+    }
     if (r.action !== "scan_now") return json({ error: "invalid_request" }, 400);
     const brain = await loadBrain(admin, r.workspace_id, now);
     const rows = await monitoringRows(admin, r.workspace_id);
@@ -195,7 +234,7 @@ export async function handleLisa(req: Request, deps: LisaDeps): Promise<Response
     for (const w of chosen) {
       const run_key = onDemandRunKey(w, r.request_id);
       const res = await runWatch({
-        db: admin, workspace_id: r.workspace_id, watch: w, brain, source, store: rpcSignalStore(admin), now, trigger: "on_demand", run_key,
+        db: admin, workspace_id: r.workspace_id, watch: w, brain, source: choice.source(w, brain, now), store: rpcSignalStore(admin), now, trigger: "on_demand", run_key,
         budget: ledgerBudget({ db: admin as unknown as CreditDb, workspace_id: r.workspace_id, run_key,
           mode: resolveCreditEnforcement((k) => deps.env(k)), scheduled: false, remainingPeriodCredits: null, price }),
       });
