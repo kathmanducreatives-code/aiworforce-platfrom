@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# BRAIN TEST — one entry point for the dedicated Company Brain TEST project.
+#
+#   scripts/test-env/brain-test init <session-pooler-host>   # once: non-secret settings file
+#   scripts/test-env/brain-test store-password               # once: DB password → Keychain (prompted)
+#   scripts/test-env/brain-test store-keys                   # once: publishable key + CLI token → Keychain (prompted)
+#   scripts/test-env/brain-test check                        # read-only DB check, no prompt
+#   scripts/test-env/brain-test build                        # schema: baseline + migrations + Brain V2 chain
+#   scripts/test-env/brain-test deploy                       # 7 functions + $0.25 spend ceiling, delegation off
+#   scripts/test-env/brain-test ui                           # local frontend against Brain TEST only
+#
+# The target is FIXED here: jekgwafobrzamoupehnn. It is not taken from the
+# environment, a flag or a file, and production (ohsdatpvfdjdemstoiuj), ATLAS
+# TEST (tlvnfrxzjhsjgdofwehb) and AgriDrone (luvostyizefajbltukkc) are refused
+# by every script this calls as well.
+#
+# Credentials (macOS Keychain, separate from ATLAS TEST's):
+#   database password  service agentory.test.postgres, account postgres.<ref>@<host>:5432/postgres
+#   publishable key    service agentory.brain-test.publishable   (public, but kept with the rest)
+#   CLI access token   service agentory.brain-test.supabase-token (the Brain TEST account's token;
+#                      used ONLY for `deploy`, as SUPABASE_ACCESS_TOKEN, so your default
+#                      `supabase login` — which ATLAS TEST tooling uses — is never changed)
+set -euo pipefail
+REF=jekgwafobrzamoupehnn
+URL="https://$REF.supabase.co"
+CONF="$HOME/.config/agentory/brain-test-db.conf"
+here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/../.." && pwd)"
+ENV_TOOL="$here/agentory-test-env"
+die() { echo "brain-test: $*" >&2; exit "${2:-1}"; }
+kc_read() { security find-generic-password -s "$1" -a "$REF" -w 2>/dev/null; }
+kc_store() { echo "Saving $2 in Keychain (service $1). It is not echoed."; security add-generic-password -U -s "$1" -a "$REF" -l "Agentory Brain TEST $2 ($REF)" -w; }
+
+case "$REF" in ohsdatpvfdjdemstoiuj|tlvnfrxzjhsjgdofwehb|luvostyizefajbltukkc) die "refusing: fixed ref is a protected project" ;; esac
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  init)
+    host="${1:-}"; [ -n "$host" ] || die "usage: brain-test init <session-pooler-host>  (Brain TEST → Connect → Session pooler)" 2
+    case "$host" in *[[:space:]:/@]*) die "give only the host name, e.g. aws-0-ap-northeast-1.pooler.supabase.com" 2 ;; esac
+    case "$host" in *ohsdatpvfdjdemstoiuj*|*tlvnfrxzjhsjgdofwehb*) die "refusing: that host names a protected project" 2 ;; esac
+    mkdir -p "$(dirname "$CONF")"
+    printf 'AGENTORY_TEST_REF=%s\nAGENTORY_TEST_PGHOST=%s\nAGENTORY_TEST_PGPORT=5432\nAGENTORY_TEST_PGDATABASE=postgres\nAGENTORY_TEST_PGUSER=postgres.%s\n' "$REF" "$host" "$REF" > "$CONF"
+    chmod 600 "$CONF"; echo "wrote $CONF (no secrets)"; cat "$CONF" ;;
+  store-password)
+    [ -f "$CONF" ] || die "run: brain-test init <session-pooler-host> first"
+    AGENTORY_TEST_CONF="$CONF" "$ENV_TOOL" store-password ;;
+  store-keys)
+    [ -t 0 ] || die "store-keys must run in an interactive terminal" 2
+    echo "1/2 Publishable key: Brain TEST → Project Settings → API Keys → Publishable key (sb_publishable_…)."
+    kc_store agentory.brain-test.publishable "publishable key"
+    echo "2/2 CLI access token of the account that OWNS Brain TEST: supabase.com → Account → Access Tokens → Generate."
+    kc_store agentory.brain-test.supabase-token "CLI access token"
+    echo "saved." ;;
+  check)
+    AGENTORY_TEST_CONF="$CONF" "$ENV_TOOL" check ;;
+  build)
+    AGENTORY_TEST_CONF="$CONF" "$ENV_TOOL" run -- bash -c \
+      'BRAIN_TEST_PROJECT_REF='"$REF"' BRAIN_TEST_DB_URL="$TEST_DB_URL" exec "'"$root"'/scripts/test-project/brain-test/build-brain-test.sh" --confirm '"$REF" ;;
+  deploy)
+    tok="$(kc_read agentory.brain-test.supabase-token)" || die "no Brain TEST CLI token in Keychain. Run: brain-test store-keys"
+    SUPABASE_ACCESS_TOKEN="$tok" BRAIN_TEST_PROJECT_REF="$REF" \
+      "$root/scripts/test-project/brain-test/deploy-brain-test.sh" --confirm "$REF" --spend-ceiling-usd 0.25 ;;
+  ui)
+    key="$(kc_read agentory.brain-test.publishable)" || die "no Brain TEST publishable key in Keychain. Run: brain-test store-keys"
+    case "$key" in sb_publishable_*|eyJ*) ;; *) die "the stored publishable key does not look like one (sb_publishable_… or a JWT)" ;; esac
+    # Process env outranks .env / .env.local in Vite, so an .env.local that points
+    # elsewhere cannot win. The app still refuses a URL/key from different projects.
+    if grep -qs 'ohsdatpvfdjdemstoiuj\|tlvnfrxzjhsjgdofwehb' "$root/.env.local"; then
+      echo "note: .env.local names production or ATLAS TEST; it is overridden for this run." >&2
+    fi
+    cd "$root"
+    echo "Frontend → $URL (Brain TEST). The app shows a 'Non-production Supabase target' banner."
+    VITE_SUPABASE_URL="$URL" VITE_SUPABASE_PUBLISHABLE_KEY="$key" VITE_SUPABASE_PROJECT_ID="$REF" \
+      VITE_STRATEGY_DISCOVERY=false exec npx vite ;;
+  *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+esac
