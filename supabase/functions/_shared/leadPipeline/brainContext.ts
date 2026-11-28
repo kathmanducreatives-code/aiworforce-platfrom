@@ -15,19 +15,21 @@
 //   * a Brain that is not usable (not onboarded, or empty) is no context at all
 //   * the row is read by workspace id with the service client AFTER the caller's
 //     membership was checked: one workspace's Brain never informs another's plan
-//   * APPROVED MEMORY (Company Brain V2 · B2.3) adds exclusions only: an industry the
-//     team approved excluding ("never target crypto") becomes an explicit workspace
-//     exclusion in Mission Contract mode. It only NARROWS — it never adds a target,
-//     never changes size or geography, and a request that asks for that industry
-//     becomes a question for the user (missionContract/brain.ts), never a silent
-//     winner. Pending, expired, disputed or unapproved memory serves nothing (the
-//     shared loader's rule). A memory read failure leaves planning exactly as before.
+//   * APPROVED MEMORY (Company Brain V2 · B2.3) adds exclusions only, through the shared
+//     interface field `excluded_industries_memory` (docs/atlas/ATLAS_V5_SHARED_MEMORY_INTERFACE.md):
+//     one entry per industry with its memory id, version and real approval status. ATLAS
+//     applies them in BOTH modes (contract and legacy), whole-word matched, as narrowing
+//     workspace policy; a request asking for that industry becomes a question. Pending,
+//     expired, disputed or unapproved memory serves nothing (the loader's rule, re-checked
+//     by ATLAS). `memoryExclusionKey` lets a run detect memory changed since approval.
+//     A memory read failure leaves planning exactly as before.
 
 import { compileCompanyBrainContext } from "../companyBrainCompiler.ts";
 import { hasUsableBrain } from "../companyBrainContext.ts";
 import { compileLeadMission } from "../leadMissionCompiler.ts";
 import type { BrainMergeInput } from "../leadMission.ts";
-import type { ContractBrainInput } from "../missionContract/brain.ts";
+import type { ContractBrainInput, MemoryIndustryExclusion } from "../missionContract/brain.ts";
+import type { MemoryItem } from "../brainMemoryModel.ts";
 import { loadCompanyBrainContext, type LoaderDb } from "../companyBrainContextLoader.ts";
 
 export interface BrainPlanningContext {
@@ -85,36 +87,62 @@ export function brainPlanningContext(row: { profile?: unknown; onboarding_comple
 }
 
 /**
- * Approved memory exclusions, folded into the Mission Contract input as EXPLICIT
- * workspace exclusions (pure). Case-insensitive de-duplication against what the
- * profile already excludes; nothing else in the context — including the v1 path's
- * `fields` report — changes.
+ * One `excluded_industries_memory` entry per industry in each servable exclusion memory
+ * (the shared interface, docs/atlas/ATLAS_V5_SHARED_MEMORY_INTERFACE.md). Provenance is
+ * kept as it is stored: the memory id, its version, its REAL approval status
+ * (`not_required` for a person's own entry, `approved` for a reviewed agent proposal)
+ * and lifecycle. ATLAS re-checks and refuses with a visible reason; Brain never relabels.
  */
-export function withMemoryExclusions(base: BrainPlanningContext, industries: readonly string[]): BrainPlanningContext {
-  if (base.status !== "used" || !base.contractInput) return base;
-  const known = new Set([...(base.contractInput.excluded_industries_explicit ?? []), ...(base.contractInput.excluded_industries_generic ?? [])]
-    .map((x) => x.trim().toLowerCase()));
-  const added: string[] = [];
-  for (const raw of industries) {
-    const v = String(raw ?? "").trim();
-    if (v && !known.has(v.toLowerCase())) { known.add(v.toLowerCase()); added.push(v); }
+export type BrainMemoryExclusion = MemoryIndustryExclusion & { version: number; created_by_kind: string };
+export function memoryIndustryExclusions(items: readonly MemoryItem[]): BrainMemoryExclusion[] {
+  const out: BrainMemoryExclusion[] = [];
+  for (const i of items) {
+    const v = (i.value ?? null) as { type?: unknown; value?: unknown; values?: unknown } | null;
+    const type = typeof v?.type === "string" ? v.type : i.fact_key.replace(/^exclusion\./, "").split(":")[0];
+    if (type !== "industry") continue;
+    const values = typeof v?.value === "string" ? [v.value]
+      : Array.isArray(v?.values) ? (v!.values as unknown[]).filter((x): x is string => typeof x === "string") : [];
+    for (const raw of values) {
+      const value = raw.trim();
+      if (!value) continue;
+      out.push({
+        value, memory_id: i.id, approval_status: i.approval_status, lifecycle_status: i.lifecycle_status,
+        scope: i.scope, workspace_id: i.workspace_id, expires_at: i.expires_at,
+        version: i.version, created_by_kind: i.created_by_kind,
+      });
+    }
   }
-  if (!added.length) return base;
-  // `fields` is NOT extended: it is also the v1 compiler path's report, and that path
-  // applies no exclusions. Contract mode reports each applied exclusion itself
-  // (report.applied: brain:exclusion:industry:<slug>, authority "policy").
-  return {
-    ...base,
-    contractInput: { ...base.contractInput, excluded_industries_explicit: [...(base.contractInput.excluded_industries_explicit ?? []), ...added] },
-  };
+  return out;
 }
 
-/** The approved, servable industry exclusions in a workspace's memory (shared loader). Never throws. */
-export async function loadMemoryExclusions(admin: unknown, workspaceId: string): Promise<string[]> {
+/**
+ * Approved memory exclusions, sent as their own field (pure). Profile exclusions and
+ * targeting are untouched; ATLAS merges and de-duplicates (mergeExclusions). `fields` is
+ * not extended: it is also the v1 path's report.
+ */
+export function withMemoryExclusions(base: BrainPlanningContext, items: readonly BrainMemoryExclusion[]): BrainPlanningContext {
+  if (base.status !== "used" || !base.contractInput || !items.length) return base;
+  return { ...base, contractInput: { ...base.contractInput, excluded_industries_memory: [...items] } };
+}
+
+/**
+ * WHICH APPROVED MEMORY SHAPED A PLAN, as one stable key: every memory id at its version.
+ * A plan signs it at plan time; a run recomputes it from the CURRENT Brain and refuses
+ * when it differs ("workspace memory changed since approval"). Editing (new version),
+ * retracting, expiring or adding an exclusion memory all change it; an unrelated memory
+ * does not. Empty memory → "" (no memory involved, nothing to invalidate).
+ */
+export function memoryExclusionKey(input: { excluded_industries_memory?: readonly MemoryIndustryExclusion[] } | null | undefined): string {
+  const items = (input?.excluded_industries_memory ?? []) as readonly Partial<BrainMemoryExclusion>[];
+  return [...new Set(items.map((m) => `${m.memory_id}@${m.version ?? "?"}`))].sort().join(",");
+}
+
+/** The servable exclusion memory of one workspace (shared loader). Never throws; failure → none. */
+export async function loadMemoryExclusions(admin: unknown, workspaceId: string): Promise<BrainMemoryExclusion[]> {
   try {
     // The caller (handleStrategyRequest) already checked membership; the loader reads this workspace only.
     const r = await loadCompanyBrainContext(admin as LoaderDb, workspaceId, { skipMembershipCheck: true });
-    return r.ok ? [...(r.context.exclusions?.industries ?? [])] : [];
+    return r.ok ? memoryIndustryExclusions(r.context.exclusions?.items ?? []) : [];
   } catch {
     return [];
   }

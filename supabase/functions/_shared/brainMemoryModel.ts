@@ -23,6 +23,8 @@
 //
 // PURE. No network, no database, no Deno APIs — importable by the frontend.
 
+import { exclusionMatches, phraseMatches } from "./exclusionPhrase.ts";
+
 export const MEMORY_KINDS = ["fact", "preference", "decision"] as const;
 export type MemoryKind = typeof MEMORY_KINDS[number];
 
@@ -251,14 +253,18 @@ export function deriveExclusions(items: MemoryItem[], now: Date = new Date()): E
 
 /** Does `text` hit an exclusion? Returns the matching exclusion, or null. */
 export function matchExclusion(ex: Exclusions, subject: { name?: string | null; domain?: string | null; industry?: string | null; location?: string | null }): string | null {
-  const hit = (needle: string, hay: string | null | undefined) => !!hay && norm(hay).includes(norm(needle)) && norm(needle).length > 1;
+  // WHOLE WORDS (exclusionPhrase.ts, shared with ATLAS): "oil" must not exclude a "toilet"
+  // company, nor "ai" a "retail" one. Industries and keywords also match on their core
+  // ("staffing agencies" ⊂ "Staffing and Recruiting"); places match as whole phrases.
+  const hit = (needle: string, hay: string | null | undefined) => !!hay && norm(needle).length > 1 && exclusionMatches(hay, needle);
+  const placeHit = (needle: string, hay: string | null | undefined) => !!hay && norm(needle).length > 1 && phraseMatches(hay, needle);
   for (const c of ex.companies) {
     const n = norm(c);
     if (subject.domain && (norm(subject.domain) === n || norm(subject.domain).endsWith(`.${n}`))) return `company ${c}`;
     if (subject.name && norm(subject.name) === n) return `company ${c}`;
   }
   for (const i of ex.industries) if (hit(i, subject.industry)) return `industry ${i}`;
-  for (const g of ex.geographies) if (hit(g, subject.location)) return `geography ${g}`;
+  for (const g of ex.geographies) if (placeHit(g, subject.location)) return `geography ${g}`;
   for (const k of ex.keywords) if (hit(k, subject.name) || hit(k, subject.industry)) return `keyword ${k}`;
   return null;
 }

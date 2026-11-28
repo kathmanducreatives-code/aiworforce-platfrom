@@ -320,3 +320,13 @@ Deno.test("the loader's literal memory select is exactly MEMORY_COLUMNS (so the 
   const src = await Deno.readTextFile(new URL("../../../supabase/functions/_shared/companyBrainContextLoader.ts", import.meta.url));
   assertStringIncludes(src, `.from("company_brain_memory").select("${MEMORY_COLUMNS}")`);
 });
+
+Deno.test("matchExclusion: WHOLE WORDS — 'oil' never excludes a toilet maker, 'ai' never a retailer; real hits still match", () => {
+  const ex = { industries: ["oil", "staffing agencies"], companies: [], geographies: ["Russia"], keywords: ["ai"], items: [] };
+  assertEquals(matchExclusion(ex, { name: "Northwind Toilets", industry: "toilet and bathroom fixtures" }), null);
+  assertEquals(matchExclusion(ex, { name: "Retail Partners", industry: "retail" }), null);
+  assertEquals(matchExclusion(ex, { name: "PetroCo", industry: "Oil and gas exploration" }), "industry oil");
+  assertEquals(matchExclusion(ex, { name: "TempCo", industry: "Staffing and Recruiting" }), "industry staffing agencies");
+  assertEquals(matchExclusion(ex, { name: "Acme AI Labs", industry: "software" }), "keyword ai");
+  assertEquals(matchExclusion(ex, { name: "x", location: "Moscow, Russia" }), "geography Russia");
+});
