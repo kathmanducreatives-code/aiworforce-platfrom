@@ -8,6 +8,9 @@
 #   scripts/test-env/brain-test build                        # schema: baseline + migrations + Brain V2 chain
 #   scripts/test-env/brain-test deploy                       # 7 functions + $0.25 spend ceiling, delegation off
 #   scripts/test-env/brain-test ui                           # local frontend against Brain TEST only
+#   scripts/test-env/brain-test atlas-v5 --workspace <uuid> [--execute --confirm <ref>]
+#                                                            # ATLAS V5 for the integrated test (dry run by default;
+#                                                            # never sets an Apify token)
 #
 # The target is FIXED here: jekgwafobrzamoupehnn. It is not taken from the
 # environment, a flag or a file, and production (ohsdatpvfdjdemstoiuj), ATLAS
@@ -71,5 +74,9 @@ case "$cmd" in
     echo "Frontend → $URL (Brain TEST). The app shows a 'Non-production Supabase target' banner."
     VITE_SUPABASE_URL="$URL" VITE_SUPABASE_PUBLISHABLE_KEY="$key" VITE_SUPABASE_PROJECT_ID="$REF" \
       VITE_STRATEGY_DISCOVERY=false exec npx vite ;;
-  *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+  atlas-v5)
+    tok="$(kc_read agentory.brain-test.supabase-token)" || die "no Brain TEST CLI token in Keychain. Run: brain-test store-keys"
+    AGENTORY_TEST_CONF="$CONF" SUPABASE_ACCESS_TOKEN="$tok" "$ENV_TOOL" run -- \
+      "$root/scripts/test-project/brain-test/install-atlas-v5.sh" "$@" ;;
+  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
 esac
