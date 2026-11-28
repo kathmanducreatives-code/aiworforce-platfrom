@@ -13,11 +13,12 @@ import type { Invoke } from './strategyDiscovery';
 /** The generated simulation (src/lib/__fixtures__/strategyDiscoverySimulation.json). */
 export interface Simulation { simulated: true; plan: Canned; run: Canned; blockedPlan: Canned; reviewOnlyPlan: Canned }
 
-export type MockMode = 'off' | 'ready' | 'blocked';
+export type MockMode = 'off' | 'ready' | 'blocked' | 'server';
 
 export function strategyDiscoveryMockMode(env: Record<string, unknown> = (import.meta as { env?: Record<string, unknown> }).env ?? {}): MockMode {
   if (env.DEV !== true) return 'off';
-  return env.VITE_STRATEGY_DISCOVERY_MOCK === 'true' ? 'ready' : env.VITE_STRATEGY_DISCOVERY_MOCK === 'blocked' ? 'blocked' : 'off';
+  return env.VITE_STRATEGY_DISCOVERY_MOCK === 'true' ? 'ready' : env.VITE_STRATEGY_DISCOVERY_MOCK === 'blocked' ? 'blocked'
+    : env.VITE_STRATEGY_DISCOVERY_MOCK === 'server' ? 'server' : 'off';
 }
 
 export type Canned = { status: number; body: unknown };
@@ -37,5 +38,34 @@ export function simulatedInvoke(mode: Exclude<MockMode, 'off'>, simulation: Simu
     }
     if (b.action === 'strategy_run') return respond<T>(simulation.run);
     return respond<T>({ status: 400, body: { error: 'unknown action' } });
+  }) as Invoke;
+}
+
+// ── 'server': the local ATLAS simulator backend (scripts/dev/atlas-sim/server.ts) ──────────────
+// The REAL lead-pipeline service on 127.0.0.1 with every provider faked: plan, approval, budgets,
+// provider isolation and stage codes behave exactly as deployed, at $0. Development builds only.
+
+/** What the dev preview chose: the scenario, and the approval cases it can simulate. */
+export const simControls: { scenario: string | null; clockHours: number; otherWorkspace: boolean } = { scenario: null, clockHours: 0, otherWorkspace: false };
+
+export const simServerUrl = (env: Record<string, unknown> = (import.meta as { env?: Record<string, unknown> }).env ?? {}): string =>
+  typeof env.VITE_ATLAS_SIM_URL === 'string' && /^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(env.VITE_ATLAS_SIM_URL) ? env.VITE_ATLAS_SIM_URL : 'http://127.0.0.1:8787';
+
+/** An `Invoke` that answers from the local simulator backend, shaped as supabase-js answers. */
+export function serverInvoke(base = simServerUrl()): Invoke {
+  return (async <T,>(name: string, body: unknown) => {
+    if (name !== 'lead-pipeline') return respond<T>({ status: 404, body: { error: 'not simulated' } });
+    let res: Response;
+    try {
+      res = await fetch(`${base}/lead-pipeline`, { method: 'POST', body: JSON.stringify(body), headers: {
+        'content-type': 'application/json', ...(simControls.scenario ? { 'x-atlas-scenario': simControls.scenario } : {}),
+        // Only the RUN is moved later: the plan's token is issued now, so it can expire.
+        ...(simControls.clockHours && (body as { action?: string })?.action === 'strategy_run' ? { 'x-atlas-clock-hours': String(simControls.clockHours) } : {}),
+        ...(simControls.otherWorkspace ? { 'x-atlas-workspace': 'other' } : {}) } });
+    } catch {
+      return respond<T>({ status: 503, body: { error: `The ATLAS simulator is not running at ${base} (npm run dev:atlas-server).` } });
+    }
+    const json = await res.json().catch(() => ({ error: 'unreadable simulator answer' }));
+    return respond<T>({ status: res.status, body: json });
   }) as Invoke;
 }

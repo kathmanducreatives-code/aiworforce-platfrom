@@ -39,6 +39,12 @@ export interface Origin {
   confidence?: number | null;
   /** The user's emphasis that made it hard ("only", "must", "excluding"…; compiler `elevated_by`). */
   elevatedBy?: string | null;
+  /**
+   * The approved Company Brain memories a `company_brain_policy` requirement came from
+   * (company_brain_memory.id, sorted). Present only when memory contributed, so a contract
+   * without memory hashes exactly as before.
+   */
+  memoryIds?: string[];
 }
 
 /** A dated window a signal must fall in. `origin.source === "system_default"` ⇒ an assumption. */
