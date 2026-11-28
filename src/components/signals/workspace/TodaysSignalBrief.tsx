@@ -10,9 +10,17 @@ interface Props {
   onRunScan: () => void;
   onReview: () => void;
   accentHex: string;
+  /** The Signals agent's display name (LISA). */
+  agentName: string;
+  /** Active monitoring plans; null when plans are not enabled on this project. */
+  activeMonitoring: number | null;
 }
 
-export default function TodaysSignalBrief({ brief, scanning, onRunScan, onReview, accentHex }: Props) {
+export default function TodaysSignalBrief({ brief, scanning, onRunScan, onReview, accentHex, agentName, activeMonitoring }: Props) {
+  // Never claim monitoring that is not happening: only an ACTIVE plan is monitoring.
+  const monitoringLine = activeMonitoring && activeMonitoring > 0
+    ? `${agentName} is monitoring ${activeMonitoring} active ${activeMonitoring === 1 ? 'plan' : 'plans'}.`
+    : 'Monitoring is not active — results appear when you run a scan or activate a monitoring plan.';
   return (
     <section
       aria-label="Today's signal brief"
@@ -34,8 +42,9 @@ export default function TodaysSignalBrief({ brief, scanning, onRunScan, onReview
           <div className="min-w-0">
             <h3 className="text-[16px] font-semibold text-foreground">No verified signals yet</h3>
             <p className="mt-1 max-w-[64ch] text-[13.5px] text-muted-foreground/85">
-              Lyra has not confirmed new signals for your ICP. Run a radar scan or ask Lyra what to monitor.
+              {agentName} has no verified signals recorded for your ICP yet. Run a radar scan, or ask {agentName} which signals to watch.
             </p>
+            <p className="mt-1 text-[12px] text-muted-foreground/60" data-testid="monitoring-status">{monitoringLine}</p>
             {brief.missingSources.length > 0 && (
               <p className="mt-2 text-[12px] text-amber-300/80">
                 Missing sources: {brief.missingSources.join(', ')}
@@ -66,7 +75,7 @@ export default function TodaysSignalBrief({ brief, scanning, onRunScan, onReview
               </p>
             )}
             <p className="mt-1 text-[12.5px] text-muted-foreground/60">
-              {brief.usefulCount} verified · Lyra is monitoring your radar.
+              {brief.usefulCount} verified · {monitoringLine}
             </p>
           </div>
           <button

@@ -26,11 +26,12 @@ Deno.test("no department surface hardcodes a status; all use useDepartmentAgentS
   const surfaces = [
     "src/pages/Signals.tsx", "src/pages/LeadLibrary.tsx", "src/pages/Content.tsx",
     "src/components/layout/department/AgentStatus.tsx", "src/components/leads/library/AtlasStrip.tsx",
-    "src/components/content/ScribePanel.tsx", "src/components/signals/workspace/ScoutCopilot.tsx",
+    "src/components/content/ScribePanel.tsx", "src/components/signals/workspace/LisaCopilot.tsx",
     "src/components/layout/DepartmentWorkspaceShell.tsx",
   ];
   for (const f of surfaces) assertFalse(/On duty/i.test(code(await read(f))), `${f} must not claim a fixed status`);
-  assert((await read("src/pages/Signals.tsx")).includes("useDepartmentAgentStatus(workspaceId, 'lyra')"));
+  // Signals recovery: the Signals page is LISA's (agentRegistry), not Lyra's (content).
+  assert((await read("src/pages/Signals.tsx")).includes("useDepartmentAgentStatus(workspaceId, 'lisa')"));
   assert((await read("src/pages/LeadLibrary.tsx")).includes('useDepartmentAgentStatus(workspaceId, "atlas")'));
   assert((await read("src/pages/Content.tsx")).includes("useDepartmentAgentStatus(workspaceId, 'scribe')"));
   const card = await read("src/components/dashboard/WorkforceAgentCard.tsx");

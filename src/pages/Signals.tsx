@@ -1,11 +1,11 @@
 // Signals — department workspace page for the Company-Brain radar.
-// Uses DepartmentWorkspaceShell + ScoutCopilot right rail. Reuses the existing
+// Uses DepartmentWorkspaceShell + LisaCopilot right rail (LISA, the Signals specialist). Reuses the existing
 // useSignalFeed / useSignalReviews hooks; no schema or backend changes.
 
 import { useMemo, useState } from 'react';
 import { Radar, Loader2, Settings2 } from 'lucide-react';
 import DepartmentWorkspaceShell, { type DeptTab } from '@/components/layout/DepartmentWorkspaceShell';
-import ScoutCopilot from '@/components/signals/workspace/ScoutCopilot';
+import LisaCopilot from '@/components/signals/workspace/LisaCopilot';
 import SignalsFilters, { type SecondaryCategory } from '@/components/signals/workspace/SignalsFilters';
 import TodaysSignalBrief from '@/components/signals/workspace/TodaysSignalBrief';
 import SignalsFeedList from '@/components/signals/workspace/SignalsFeedList';
@@ -15,6 +15,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 import { useSignalFeed } from '@/hooks/useSignalFeed';
 import { useSignalReviews } from '@/hooks/useSignalReviews';
+import { useMonitoringPlans } from '@/hooks/useMonitoringPlans';
 import { useDepartmentAgentStatus } from '@/hooks/useDepartmentAgentStatus';
 import { deriveRadarBrief, type BriefSignal } from '@/lib/radarBrief';
 import { resolveAgent } from '@/lib/agentResolver';
@@ -64,8 +65,9 @@ export default function Signals() {
   const { data: brainData, refresh: refreshBrain } = useCompanyBrain();
   const { signals, clusters, relevance, loading, runRadarScan, scanning } = useSignalFeed(workspaceId);
   const { reviewsBySignal } = useSignalReviews(workspaceId);
-  // Lyra's live state — the same source as her dashboard card.
-  const lyraStatus = useDepartmentAgentStatus(workspaceId, 'lyra');
+  const monitoring = useMonitoringPlans(workspaceId);
+  // LISA's live state — the Signals specialist (agentRegistry `lisa`), as on her dashboard card.
+  const lisaStatus = useDepartmentAgentStatus(workspaceId, 'lisa');
 
   const [tab, setTab] = useState<PrimaryTab>('today');
   const [secondary, setSecondary] = useState<SecondaryCategory>('all');
@@ -73,8 +75,8 @@ export default function Signals() {
   const [showUnverified, setShowUnverified] = useState(false);
   const [editRadarOpen, setEditRadarOpen] = useState(false);
 
-  // Canonical Signal Scout identity (legacy 'scout' → public Lyra profile).
-  const scout = resolveAgent('scout');
+  // The canonical Signals agent is LISA (agentRegistry / departments.ts). Legacy 'scout' is ATLAS.
+  const lisa = resolveAgent('lisa');
   const theme = getDeptTheme('growth');
   const accent = theme.hex;
 
@@ -134,7 +136,7 @@ export default function Signals() {
     try {
       const res = await runRadarScan({ mode: 'default' });
       if (res?.inserted !== undefined) {
-        toast.success(`Lyra added ${res.inserted} new ${res.inserted === 1 ? 'signal' : 'signals'}`);
+        toast.success(`LISA added ${res.inserted} new ${res.inserted === 1 ? 'signal' : 'signals'}`);
       } else {
         toast.success('Radar scan complete');
       }
@@ -149,14 +151,14 @@ export default function Signals() {
       <DepartmentWorkspaceShell
         eyebrow="Growth · Signals"
         title="Company Brain Radar"
-        description="Verified market signals from your ICP — hiring, funding, competitor moves and buying-window activity, monitored by Lyra."
+        description="Market signals for your ICP — hiring, expansion, funding, leadership and competitor moves — collected, verified and scored by LISA against your Company Brain."
         agent={{
-          name: scout.name,
-          role: scout.role,
-          status: lyraStatus ?? undefined,
-          avatar: scout.image ?? '',
+          name: lisa.name,
+          role: lisa.role,
+          status: lisaStatus ?? undefined,
+          avatar: lisa.image ?? '',
           accentHex: accent,
-          fallbackInitial: (scout.name?.[0] ?? 'S').toUpperCase(),
+          fallbackInitial: (lisa.name?.[0] ?? 'S').toUpperCase(),
         }}
         metrics={metrics}
         primaryAction={{
@@ -187,18 +189,18 @@ export default function Signals() {
           />
         }
         rail={
-          <ScoutCopilot
-            agentName={scout.name}
-            agentRole={scout.role}
-            agentAvatar={scout.image ?? ''}
-            agentStatus={lyraStatus}
+          <LisaCopilot
+            agentName={lisa.name}
+            agentRole={lisa.role}
+            agentAvatar={lisa.image ?? ''}
+            agentStatus={lisaStatus}
             accentHex={accent}
             onRunRadarScan={handleRunScan}
             onEditRadar={() => setEditRadarOpen(true)}
           />
         }
         collapsibleRail
-        mobileRailLabel={`Open ${scout.name}`}
+        mobileRailLabel={`Open ${lisa.name}`}
       >
         {tab === 'today' && (
           <TodaysSignalBrief
@@ -207,6 +209,8 @@ export default function Signals() {
             onRunScan={handleRunScan}
             onReview={() => setTab('hiring')}
             accentHex={accent}
+            agentName={lisa.name}
+            activeMonitoring={monitoring.available ? monitoring.activeCount : null}
           />
         )}
         {/* ── SITUATIONS, ABOVE THE ROWS ──────────────────────────────────

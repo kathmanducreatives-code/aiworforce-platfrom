@@ -1,14 +1,14 @@
 import AgentStatus from '@/components/layout/department/AgentStatus';
-// ScoutCopilot — persistent right-rail assistant for the Signals workspace.
-// Mirrors MiraCopilot's structure: agent header, rotating insight, mode chips,
-// prompt suggestions, and a bottom Ask input. Dispatches via sendAgentCommand
-// (no new backend). Uses the canonical Signal Scout profile from the registry.
+// LisaCopilot — LISA, the Signals specialist (agentRegistry: `lisa`), in the Signals page rail.
+// Mode chips change what LISA does; every message is sent with { department: "lisa", lisa_mode }
+// and answered by pilot-chat's LISA branch from the Company Brain and the recorded canonical
+// signals (Watch drafts a reviewable monitoring plan). The answer opens in the workforce chat.
 
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, Radar, Eye, Brain, MessageSquare } from 'lucide-react';
 import { sendAgentCommand } from '@/lib/agentCommand';
 
-interface ScoutCopilotProps {
+interface LisaCopilotProps {
   agentName: string;
   agentRole: string;
   agentAvatar: string;
@@ -21,57 +21,49 @@ interface ScoutCopilotProps {
 
 type Mode = 'brief' | 'watch' | 'analyze' | 'ask';
 
-const MODES: { id: Mode; label: string; icon: typeof Radar; prompts: string[] }[] = [
+// Each mode CHANGES WHAT LISA DOES (pilot-chat's LISA branch reads `lisa_mode`):
+//   brief / analyze / ask → LISA answers from the Company Brain + recorded canonical signals
+//   watch                 → a reviewable monitoring DRAFT (nothing runs until approved + activated)
+const MODES: { id: Mode; label: string; icon: typeof Radar; does: string; prompts: string[] }[] = [
   {
-    id: 'brief',
-    label: 'Brief',
-    icon: Sparkles,
+    id: 'brief', label: 'Brief', icon: Sparkles,
+    does: 'What your recorded signals say — and, when none are recorded, which signals are worth watching for your business.',
     prompts: [
-      'What should I monitor this week?',
-      'Summarise today’s strongest signals',
-      'Which accounts moved most this week?',
+      'Which buying signals should we prioritize, and why?',
+      'Summarise the strongest recorded signals',
+      'What changed since my last review?',
     ],
   },
   {
-    id: 'watch',
-    label: 'Watch',
-    icon: Eye,
+    id: 'watch', label: 'Watch', icon: Eye,
+    does: 'Drafts a monitoring plan from your Company Brain. Nothing runs until an owner, admin or editor approves and activates it.',
     prompts: [
-      'Find companies showing buying intent',
-      'Watch competitor launches this month',
-      'Track hiring surges in my ICP',
+      'Watch for US manufacturers and distributors that are expanding',
+      'Watch for companies in our ICP hiring Account Executives',
+      'Watch our main competitor for launches and pricing changes',
     ],
   },
   {
-    id: 'analyze',
-    label: 'Analyze',
-    icon: Brain,
+    id: 'analyze', label: 'Analyze', icon: Brain,
+    does: 'Checks recorded signals against your Company Brain: verification, relevance, what is missing, and a recommended action.',
     prompts: [
-      'Explain today’s strongest signal',
-      'Review unverified signals',
-      'Which signals map to a buying window?',
+      'Analyse the strongest recorded signal',
+      'Which recorded signals are unverified, and what would verify them?',
+      'Which signals match our ICP best?',
     ],
   },
   {
-    id: 'ask',
-    label: 'Ask',
-    icon: MessageSquare,
+    id: 'ask', label: 'Ask', icon: MessageSquare,
+    does: 'Anything about signals, answered from your Company Brain and what is recorded.',
     prompts: [
-      'Create a radar for my ICP',
-      'How do you detect a buying window?',
-      'What would a stronger radar include?',
+      'What would a stronger radar include for us?',
+      'How do you verify a signal?',
+      'What can’t you see yet, and why?',
     ],
   },
 ];
 
-const INSIGHTS = [
-  'Hiring signals paired with leadership changes are more likely to create immediate buying windows.',
-  'Funding rounds under $10M convert to outreach faster than mega-rounds — they hire quickly.',
-  'Competitor launches in the past 14 days often surface founders open to alternatives.',
-  'A workflow-trend signal is strongest when at least three companies in your ICP mention it.',
-];
-
-export default function ScoutCopilot({
+export default function LisaCopilot({
   agentName,
   agentRole,
   agentAvatar,
@@ -79,11 +71,10 @@ export default function ScoutCopilot({
   accentHex,
   onRunRadarScan,
   onEditRadar,
-}: ScoutCopilotProps) {
+}: LisaCopilotProps) {
   const [mode, setMode] = useState<Mode>('brief');
   const [value, setValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const insight = useMemo(() => INSIGHTS[Math.floor(Math.random() * INSIGHTS.length)], []);
   const active = MODES.find((m) => m.id === mode)!;
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -98,9 +89,11 @@ export default function ScoutCopilot({
     if (!text.trim() || submitting) return;
     setSubmitting(true);
     try {
+      // The panel's MODE reaches LISA: it selects her task (pilot-chat LISA branch).
       await sendAgentCommand(text, {
-        success: `Sent to ${agentName}`,
-        action_source: 'signals_scout_copilot',
+        success: `Sent to ${agentName} — the answer opens in your workforce chat`,
+        action_source: 'signals_lisa',
+        metadata: { department: 'lisa', lisa_mode: mode },
       });
       setValue('');
     } finally {
@@ -118,15 +111,18 @@ export default function ScoutCopilot({
         <AgentStatus name={agentName} role={agentRole} src={agentAvatar} status={agentStatus} />
       </div>
 
-      {/* Insight */}
-      <div className="border-b border-white/[0.05] px-4 py-3">
+      {/* What this mode does — no invented market "insights". */}
+      <div className="border-b border-white/[0.05] px-4 py-3" data-testid="lisa-mode-description">
         <p
           className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em]"
           style={{ color: `${accentHex}CC` }}
         >
-          Insight
+          {active.label}
         </p>
-        <p className="text-[13px] leading-relaxed text-foreground/85">{insight}</p>
+        <p className="text-[13px] leading-relaxed text-foreground/85">{active.does}</p>
+        <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted-foreground/75">
+          {agentName} reports only signals recorded with a source, and calls one verified only when the evidence says so.
+        </p>
       </div>
 
       {/* Modes */}
@@ -212,7 +208,7 @@ export default function ScoutCopilot({
                 void dispatch(value);
               }
             }}
-            placeholder={`Ask ${agentName} about market signals…`}
+            placeholder={`${active.label}: ask ${agentName} about signals…`}
             rows={1}
             className="min-w-0 flex-1 resize-none bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
           />

@@ -211,17 +211,18 @@ Deno.test("FINDING: LISA's signal types have no card on the Signals page, which 
   const list = read("src/components/signals/workspace/SignalsFeedList.tsx");
   assertFalse(list.includes("fallback="), "the page renders no fallback for unknown types");
 });
-Deno.test("FINDING: Signals page identity — copy says Lyra, card resolves legacy 'scout' (→ Atlas), status reads 'lyra'; registry owner is LISA", () => {
+Deno.test("FIXED: the Signals page is LISA's — name, status, copy and panel; the panel sends LISA's mode", () => {
   const page = read("src/pages/Signals.tsx");
-  assertStringIncludes(page, "monitored by Lyra");
-  assertStringIncludes(page, "resolveAgent('scout')");
-  assertStringIncludes(page, "useDepartmentAgentStatus(workspaceId, 'lyra')");
-  const registry = read("src/config/agentRegistry.ts");
-  assertStringIncludes(registry, "scout: 'atlas'");
-  assertStringIncludes(registry, "Monitors competitors and markets");
-  const copilot = read("src/components/signals/workspace/ScoutCopilot.tsx");
-  assertStringIncludes(copilot, "sendAgentCommand(text");
-  assertFalse(/mode[,:]\s*mode|metadata:\s*\{[^}]*mode/.test(copilot), "the selected mode is not sent");
+  assertStringIncludes(page, "resolveAgent('lisa')");
+  assertStringIncludes(page, "useDepartmentAgentStatus(workspaceId, 'lisa')");
+  assertFalse(/Lyra|resolveAgent\('scout'\)/.test(page.replace(/\/\/.*$/gm, "")), "no Lyra / scout identity left on the page");
+  const copilot = read("src/components/signals/workspace/LisaCopilot.tsx");
+  assertStringIncludes(copilot, "action_source: 'signals_lisa'");
+  assertStringIncludes(copilot, "metadata: { department: 'lisa', lisa_mode: mode }");
+  assertFalse(copilot.includes("INSIGHTS"), "no invented market insights");
+  const brief = read("src/components/signals/workspace/TodaysSignalBrief.tsx");
+  assertFalse(/Lyra/.test(brief));
+  assertStringIncludes(brief, "Monitoring is not active");
 });
 Deno.test("FINDING: the review filter on the Signals page is wired to a no-op", () => {
   assertStringIncludes(read("src/pages/Signals.tsx"), "onReviewFilterChange={() => {}}");
@@ -243,4 +244,45 @@ Deno.test("Radar plan targeting: industries, geography, size, business model, pe
   assertEquals(tg.buying_signals, ["Hiring growth", "Market expansion", "Technology adoption", "Leadership changes"]);
   assert(tg.excluded_industries.map((x) => x.toLowerCase()).includes("crypto"), "approved memory exclusion");
   assert(tg.evidence_requirements.includes("source_url") && tg.evidence_requirements.includes("event_date"));
+});
+
+// ═══ LISA · the Signals specialist, through the real handler ═════════════════════════════════
+const LISA_ACTION = (mode: string) => ({ action_source: "signals_lisa", metadata: { department: "lisa", lisa_mode: mode } });
+async function lisaTurn(say: string, mode: string, extra: Partial<Record<string, Row[]>> = {}, reading: unknown = modelRequest([{ objective: "converse", entity: "conversation", shape: "answer" }])) {
+  const tables = { ...seed(), ...extra } as Record<string, Row[]>;
+  const net = installFakeNetwork({ supabaseUrl: SUPABASE_URL, tables, modelReplies: [
+    { when: (_u, s) => isBrain(s), content: reading },
+    { when: (_u, s) => !isBrain(s), content: "LISA's grounded answer." },
+  ] });
+  try {
+    const out = await sendTurn(say, tables, LISA_ACTION(mode));
+    return { out, tables, net, lisa: net.modelCalls.find((c) => c.system.includes("You are LISA")) ?? null };
+  } finally { net.restore(); }
+}
+Deno.test("LISA Brief with zero signals: LISA answers from the Brain, says nothing is recorded or monitored", async () => {
+  const { out, lisa, net } = await lisaTurn("Which buying signals should we prioritize, and why?", "brief");
+  assertEquals(out.status, 200);
+  assert(lisa, "LISA's prompt was used");
+  assertStringIncludes(lisa!.system, "TASK (brief)");
+  assertStringIncludes(lisa!.system, '<recorded_signals count="0">');
+  assertStringIncludes(lisa!.system, "Market expansion", "the Brain's declared buying signals");
+  assertStringIncludes(lisa!.system, "Crypto", "approved memory");
+  assertStringIncludes(lisa!.system, "no monitoring plan is active");
+  assertEquals((out.reply as Record<string, unknown>).agent_slug, "lisa");
+  assertFalse(net.modelCalls.some((c) => isBrain(c.system)), "no understanding call for a LISA brief");
+});
+Deno.test("LISA Analyze with a canonical [TEST FIXTURE] signal: the row is cited as [S1] with its provenance", async () => {
+  const { lisa } = await lisaTurn("Analyse the strongest recorded signal", "analyze", { signal_events: [canonicalRow] });
+  assertStringIncludes(lisa!.system, "TASK (analyze)");
+  assertStringIncludes(lisa!.system, "[S1] [TEST FIXTURE] Kestrel Fabrication: [TEST FIXTURE] opens a second plant");
+  assertStringIncludes(lisa!.system, "verification corroborated");
+  assertStringIncludes(lisa!.system, "source https://news.example.test/expansion");
+});
+Deno.test("LISA Watch: a monitoring DRAFT from the Brain — nothing enabled, LISA attributed", async () => {
+  const { out, tables } = await lisaTurn("Watch for US manufacturers and distributors that are expanding", "watch", {},
+    modelRequest([{ objective: "read", entity: "company", shape: "records" }]));
+  assertEquals(tables.monitoring_subjects.length, 0);
+  assertEquals(tables.monitoring_plans.length, 1);
+  assertEquals((tables.monitoring_plans[0] as Record<string, unknown>).kind, "icp");
+  assertStringIncludes(out.content, "Draft monitoring plan saved — nothing is running");
 });

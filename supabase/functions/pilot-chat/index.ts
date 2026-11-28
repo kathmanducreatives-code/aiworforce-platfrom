@@ -152,7 +152,8 @@ import { routeQualifiedLead, qualifiedLeadRouteFromMission, normalizeCompanyVert
 import { inferFamilyKey, getJobFamily } from "../_shared/jobFamilyRegistry.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
 import { radarTargeting } from "../_shared/radarScanPlanner.ts";
-import { buildMonitoringPlan, renderMonitoringPlan } from "../_shared/monitoringPlan.ts";
+import { asMonitorRequest, buildMonitoringPlan, renderMonitoringPlan } from "../_shared/monitoringPlan.ts";
+import { lisaSystemPrompt, parseLisaMode, type LisaPlanRow, type LisaSignalRow } from "../_shared/lisaConverse.ts";
 import { canRunPaidOperation } from "../_shared/paidOperationRole.ts";
 import {
   mergeCompanyBrainIntoMission, parseLeadMissionDeterministic, type LeadMissionV1,
@@ -2358,6 +2359,45 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       (priorRows ?? []).filter((r) => r.id !== insertedUserMessage?.id),
     ).slice(-TURN_LOOKBACK);
 
+    // ══ LISA · THE SIGNALS SPECIALIST (Signals page panel) ═══════════════════
+    // A panel message carries { department: "lisa", lisa_mode }. Brief / Analyze / Ask are
+    // answered by LISA from the Company Brain (with approved memory), the workspace's CANONICAL
+    // signal rows and its monitoring plans — no understanding call, no provider. Watch continues
+    // below as a monitor request, so it is the same reviewable draft plan with the same role check.
+    const lisaTurn = actionSource === "signals_lisa" ? parseLisaMode((actionMetadata as Record<string, unknown> | null)?.lisa_mode) : null;
+    if (lisaTurn && lisaTurn !== "watch") {
+      const { data: sigRows } = await admin.from("signal_events")
+        .select("id, signal_type, verification_status, confidence, occurred_at, observed_at, source_url, subject_key, normalized_value")
+        .eq("workspace_id", workspaceId).eq("lifecycle_status", "active")
+        .order("observed_at", { ascending: false }).limit(20);
+      const plansRes = await admin.from("monitoring_plans").select("status, title, signal_categories")
+        .eq("workspace_id", workspaceId).limit(20);
+      const signals = (sigRows ?? []) as unknown as LisaSignalRow[];
+      const ai = await generateText({
+        onModelCall: fail.modelCalls?.sink,
+        budget: fail.modelCalls,
+        taskType: "pilot_chat",
+        systemPrompt: lisaSystemPrompt({ mode: lisaTurn, workspaceContext: workspaceContextBlock, signals,
+          plans: plansRes.error ? null : (plansRes.data ?? []) as unknown as LisaPlanRow[] }),
+        messages: [...priorTurns, { role: "user", content: message }],
+        temperature: 0.4,
+        maxTokens: 900,
+        functionName: "pilot-chat-lisa",
+        workspaceId,
+        workforceTask: "complex_company_qa",
+        terraLimiter: createTerraRunLimiter(),
+      });
+      const { data: saved } = await admin.from("messages").insert({
+        conversation_id: conversationId, role: "assistant",
+        content: ai.ok && ai.content?.trim() ? ai.content.trim() : CONVERSE_UNAVAILABLE,
+        agent_slug: "lisa", model_used: actualModelUsed(),
+        metadata: { ...replyMeta(), department: "lisa", lisa: { mode: lisaTurn, signal_ids: signals.map((r) => r.id),
+          grounded: !!workspaceContextBlock, plans_available: !plansRes.error },
+          ...(ai.ok ? {} : { model_error: { code: ai.errorCode ?? "unknown", model: ai.model || null } }) },
+      }).select("*").single();
+      return json({ type: "reply", conversation_id: conversationId, route: "lisa", message: saved });
+    }
+
     const understood = await understandRequest(message, {
       workspaceContext: workspaceContextBlock,
       conversation: priorTurns,
@@ -2370,6 +2410,10 @@ async function handlePilotChat(req: Request, fail: FailureContext): Promise<Resp
       onModelCall: fail.modelCalls?.sink,
     });
 
+    if (understood.ok && lisaTurn === "watch" && !understood.request.parts.some((p) => p.objective === "monitor")) {
+      // LISA Watch: whatever the wording, this is a request to watch — a monitoring draft.
+      understood.request = asMonitorRequest(understood.request);
+    }
     if (understood.ok) {
       // ══ A SIGNAL THE USER IS LOOKING AT ══════════════════════════════════
       //

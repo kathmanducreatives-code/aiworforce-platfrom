@@ -171,3 +171,13 @@ export function renderMonitoringPlan(p: MonitoringPlanDraft): string {
   if (p.sources.some((s) => !s.ready)) lines.push("", "Some sources are not configured yet, so activation would not collect those categories until they are.");
   return lines.join("\n");
 }
+
+/** LISA Watch: the request, read as a single monitor part (a named company stays a reference). */
+export function asMonitorRequest(request: RequestV1): RequestV1 {
+  const first = request.parts[0];
+  const refs = request.parts.flatMap((p) => p.subject.references ?? []);
+  const named = refs.some((r) => r.kind === "named");
+  return { ...request, objective: "monitor" as RequestV1["objective"],
+    parts: [{ ...first, objective: "monitor", subject: { ...first.subject, entity: named ? "company" : "market", references: named ? refs : [] },
+      requirements: request.parts.flatMap((p) => p.requirements ?? []), depends_on: [] }] };
+}
