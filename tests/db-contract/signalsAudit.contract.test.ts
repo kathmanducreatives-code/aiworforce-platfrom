@@ -19,13 +19,25 @@ async function canonicalSignal(ws: string): Promise<string> {
   return row.id as string;
 }
 
-Deno.test("FINDING: a review of a CANONICAL signal is refused — signal_reviews.signal_id references legacy public.signals", opts, async () => {
+Deno.test("FIXED: a member can review a CANONICAL signal (signal_reviews.signal_event_id)", opts, async () => {
   const t = await team(PROFILE);
   const id = await canonicalSignal(t.ws);
   const owner = await as("authenticated", t.owner.id);
-  const { error } = await owner.from("signal_reviews").insert({ workspace_id: t.ws, signal_id: id, user_id: t.owner.id, status: "reviewed" });
-  assert(error, "the review should fail");
-  assertEquals(error!.code, "23503", `foreign-key violation expected, got ${JSON.stringify(error)}`);
+  const { error } = await owner.from("signal_reviews").insert({ workspace_id: t.ws, signal_event_id: id, user_id: t.owner.id, status: "reviewed" });
+  assertEquals(error, null, JSON.stringify(error));
+  const [r] = await sql`select status, signal_id from public.signal_reviews where signal_event_id = ${id}`;
+  assertEquals([r.status, r.signal_id], ["reviewed", null]);
+  // The same user reviewing the same event again is ONE row (unique per user and event).
+  const again = await owner.from("signal_reviews").insert({ workspace_id: t.ws, signal_event_id: id, user_id: t.owner.id, status: "saved" });
+  assert(again.error, "a second row for the same user and event is refused");
+});
+
+Deno.test("A review cannot point at ANOTHER workspace's canonical event", opts, async () => {
+  const a = await team(PROFILE); const b = await team(PROFILE);
+  const foreign = await canonicalSignal(a.ws);
+  const bOwner = await as("authenticated", b.owner.id);
+  const { error } = await bOwner.from("signal_reviews").insert({ workspace_id: b.ws, signal_event_id: foreign, user_id: b.owner.id, status: "reviewed" });
+  assert(error, "refused");
 });
 
 Deno.test("A review of a LEGACY signal works for a member (per-user triage)", opts, async () => {

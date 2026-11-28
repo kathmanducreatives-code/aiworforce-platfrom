@@ -145,6 +145,7 @@ done
 # the security chain above.
 held_signals=(
   20261128140000_signals_monitoring_plans.sql
+  20261128150000_signals_canonical_reviews.sql
 )
 for f in "${held_signals[@]}"; do
   if [ "$f" = "$omit" ]; then echo "omitted $f (mutation proof)"; continue; fi

@@ -286,3 +286,15 @@ Deno.test("LISA Watch: a monitoring DRAFT from the Brain — nothing enabled, LI
   assertEquals((tables.monitoring_plans[0] as Record<string, unknown>).kind, "icp");
   assertStringIncludes(out.content, "Draft monitoring plan saved — nothing is running");
 });
+
+// ═══ PHASE 2 · the signals collectors write the canonical store by default ═══════════════════
+import { isCanonicalSignalWriteEnabled, isSignalsV2Enabled } from "../../../../supabase/functions/_shared/signalsV2Flag.ts";
+Deno.test("Canonical writes: on by default for the signals collectors; an explicit off still turns them off; the strict flag is unchanged", () => {
+  assertEquals(isCanonicalSignalWriteEnabled(() => undefined), true);
+  for (const off of ["false", "0", "off", "disabled", " FALSE "]) assertEquals(isCanonicalSignalWriteEnabled(() => off), false, off);
+  assertEquals(isCanonicalSignalWriteEnabled(() => "true"), true);
+  assertEquals(isSignalsV2Enabled(() => undefined), false, "ATLAS paths keep the strict default-off flag");
+  for (const f of ["supabase/functions/run-radar-scan/index.ts", "supabase/functions/run-monitoring-scan/index.ts"]) {
+    assertStringIncludes(read(f), "isCanonicalSignalWriteEnabled()");
+  }
+});

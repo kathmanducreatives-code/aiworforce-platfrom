@@ -35,7 +35,7 @@ import {
 import { evaluationCriteria, parseMissionEvaluationStrict } from "../_shared/missionEvaluation.ts";
 import { writeSignalEventV2 } from "../_shared/signalsV2Writer.ts";
 import { canRunPaidOperation, paidRoleRefusal } from "../_shared/paidOperationRole.ts";
-import { isSignalsV2Enabled } from "../_shared/signalsV2Flag.ts";
+import { isCanonicalSignalWriteEnabled } from "../_shared/signalsV2Flag.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
 import {
   runMonitoring, MONITORING_AUTHORITY,
@@ -233,7 +233,8 @@ Deno.serve(async (req) => {
   const maxCandidates = requestedMaxCandidates(body);
   /** When this pass began — used to find the situations it could have changed. */
   const startedAt = Date.now();
-  const v2Enabled = isSignalsV2Enabled();
+  // Signals recovery: the canonical store is written by default (explicit SIGNALS_V2=false opts out).
+  const v2Enabled = isCanonicalSignalWriteEnabled();
 
   const outcome = await runMonitoring(
     { workspace_id, subjects, icp },

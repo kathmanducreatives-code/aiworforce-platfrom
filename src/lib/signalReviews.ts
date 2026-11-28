@@ -8,19 +8,45 @@ import {
   type SignalReviewRow,
 } from "@/lib/signalReviewModel";
 
+// ── CANONICAL SIGNALS CAN BE REVIEWED (Signals recovery) ─────────────────────
+// A review names either a legacy `signals` row (signal_id) or a canonical `signal_events` row
+// (signal_event_id, held migration 20261128150000). Callers keep passing one id per signal; this
+// layer finds which table it belongs to. `signal_id` on a returned row is the id the FEED uses,
+// whichever column stored it. Without the migration everything behaves as before.
+const REVIEW_COLS = "id, signal_id, signal_event_id, lead_candidate_id, status, note, reviewed_at, ignored_at, saved_at, updated_at";
+const LEGACY_REVIEW_COLS = "id, signal_id, lead_candidate_id, status, note, reviewed_at, ignored_at, saved_at, updated_at";
+let canonicalReviewsAvailable: boolean | null = null;
+const asFeedKeyed = (r: any): SignalReviewRow => ({ ...r, signal_id: r?.signal_event_id ?? r?.signal_id ?? null });
+
+/** Which of these ids are canonical signal_events of this workspace. */
+async function canonicalIdsOf(workspaceId: string, ids: string[]): Promise<Set<string>> {
+  if (!ids.length || canonicalReviewsAvailable === false) return new Set();
+  const { data, error } = await supabase.from("signal_events" as any).select("id")
+    .eq("workspace_id", workspaceId).in("id", ids);
+  if (error) return new Set();
+  return new Set(((data ?? []) as any[]).map((r) => String(r.id)));
+}
+
 /** Fetch the current user's review rows for a workspace. */
 export async function fetchSignalReviews(
   workspaceId: string,
   limit = 500,
 ): Promise<SignalReviewRow[]> {
-  const { data, error } = await supabase
+  const run = (cols: string) => supabase
     .from("signal_reviews" as any)
-    .select("id, signal_id, lead_candidate_id, status, note, reviewed_at, ignored_at, saved_at, updated_at")
+    .select(cols)
     .eq("workspace_id", workspaceId)
     .order("updated_at", { ascending: false })
     .limit(limit);
+  let { data, error } = await run(canonicalReviewsAvailable === false ? LEGACY_REVIEW_COLS : REVIEW_COLS);
+  if (error && canonicalReviewsAvailable !== false && /signal_event_id/.test(error.message ?? "")) {
+    canonicalReviewsAvailable = false;
+    ({ data, error } = await run(LEGACY_REVIEW_COLS));
+  } else if (!error) {
+    canonicalReviewsAvailable = canonicalReviewsAvailable ?? true;
+  }
   if (error) { console.error("fetchSignalReviews", error); throw error; }
-  return (data ?? []) as unknown as SignalReviewRow[];
+  return ((data ?? []) as any[]).map(asFeedKeyed);
 }
 
 /** Resolve the current authenticated user's id (for user_id pinning). */
@@ -41,20 +67,26 @@ export async function upsertSignalReview(args: {
   note?: string | null;
 }): Promise<SignalReviewRow> {
   const userId = await currentUserId();
-  const payload = buildReviewUpsert({
+  const base = buildReviewUpsert({
     workspaceId: args.workspaceId,
     userId,
     signalId: args.signalId,
     status: args.status,
     note: args.note ?? null,
   });
+  const canonical = (await canonicalIdsOf(args.workspaceId, [args.signalId])).has(args.signalId);
+  const column = canonical ? "signal_event_id" : "signal_id";
+  const payload = (canonical
+    ? { ...base, signal_id: null, signal_event_id: args.signalId }
+    : { ...base }) as unknown as Record<string, unknown>;
+  const cols = canonicalReviewsAvailable === false ? LEGACY_REVIEW_COLS : REVIEW_COLS;
 
   const { data: existing, error: selErr } = await supabase
     .from("signal_reviews" as any)
     .select("id")
     .eq("workspace_id", args.workspaceId)
     .eq("user_id", userId)
-    .eq("signal_id", args.signalId)
+    .eq(column, args.signalId)
     .maybeSingle();
   if (selErr) { console.error("upsertSignalReview select", selErr); throw selErr; }
 
@@ -69,19 +101,19 @@ export async function upsertSignalReview(args: {
         saved_at: payload.saved_at,
       })
       .eq("id", (existing as any).id)
-      .select("id, signal_id, lead_candidate_id, status, note, reviewed_at, ignored_at, saved_at, updated_at")
+      .select(cols)
       .single();
     if (error) { console.error("upsertSignalReview update", error); throw error; }
-    return data as unknown as SignalReviewRow;
+    return asFeedKeyed(data);
   }
 
   const { data, error } = await supabase
     .from("signal_reviews" as any)
     .insert(payload)
-    .select("id, signal_id, lead_candidate_id, status, note, reviewed_at, ignored_at, saved_at, updated_at")
+    .select(cols)
     .single();
   if (error) { console.error("upsertSignalReview insert", error); throw error; }
-  return data as unknown as SignalReviewRow;
+  return asFeedKeyed(data);
 }
 
 /**
@@ -98,17 +130,20 @@ export async function bulkUpdateSignalReviews(args: {
   if (ids.length === 0) return { updated: 0, inserted: 0 };
   const userId = await currentUserId();
 
-  const { data: existingRows, error: selErr } = await supabase
-    .from("signal_reviews" as any)
-    .select("id, signal_id")
-    .eq("workspace_id", args.workspaceId)
-    .eq("user_id", userId)
-    .in("signal_id", ids);
-  if (selErr) { console.error("bulkUpdateSignalReviews select", selErr); throw selErr; }
-
+  const canonical = await canonicalIdsOf(args.workspaceId, ids);
+  const legacyIds = ids.filter((i) => !canonical.has(i));
+  const eventIds = ids.filter((i) => canonical.has(i));
   const existingBySignal = new Map<string, string>();
-  for (const r of (existingRows ?? []) as any[]) {
-    if (r.signal_id) existingBySignal.set(r.signal_id, r.id);
+  for (const [column, group] of [["signal_id", legacyIds], ["signal_event_id", eventIds]] as const) {
+    if (!group.length) continue;
+    const { data: existingRows, error: selErr } = await supabase
+      .from("signal_reviews" as any)
+      .select(`id, ${column}`)
+      .eq("workspace_id", args.workspaceId)
+      .eq("user_id", userId)
+      .in(column, group);
+    if (selErr) { console.error("bulkUpdateSignalReviews select", selErr); throw selErr; }
+    for (const r of (existingRows ?? []) as any[]) if (r[column]) existingBySignal.set(r[column], r.id);
   }
 
   const now = new Date().toISOString();
@@ -134,9 +169,10 @@ export async function bulkUpdateSignalReviews(args: {
   }
 
   if (missing.length) {
-    const rows = missing.map((signalId) =>
-      buildReviewUpsert({ workspaceId: args.workspaceId, userId, signalId, status: args.status, now }),
-    );
+    const rows = missing.map((signalId) => {
+      const row = buildReviewUpsert({ workspaceId: args.workspaceId, userId, signalId, status: args.status, now });
+      return canonical.has(signalId) ? { ...row, signal_id: null, signal_event_id: signalId } : row;
+    });
     const { error } = await supabase.from("signal_reviews" as any).insert(rows);
     if (error) { console.error("bulkUpdateSignalReviews insert", error); throw error; }
     inserted = missing.length;

@@ -4,7 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { signalDedupeKey } from "../_shared/signalQuality.ts";
-import { isSignalsV2Enabled } from "../_shared/signalsV2Flag.ts";
+import { isCanonicalSignalWriteEnabled } from "../_shared/signalsV2Flag.ts";
 import { writeSignalEventV2 } from "../_shared/signalsV2Writer.ts";
 import { mapRadarSignalToV2, type RadarLegacyRow } from "../_shared/radarSignalToV2.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
@@ -575,7 +575,8 @@ Deno.serve(async (req) => {
   // rows are refused because Radar resolves neither company identity nor role
   // family, and a silent zero is indistinguishable from a broken writer — which
   // is the failure mode this whole phase exists to make visible.
-  const v2Enabled = isSignalsV2Enabled();
+  // Signals recovery: the canonical store is written by default (explicit SIGNALS_V2=false opts out).
+  const v2Enabled = isCanonicalSignalWriteEnabled();
   const v2 = { enabled: v2Enabled, attempted: 0, written: 0, deduplicated: 0, failed: 0,
     skipped: {} as Record<string, number> };
   if (v2Enabled && persisted.length > 0) {

@@ -34,3 +34,23 @@ export function isSignalsV2Enabled(read?: EnvReader): boolean {
     return false;
   }
 }
+
+/**
+ * SIGNALS RECOVERY (2026-11-28): THE SIGNALS COLLECTORS WRITE THE CANONICAL STORE BY DEFAULT.
+ *
+ * `signal_events` is the one store every consumer reads (Signals page, LISA, ORION, executive
+ * brief, dashboard, content, the ATLAS handoff). The radar and the monitoring scan used to write
+ * it only behind SIGNALS_V2 (off by default), so a radar signal reached the page but never ORION.
+ * For THESE collectors canonical writing is now on unless SIGNALS_V2 is explicitly switched off
+ * ("false" / "0" / "off" / "disabled"). `isSignalsV2Enabled` (strict, default off) is unchanged
+ * for every other caller — the ATLAS lead paths keep their own flag.
+ */
+export const SIGNALS_V2_DISABLED_VALUES: ReadonlySet<string> = new Set(["false", "0", "off", "disabled"]);
+export function isCanonicalSignalWriteEnabled(read?: EnvReader): boolean {
+  try {
+    const raw = read ? read(SIGNALS_V2_FLAG) : (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get(SIGNALS_V2_FLAG);
+    return !(typeof raw === "string" && SIGNALS_V2_DISABLED_VALUES.has(raw.trim().toLowerCase()));
+  } catch {
+    return true;
+  }
+}
