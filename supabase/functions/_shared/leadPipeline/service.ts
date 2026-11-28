@@ -332,6 +332,11 @@ export interface StrategyDeps extends PipelineDeps {
   signer?: PlanSigner | null;
   /** GPT strategy advice; null = the deterministic choice only. */
   advisor: GenerateJsonFn | null;
+  /**
+   * G4: the workspace's Company Brain rules NOW, fingerprinted as at plan time
+   * (missionContract/brain.ts workspaceRulesFingerprint). Absent: the check is skipped.
+   */
+  brainFingerprint?(workspaceId: string): Promise<string | null>;
   /** The mission interpretation contract in force (default: AGENTORY_MISSION_CONTRACT, v1). */
   contractVersion?: string;
   /**
@@ -375,6 +380,18 @@ export async function handleStrategyRequest(req: StrategyRequest, d: StrategyDep
     const v = await d.signer.verify(req.approval.token, { workspaceId: req.workspaceId, planHash: req.approval.planHash, walkId: req.walkId }, now());
     if (!v.ok) return { status: 409, body: { error: v.reason, stage: "approval", code: approvalCode(v.reason) } };
     token = v.payload;
+    // G4: the approval assumed the workspace's Brain rules and approved memories AS THEY WERE. A
+    // change since (a new exclusion memory, a changed size rule…) is a different plan: refused,
+    // nothing bought, re-plan to review. A token from before fingerprints is not checked.
+    const signed = token.replay.brain?.fingerprint;
+    if (signed && d.brainFingerprint) {
+      const current = await d.brainFingerprint(req.workspaceId).catch(() => null);
+      if (current !== signed) {
+        return { status: 409, body: { error: current === null
+          ? "your Company Brain could not be read to confirm this approval; nothing ran — try again or re-plan"
+          : "your Company Brain changed since this plan was approved (its rules or approved memories); nothing ran — re-plan to review", stage: "approval", code: "brain_changed" } };
+      }
+    }
   }
   const interpreted = token
     ? await d.recompile!(token.query, token.requestedCount, token.replay)

@@ -65,6 +65,8 @@ Deno.serve({ hostname: "127.0.0.1", port: PORT }, async (req) => {
   const base = found.sim.d.now ?? (() => new Date());
   const d = Number.isFinite(hours) && hours > 0 ? { ...found.sim.d, now: () => new Date(base().getTime() + hours * 3600_000) } : found.sim.d;
   const r = await handleStrategyRequest(parsed, d);
+  // A scenario whose Brain changes after approval: the change happens once the first plan is answered.
+  if (parsed.action === "strategy_plan") found.sim.approvedOnce.done = true;
   console.log(`[atlas-sim] ${name} ${parsed.action} ${body.strategy ?? "auto"} → ${r.status} ${(r.body as { stage?: string }).stage ?? ""}/${(r.body as { code?: string }).code ?? ""}  apify=${found.sim.ap.calls.length} leadocean=${found.sim.loCalls.length}`);
   return json(r.status, { ...r.body, simulation: { scenario: name, apifyCalls: found.sim.ap.calls.length, leadoceanCalls: found.sim.loCalls.length } }, origin);
 });

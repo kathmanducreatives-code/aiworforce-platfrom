@@ -21,7 +21,7 @@ import { handleLeadPipeline, handleStrategyRequest, parsePipelineRequest, parseS
 import { buildMissionCompilerBinding } from "../_shared/leadMissionCompilerBinding.ts";
 import { MissionNeedsClarificationError } from "../_shared/leadMissionCompiler.ts";
 import { gptContractGenerate, interpretContract } from "../_shared/missionContract/gptInterpreter.ts";
-import { applyCompanyBrain, workspaceExclusionsOf } from "../_shared/missionContract/brain.ts";
+import { applyCompanyBrain, workspaceExclusionsOf, workspaceRulesFingerprint } from "../_shared/missionContract/brain.ts";
 import { compileContract, ContractInvalidError } from "../_shared/missionContract/compile.ts";
 import { contractHash, type MissionContract } from "../_shared/missionContract/contract.ts";
 import { createStrategyAdvisorGenerateJson } from "../_shared/leadPipeline/strategyAdvisorModel.ts";
@@ -114,7 +114,8 @@ Deno.serve(withBuildStamp(async (req) => {
             brain: { status: brain.status, fields: brain.fields, applied: report.applied, rejected: report.notApplied,
               ...(report.merged ? { merged: report.merged } : {}), ...(report.refusedMemory ? { refusedMemory: report.refusedMemory } : {}) },
             // The approval token replays THE CONTRACT ITSELF: a run executes exactly what was approved.
-            replay: { proposal: { contract, contractHash: hash }, brain: { status: brain.status, fields: brain.fields, context: null } },
+            replay: { proposal: { contract, contractHash: hash }, brain: { status: brain.status, fields: brain.fields, context: null,
+              fingerprint: await workspaceRulesFingerprint(brain.contractInput ?? null, { workspaceId: ws }) } },
           };
         } : async (query, ws, requestedCount) => {
           // The workspace's own Company Brain as context (read-only, this workspace only,
@@ -139,7 +140,8 @@ Deno.serve(withBuildStamp(async (req) => {
             // approved memory — apply here too (service.ts, resolveWorkspaceExclusions).
             workspaceExclusions: workspaceExclusionsOf(brain.contractInput),
             // Signed into the approval token: a run rebuilds exactly this, with no model call.
-            replay: { proposal, brain: { status: brain.status, fields: brain.fields, context: brain.context, exclusions: workspaceExclusionsOf(brain.contractInput) } },
+            replay: { proposal, brain: { status: brain.status, fields: brain.fields, context: brain.context, exclusions: workspaceExclusionsOf(brain.contractInput),
+              fingerprint: await workspaceRulesFingerprint(brain.contractInput ?? null, { workspaceId: ws }) } },
           };
         },
         // strategy_run: the signed proposal and Brain context, compiled again (deterministic).
@@ -157,6 +159,11 @@ Deno.serve(withBuildStamp(async (req) => {
         // Approval tokens are MAC'd with a key derived from the service-role key (no new secret).
         signer: await planSigner(env("SUPABASE_SERVICE_ROLE_KEY") ?? ""),
         advisor: createStrategyAdvisorGenerateJson(),
+        // G4: the workspace's Brain rules now, for a run to compare with what its approval assumed.
+        brainFingerprint: async (ws) => {
+          const b = await loadBrainPlanningContext(admin as never, ws);
+          return b.status === "unreadable" ? null : workspaceRulesFingerprint(b.contractInput ?? null, { workspaceId: ws });
+        },
         // The run's Workbench plan: one task_plans row in THIS workspace (the same shape
         // continue-workflow writes). Its id is what the saved leads carry.
         recordRunPlan: async (p) => {

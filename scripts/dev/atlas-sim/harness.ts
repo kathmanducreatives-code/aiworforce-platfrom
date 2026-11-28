@@ -15,7 +15,7 @@
 // tests/edge-functions/_shared/leadPipeline/atlasSimScenarios.test.ts.
 
 import { handleStrategyRequest, parseStrategyRequest, readPipelineFlags, type StrategyDeps } from "../../../supabase/functions/_shared/leadPipeline/service.ts";
-import { applyCompanyBrain } from "../../../supabase/functions/_shared/missionContract/brain.ts";
+import { applyCompanyBrain, workspaceRulesFingerprint } from "../../../supabase/functions/_shared/missionContract/brain.ts";
 import { modelGrounder } from "../../../supabase/functions/_shared/leadPipeline/businessModelCheck.ts";
 import { readFlags } from "../../../supabase/functions/_shared/discoveryProviders/flags.ts";
 import { memoryLedger } from "../../../supabase/functions/_shared/discoveryProviders/budget.ts";
@@ -84,6 +84,8 @@ export interface Scenario {
   leadocean?: boolean;
   /** V5 G2 / memory: the workspace's Company Brain input, applied as lead-pipeline does (missionContract/brain.ts). */
   brain?: Record<string, unknown>;
+  /** G4: the workspace's Brain input AFTER approval (e.g. a newly approved exclusion memory); absent = unchanged. */
+  brainAfterApproval?: Record<string, unknown>;
   allowReviewOnly?: boolean;
   /** FLEXIBLE DISCOVERY: the mode the request is sent in (absent = strict). */
   mode?: "strict" | "flexible";
@@ -306,6 +308,8 @@ function asyncRig(s: Scenario, ap: ReturnType<typeof simApify>, base: ReturnType
 
 /** The REAL lead-pipeline service's dependencies for one scenario, every provider faked (offline). */
 export async function buildSim(s: Scenario) {
+  // Flips once the first plan has been answered: what a 'Brain changed after approval' run sees.
+  const approvedOnce = { done: false };
   const signer = await planSigner("offline-sim-secret-0123456789abcdef");
   const env: Record<string, string> = { LEAD_PIPELINE_ENABLED: "true", LEAD_PIPELINE_WORKSPACES: SIM_WS, PROVIDER_DISCOVERY_ENABLED: "true", PROVIDER_APIFY_DISCOVERY_ENABLED: "true",
     ...(s.leadocean ? { PROVIDER_LEADOCEAN_ENABLED: "true", LEADOCEAN_COMMERCIAL_TERMS_CONFIRMED: "true" } : {}), ...(s.flags ?? {}) };
@@ -338,7 +342,8 @@ export async function buildSim(s: Scenario) {
     interpret: async (query: string) => {
       const read = contractFromProposal(query, s.interpretation as never).contract;
       // V5: the workspace's Company Brain (profile and approved memory), applied as lead-pipeline does.
-      const applied = s.brain ? applyCompanyBrain(read, s.brain as never, { workspaceId: SIM_WS, now: NOW() }) : null;
+      const brainNow = approvedOnce.done && s.brainAfterApproval ? s.brainAfterApproval : s.brain;
+      const applied = brainNow ? applyCompanyBrain(read, brainNow as never, { workspaceId: SIM_WS, now: NOW() }) : null;
       const contract = applied?.contract ?? read;
       const report = applied?.report ?? null;
       // As lead-pipeline/index.ts does: open questions are a clarification, never compiled
@@ -351,7 +356,8 @@ export async function buildSim(s: Scenario) {
       return { mission: await compileContract(contract), contract,
         brain: report ? { status: "used", fields: [], applied: report.applied, rejected: report.notApplied, ...(report.merged ? { merged: report.merged } : {}), ...(report.refusedMemory ? { refusedMemory: report.refusedMemory } : {}) }
           : { status: "absent", fields: [], applied: [], rejected: [] },
-        replay: { proposal: { contract, contractHash: hash }, brain: { status: "absent", fields: [], context: null } } } as never;
+        replay: { proposal: { contract, contractHash: hash }, brain: { status: brainNow ? "used" : "absent", fields: [], context: null,
+          fingerprint: await workspaceRulesFingerprint((brainNow ?? null) as never, { workspaceId: SIM_WS, now: NOW() }) } } } as never;
     },
     recompile: async (_q: string, _n: number | null, replay: { proposal: unknown }) => {
       const a = replay.proposal as { contract: MissionContract };
@@ -364,6 +370,8 @@ export async function buildSim(s: Scenario) {
       return Promise.resolve(planId);
     },
     signer,
+    // G4: the workspace's Brain now — after approval it may have changed (brainAfterApproval).
+    brainFingerprint: () => workspaceRulesFingerprint(((approvedOnce.done && s.brainAfterApproval) ? s.brainAfterApproval : s.brain ?? null) as never, { workspaceId: SIM_WS, now: NOW() }),
     // The only model call a simulated plan makes: Flexible Discovery's related industries.
     advisor: s.relatedIndustries ? (async (o: { functionName?: string }) => o.functionName === "lead-pipeline-flexible-industries"
       ? { ok: true, content: JSON.stringify({ related: s.relatedIndustries }), json: { related: s.relatedIndustries }, model: "sim-model" }
@@ -371,11 +379,11 @@ export async function buildSim(s: Scenario) {
     ...(s.grounding === false ? {} : { groundBusinessModel: modelGrounder(simModel(s, grounding) as never, s.query) }),
   } as StrategyDeps;
 
-  return { d, ap, rig, loCalls, mem, planRecords, grounding };
+  return { d, ap, rig, loCalls, mem, planRecords, grounding, approvedOnce };
 }
 
 export async function runScenario(s: Scenario): Promise<SimResult> {
-  const { d, ap, rig, loCalls, mem, planRecords, grounding } = await buildSim(s);
+  const { d, ap, rig, loCalls, mem, planRecords, grounding, approvedOnce } = await buildSim(s);
   const ws = s.workspace === "not_member" ? OTHER_WS : SIM_WS;
   const correlationId = `sim-${s.name}`;
   const req = (b: Record<string, unknown>, walk = correlationId) =>
@@ -385,6 +393,7 @@ export async function runScenario(s: Scenario): Promise<SimResult> {
   const t0 = performance.now();
   const plan = await handleStrategyRequest(req({ action: "strategy_plan", ...(s.allowReviewOnly ? { allow_review_only: true } : {}) }), d);
   const tPlan = performance.now() - t0;
+  approvedOnce.done = true;
   const runs: SimResult["runs"] = [];
   const runTimes: number[] = [];
   const p = plan.body.plan as { planHash?: string; estimate?: { apifyUsd: number } } | undefined;

@@ -27,7 +27,8 @@ export interface PlanReplay {
   proposal: unknown;
   /** The Company Brain planning context used (null when there was none). */
   /** `exclusions`: the workspace's industry exclusions the LEGACY path applied (absent before 2026-11-28 and in contract mode). */
-  brain: { status: string; fields: string[]; context: unknown | null; exclusions?: unknown };
+  /** `fingerprint` (G4): the workspace rules the approval assumed (workspaceRulesFingerprint); absent on older tokens. */
+  brain: { status: string; fields: string[]; context: unknown | null; exclusions?: unknown; fingerprint?: string };
   /** The strategy advisor's pick (null: deterministic choice only, or the user named a strategy). */
   advice: { proposed: string | null; rationale: string; model: string | null; error: string | null } | null;
   /** FLEXIBLE DISCOVERY: the related industries GPT named at plan time (re-validated on replay). */

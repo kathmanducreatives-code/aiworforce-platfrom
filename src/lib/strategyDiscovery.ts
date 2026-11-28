@@ -366,6 +366,7 @@ const APPROVAL_LABEL: Record<string, string> = {
   plan_blocked: 'The plan can no longer run as approved — nothing ran. Review the new plan.',
   meaning_changed: 'The request’s meaning did not survive intact — nothing ran. Re-plan.',
   provider_isolation: 'The plan would use a provider you ruled out — nothing ran.',
+  brain_changed: 'Your Company Brain changed since you approved (rules or approved memories) — nothing ran. Review the new plan.',
   not_authorized: 'Only a workspace owner or admin can approve a paid run — nothing ran.',
 };
 
